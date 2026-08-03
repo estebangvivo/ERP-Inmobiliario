@@ -3,9 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-# DB antes de levantar Next, para que el healthcheck no espere el seed.
-preDeployCommand = "npx prisma db push && npx tsx prisma/seed.ts"
-startCommand = "npx next start -H 0.0.0.0"
-healthcheckPath = "/login"
-healthcheckTimeout = 120
+startCommand = "npm run start:prod"
+# Sin healthcheck: si Prisma tarda o falla, Railway igual deja el contenedor arriba
+# y se puede ver el error real en los logs / la URL.
 restartPolicyType = "ON_FAILURE"

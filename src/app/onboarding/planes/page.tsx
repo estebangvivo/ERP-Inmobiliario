@@ -3,6 +3,8 @@ import { getSession, hasOrganization } from "@/lib/auth";
 import { isPlatformSuperadminEmail } from "@/features/auth/lib/platform-admin";
 import { PlansSignupView } from "@/features/billing/components/plans-signup-view";
 
+export const dynamic = "force-dynamic";
+
 export default async function OnboardingPlanesPage() {
   const session = await getSession();
   if (!session) redirect("/login");

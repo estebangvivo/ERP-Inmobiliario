@@ -5,6 +5,8 @@ import { DEFAULT_THEME_ID, themeToCssText } from "@/config/themes";
 import { isPlatformSuperadminEmail } from "@/features/auth/lib/platform-admin";
 import { organizationLogoSrc } from "@/features/settings/lib/organization-logo";
 
+export const dynamic = "force-dynamic";
+
 export default async function ErpLayout({
   children,
 }: {

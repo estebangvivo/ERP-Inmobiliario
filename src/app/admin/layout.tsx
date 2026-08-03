@@ -2,6 +2,8 @@ import { requireAdminPanelSession } from "@/lib/auth";
 import { ErpShell } from "@/components/erp/shell";
 import { BRAND_NAME } from "@/lib/brand";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {

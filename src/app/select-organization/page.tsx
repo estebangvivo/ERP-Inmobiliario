@@ -4,6 +4,8 @@ import { isPlatformSuperadminEmail } from "@/features/auth/lib/platform-admin";
 import { listMyOrganizations } from "@/features/auth/actions/organization-actions";
 import { SelectOrganizationPanel } from "@/features/auth/components/select-organization-panel";
 
+export const dynamic = "force-dynamic";
+
 export default async function SelectOrganizationPage({
   searchParams,
 }: {

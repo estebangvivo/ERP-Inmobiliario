@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { publicOrganizationPropertyFilter } from "@/lib/tenant-scope";
 import { publicPropertyPath } from "@/lib/public-org";
 
+export const dynamic = "force-dynamic";
+
 type Params = Promise<{ slug: string }>;
 
 /** Compatibilidad: redirige al portal de la inmobiliaria dueña. */

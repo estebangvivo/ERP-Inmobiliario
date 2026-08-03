@@ -8,6 +8,8 @@ import {
 } from "@/lib/public-org";
 import { BRAND_NAME } from "@/lib/brand";
 
+export const dynamic = "force-dynamic";
+
 type Params = Promise<{ orgSlug: string }>;
 
 export default async function TenantStorefrontLayout({

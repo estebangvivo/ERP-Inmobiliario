@@ -12,9 +12,9 @@ export type AdminOrgOverview = {
   slug: string;
   billingStatus: BillingStatus;
   billingPlan: BillingPlan | null;
-  paidUntil: Date | null;
+  paidUntil: string | null;
   memberCount: number;
-  createdAt: Date;
+  createdAt: string;
 };
 
 export type AdminOrganizationMemberOverview = {
@@ -58,9 +58,9 @@ export async function listAdminOrganizationsOverview(): Promise<
     slug: o.slug,
     billingStatus: o.billingStatus,
     billingPlan: o.billingPlan,
-    paidUntil: o.paidUntil,
+    paidUntil: o.paidUntil ? o.paidUntil.toISOString() : null,
     memberCount: o._count.members,
-    createdAt: o.createdAt,
+    createdAt: o.createdAt.toISOString(),
   }));
 }
 

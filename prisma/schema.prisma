@@ -374,6 +374,11 @@ model User {
   billingPayments         BillingPayment[]       @relation("BillingPaymentPayer")
   memberships             OrganizationMember[]
   visitBookingsAssigned   PropertyVisitBooking[] @relation("VisitBookingAssignee")
+  platformSystemExpenses  PlatformSystemExpense[] @relation("PlatformSystemExpenseCreator")
+  featureRequestsCreated  FeatureRequest[]       @relation("FeatureRequestCreator")
+  featureRequestsQuoted   FeatureRequest[]       @relation("FeatureRequestQuoter")
+  featureRequestsDecided  FeatureRequest[]       @relation("FeatureRequestDecider")
+  featureRequestMessages  FeatureRequestMessage[]
 
   @@index([documentNumber])
 }
@@ -507,6 +512,7 @@ model Organization {
   visitBookings            PropertyVisitBooking[]
   billingPayments          BillingPayment[]
   members                  OrganizationMember[]
+  featureRequests          FeatureRequest[]
   turneroClientes          TurneroCliente[]
   turneroContadoresDiarios TurneroContadorDiario[]
   turneroPuestos           TurneroPuesto[]
@@ -532,6 +538,101 @@ model PlatformBillingSettings {
   updatedAt           DateTime @updatedAt
 
   @@map("platform_billing_settings")
+}
+
+enum PlatformSystemExpenseCategory {
+  HOSTING
+  DEVELOPMENT
+  TOOLS
+  DOMAIN
+  MARKETING
+  SUPPORT
+  OTHER
+}
+
+/// Gasto de mantenimiento / operación del SaaS (solo plataforma).
+model PlatformSystemExpense {
+  id              String                        @id @default(cuid())
+  date            DateTime                      @db.Date
+  category        PlatformSystemExpenseCategory
+  title           String
+  notes           String?
+  currency        String                        @default("ARS")
+  amount          Decimal                       @db.Decimal(14, 2)
+  hours           Decimal?                      @db.Decimal(8, 2)
+  vendor          String?
+  createdByUserId String?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+
+  createdBy User? @relation("PlatformSystemExpenseCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([category])
+  @@map("platform_system_expenses")
+}
+
+enum FeatureRequestStatus {
+  OPEN
+  IN_REVIEW
+  AWAITING_USER
+  QUOTED
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  CLOSED
+}
+
+enum FeatureRequestAuthorKind {
+  USER
+  STAFF
+}
+
+/// Pedido de mejora o modificación del sistema (usuario → plataforma).
+model FeatureRequest {
+  id             String               @id @default(cuid())
+  organizationId String
+  createdById    String
+  title          String
+  description    String
+  status         FeatureRequestStatus @default(OPEN)
+  attachmentUrls String[]             @default([])
+  quoteAmount    Decimal?             @db.Decimal(14, 2)
+  quoteCurrency  String?
+  quoteNotes     String?
+  quotedAt       DateTime?
+  quotedById     String?
+  decidedAt      DateTime?
+  decidedById    String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User                    @relation("FeatureRequestCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  quotedBy     User?                   @relation("FeatureRequestQuoter", fields: [quotedById], references: [id], onDelete: SetNull)
+  decidedBy    User?                   @relation("FeatureRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  messages     FeatureRequestMessage[]
+
+  @@index([status, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([createdById, createdAt])
+  @@map("feature_requests")
+}
+
+model FeatureRequestMessage {
+  id             String                   @id @default(cuid())
+  requestId      String
+  authorId       String
+  authorKind     FeatureRequestAuthorKind
+  body           String
+  attachmentUrls String[]                 @default([])
+  createdAt      DateTime                 @default(now())
+
+  request FeatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author  User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@map("feature_request_messages")
 }
 
 model TurneroCliente {

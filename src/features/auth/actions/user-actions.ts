@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import type { OrganizationRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgAdmin, requireSession } from "@/lib/session";
+import {
+  requireAuthSession,
+  type SessionContext,
+} from "@/lib/auth";
 import { isPlatformSuperadminEmail } from "@/features/auth/lib/platform-admin";
 import {
   hashPassword,
@@ -28,10 +31,12 @@ export type OrganizationUserRow = {
   isActive: boolean;
 };
 
-async function assertCanManageUsers(organizationId: string) {
-  const session = await requireSession();
+async function assertCanManageUsers(
+  organizationId: string,
+): Promise<SessionContext> {
+  const session = await requireAuthSession();
   const isSuper = isPlatformSuperadminEmail(session.user.email);
-  if (session.organizationRole !== "ADMIN" && !isSuper) {
+  if (!isSuper && session.organizationRole !== "ADMIN") {
     throw new Error("FORBIDDEN");
   }
   if (!isSuper && session.organizationId !== organizationId) {
@@ -55,8 +60,9 @@ function assertNotProtectingPlatformSuperadmin(
 export async function listOrganizationUsers(
   organizationId?: string,
 ): Promise<OrganizationUserRow[]> {
-  const session = await requireSession();
+  const session = await requireAuthSession();
   const orgId = organizationId ?? session.organizationId;
+  if (!orgId) return [];
   await assertCanManageUsers(orgId);
 
   const members = await prisma.organizationMember.findMany({
@@ -91,8 +97,9 @@ export async function createOrganizationUser(input: {
   phone?: string;
 }): Promise<UserActionResult> {
   try {
-    const session = await requireSession();
+    const session = await requireAuthSession();
     const orgId = input.organizationId ?? session.organizationId;
+    if (!orgId) return { ok: false, error: "Empresa requerida." };
     await assertCanManageUsers(orgId);
 
     const name = input.name.trim();
@@ -164,8 +171,9 @@ export async function updateOrganizationUser(input: {
   password?: string;
 }): Promise<UserActionResult> {
   try {
-    const session = await requireSession();
+    const session = await requireAuthSession();
     const orgId = input.organizationId ?? session.organizationId;
+    if (!orgId) return { ok: false, error: "Empresa requerida." };
     await assertCanManageUsers(orgId);
 
     const membership = await prisma.organizationMember.findUnique({
@@ -240,7 +248,8 @@ export async function getMyAssignedTurneroPuesto(): Promise<{
   categoria: string;
 } | null> {
   try {
-    const session = await requireSession();
+    const session = await requireAuthSession();
+    if (!session.organizationId) return null;
     const membership = await prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -269,8 +278,9 @@ export async function removeOrganizationUser(input: {
   userId: string;
 }): Promise<UserActionResult> {
   try {
-    const session = await requireSession();
+    const session = await requireAuthSession();
     const orgId = input.organizationId ?? session.organizationId;
+    if (!orgId) return { ok: false, error: "Empresa requerida." };
     await assertCanManageUsers(orgId);
 
     if (input.userId === session.user.id) {

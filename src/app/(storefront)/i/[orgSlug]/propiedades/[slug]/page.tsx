@@ -8,7 +8,7 @@ import {
   publicPropertyWhereForOrg,
 } from "@/lib/public-org";
 import { Badge } from "@/components/ui/badge";
-import { LeadForm } from "@/components/storefront/lead-form";
+import { VisitBookingForm } from "@/components/storefront/visit-booking-form";
 import { PropertyGallery } from "@/components/storefront/property-gallery";
 import {
   OPERATION_LABELS,
@@ -140,7 +140,10 @@ export default async function TenantPropertyDetailPage({
       </div>
 
       <aside className="lg:sticky lg:top-24 lg:self-start">
-        <LeadForm propertyId={property.id} propertyTitle={property.title} />
+        <VisitBookingForm
+          propertyId={property.id}
+          propertyTitle={property.title}
+        />
       </aside>
     </div>
   );

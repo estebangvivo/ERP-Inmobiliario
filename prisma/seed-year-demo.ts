@@ -390,7 +390,7 @@ async function main() {
   for (const def of complexDefs) {
     const complex = await prisma.complex.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         name: def.name,
         slug: def.slug,
         address: def.address,
@@ -456,7 +456,7 @@ async function main() {
     const slug = slugify(`depto-${unit.complexId.slice(-5)}-${unit.code}-${i}`);
     const created = await prisma.property.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         title: `${title} · ${unit.address}`,
         slug,
         description: `${title} en ${unit.address}. Ambientes luminosos, amenities y seguridad.`,
@@ -625,7 +625,7 @@ async function main() {
     const slug = slugify(`extra-${e.title}-${i}`);
     const created = await prisma.property.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         title: e.title,
         slug,
         description: `${e.title}. Generada para simulación anual SimpleInmo.`,
@@ -713,7 +713,7 @@ async function main() {
 
     const contract = await prisma.contract.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         code,
         propertyId: opts.property.id,
         status: opts.status,
@@ -809,7 +809,7 @@ async function main() {
     const tenant = pick(tenants, i + 12);
     await prisma.contract.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         code: `YR-DRAFT-${i + 1}`,
         propertyId: prop.id,
         status: "DRAFT",
@@ -914,7 +914,7 @@ async function main() {
       const perUnit = money(totalAmount / complex.units.length);
       await prisma.expense.create({
         data: {
-          organizationId: org.id,
+          organizationId,
           complexId: complex.id,
           type: month % 4 === 0 ? "EXTRAORDINARY" : "ORDINARY",
           concept:
@@ -963,7 +963,7 @@ async function main() {
 
       const settlement = await prisma.ownerSettlement.create({
         data: {
-          organizationId: org.id,
+          organizationId,
           code: `RND-${year}${String(month).padStart(2, "0")}-${ownerId.slice(-4)}`,
           ownerId,
           periodYear: year,
@@ -1026,7 +1026,7 @@ async function main() {
     const assignee = pick(suppliers, i);
     const wo = await prisma.workOrder.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         code: `OT-YR-${String(i + 1).padStart(3, "0")}`,
         propertyId: prop.id,
         contractId: contract?.id ?? null,
@@ -1082,7 +1082,7 @@ async function main() {
     const m = pick(months, i);
     await prisma.lead.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         propertyId: prop?.id ?? null,
         name: leadNames[i]!,
         email: `lead.yr.${i + 1}@example.com`,

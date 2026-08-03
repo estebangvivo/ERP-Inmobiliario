@@ -16,6 +16,7 @@ const ERP_PREFIXES = [
   "/rendiciones",
   "/usuarios",
   "/leads",
+  "/visitas",
   "/ajustes",
   "/turnero",
 ];
@@ -103,6 +104,8 @@ export const config = {
     "/rendiciones/:path*",
     "/usuarios/:path*",
     "/leads/:path*",
+    "/visitas",
+    "/visitas/:path*",
     "/ajustes/:path*",
     "/turnero",
     "/turnero/:path*",

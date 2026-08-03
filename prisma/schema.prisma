@@ -144,6 +144,7 @@ model Lead {
   assignee       User?          @relation(fields: [assigneeId], references: [id])
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   property       Property?      @relation(fields: [propertyId], references: [id])
+  visitBookings  PropertyVisitBooking[]
 
   @@index([organizationId, status, createdAt])
   @@index([propertyId])
@@ -231,6 +232,7 @@ model Property {
   images         PropertyImage[]
   ownerships     PropertyOwnership[]
   workOrders     WorkOrder[]
+  visitBookings  PropertyVisitBooking[]
 
   @@unique([organizationId, slug])
   @@index([city])
@@ -492,6 +494,7 @@ model Organization {
   settlements              OwnerSettlement[]
   properties               Property[]
   workOrders               WorkOrder[]
+  visitBookings            PropertyVisitBooking[]
   billingPayments          BillingPayment[]
   members                  OrganizationMember[]
   turneroClientes          TurneroCliente[]
@@ -581,6 +584,35 @@ model TurneroTurno {
   @@index([organizationId, creadoEn])
   @@index([organizationId, llamadoEn])
   @@map("turnero_turnos")
+}
+
+model PropertyVisitBooking {
+  id             String            @id @default(cuid())
+  organizationId String
+  propertyId     String
+  startsAt       DateTime
+  endsAt         DateTime
+  name           String
+  email          String
+  phone          String?
+  status         VisitBookingStatus @default(RESERVED)
+  leadId         String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lead           Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, startsAt])
+  @@index([organizationId, startsAt])
+  @@index([status, startsAt])
+  @@index([leadId])
+}
+
+enum VisitBookingStatus {
+  RESERVED
+  CANCELLED
+  COMPLETED
 }
 
 enum AdjustmentIndex {

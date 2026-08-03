@@ -41,7 +41,7 @@ export const APP_MODULES: AppModuleDef[] = [
     pathPrefixes: ["/mantenimiento"],
   },
   { key: "rendiciones", label: "Rendiciones", pathPrefixes: ["/rendiciones"] },
-  { key: "consultas", label: "Consultas", pathPrefixes: ["/leads"] },
+  { key: "consultas", label: "Consultas", pathPrefixes: ["/leads", "/visitas"] },
   { key: "turnero", label: "Turnero", pathPrefixes: ["/turnero"] },
   { key: "usuarios", label: "Usuarios", pathPrefixes: ["/usuarios"] },
   { key: "ajustes", label: "Ajustes", pathPrefixes: ["/ajustes"] },
@@ -109,6 +109,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/mantenimiento": "mantenimiento",
   "/rendiciones": "rendiciones",
   "/leads": "consultas",
+  "/visitas": "consultas",
   "/turnero": "turnero",
   "/usuarios": "usuarios",
   "/ajustes": "ajustes",
@@ -126,6 +127,7 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/mantenimiento")) return "mantenimiento";
   if (pathname.startsWith("/rendiciones")) return "rendiciones";
   if (pathname.startsWith("/leads")) return "consultas";
+  if (pathname.startsWith("/visitas")) return "consultas";
   if (pathname.startsWith("/turnero")) return "turnero";
   if (pathname.startsWith("/ajustes")) return "ajustes";
   if (pathname.startsWith("/dashboard") || pathname === "/") return "home";

@@ -1,6 +1,7 @@
 import type { OrganizationRole } from "@prisma/client";
 import {
   Building2,
+  CalendarDays,
   FileText,
   Home,
   Landmark,
@@ -91,6 +92,13 @@ export const erpNavItems: NavItem[] = [
     title: "Consultas",
     href: "/leads",
     icon: MessageSquare,
+    module: "consultas",
+    roles: ["ADMIN", "AGENT"],
+  },
+  {
+    title: "Visitas",
+    href: "/visitas",
+    icon: CalendarDays,
     module: "consultas",
     roles: ["ADMIN", "AGENT"],
   },

@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SimpleInmo
 
-## Getting Started
+Next.js 15 + Prisma + PostgreSQL. La gestión inmobiliaria, simplificada — con portal público.
 
-First, run the development server:
+## Requisitos
+
+- Node.js 20+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (mismo enfoque que Constructora)
+
+## Arranque local
 
 ```bash
+# 1. Variables de entorno
+cp .env.example .env
+
+# 2. Migraciones + seed (usa Postgres local en schema erp_inmobiliario)
+npx prisma migrate deploy
+npm run db:seed
+
+# 3. App
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Por defecto el `.env` apunta a la misma instancia Postgres que Constructora, pero al **schema** `erp_inmobiliario` (las tablas de Constructora siguen en `public` y no se tocan).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Si preferís un contenedor Docker propio (puerto 5433):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run db:up
+# y en .env usá la Opción B del .env.example
+```
 
-## Learn More
+- App: http://localhost:3001 (Constructora queda en `:3000`)
+- Login: http://localhost:3001/login
+- Demo: `admin@erp.local` / `demo1234`
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts DB
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Script | Descripción |
+|--------|-------------|
+| `npm run db:up` | `docker compose up -d` |
+| `npm run db:down` | Detiene el contenedor |
+| `npm run db:migrate` | Prisma migrate |
+| `npm run db:seed` | Datos demo |
+| `npm run db:studio` | Prisma Studio |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Roles
 
-## Deploy on Vercel
+`ADMIN`, `AGENT`, `OWNER`, `TENANT`, `SUPPLIER`, `GUARANTOR`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Módulos
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Área | Rutas |
+|------|--------|
+| Portal público | `/`, `/propiedades`, `/propiedades/[slug]` |
+| App | `/dashboard`, `/gestion/propiedades`, `/complejos`, `/contratos`, `/cobros`, `/expensas`, `/mantenimiento`, `/rendiciones`, `/leads`, `/usuarios`, `/turnero` |
+| PDF | Recibo de cuota `/api/cobros/[id]/pdf` · Liquidación `/api/rendiciones/[id]/pdf` |
+
+## Estructura
+
+- `prisma/schema.prisma` — dominio completo
+- `src/app/(erp)` — dashboard autenticado
+- `src/app/(storefront)` — portal público
+- `src/app/(auth)` — login
+- `src/server/services` — billing, expensas, rendiciones

@@ -1,0 +1,736 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Complex {
+  id             String         @id @default(cuid())
+  name           String
+  slug           String
+  address        String
+  city           String
+  province       String?
+  country        String         @default("AR")
+  lat            Float?
+  lng            Float?
+  description    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expenses       Expense[]
+  units          Unit[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model Contract {
+  id                  String               @id @default(cuid())
+  code                String
+  propertyId          String
+  status              ContractStatus       @default(DRAFT)
+  startDate           DateTime             @db.Date
+  endDate             DateTime             @db.Date
+  initialRent         Decimal              @db.Decimal(14, 2)
+  currency            Currency             @default(ARS)
+  depositAmount       Decimal              @default(0) @db.Decimal(14, 2)
+  depositHeld         Boolean              @default(true)
+  agencyCommissionPct Decimal              @default(0) @db.Decimal(5, 2)
+  lateFeeDailyRatePct Decimal              @default(0) @db.Decimal(6, 4)
+  includesOrdinaryExp Boolean              @default(true)
+  includesExtraordExp Boolean              @default(false)
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organizationId      String?
+  commissionMode      CommissionMode       @default(PERCENT_RENT)
+  commissionOwnerPct  Decimal              @default(100) @db.Decimal(5, 2)
+  commissionTenantPct Decimal              @default(0) @db.Decimal(5, 2)
+  commissionValue     Decimal              @default(0) @db.Decimal(14, 2)
+  organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property            Property             @relation(fields: [propertyId], references: [id])
+  adjustments         ContractAdjustment[]
+  parties             ContractParty[]
+  tenantBills         TenantBill[]
+  workOrders          WorkOrder[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([propertyId, status])
+  @@index([startDate, endDate])
+}
+
+model ContractAdjustment {
+  id            String          @id @default(cuid())
+  contractId    String
+  indexType     AdjustmentIndex
+  customPercent Decimal?        @db.Decimal(6, 3)
+  periodMonths  Int             @default(12)
+  effectiveFrom DateTime        @db.Date
+  appliedRent   Decimal?        @db.Decimal(14, 2)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  contract      Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId, effectiveFrom])
+}
+
+model ContractParty {
+  id         String    @id @default(cuid())
+  contractId String
+  userId     String
+  role       PartyRole
+  sharePct   Decimal?  @db.Decimal(5, 2)
+  contract   Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@unique([contractId, userId, role])
+  @@index([userId])
+}
+
+model Expense {
+  id               String              @id @default(cuid())
+  complexId        String
+  type             ExpenseType
+  concept          String
+  periodYear       Int
+  periodMonth      Int
+  totalAmount      Decimal             @db.Decimal(14, 2)
+  currency         Currency            @default(ARS)
+  allocationMethod AllocationMethod    @default(OWNERSHIP_COEFFICIENT)
+  billToTenant     Boolean             @default(true)
+  notes            String?
+  createdAt        DateTime            @default(now())
+  organizationId   String?
+  complex          Complex             @relation(fields: [complexId], references: [id])
+  organization     Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  allocations      ExpenseAllocation[]
+
+  @@unique([complexId, type, concept, periodYear, periodMonth])
+  @@index([organizationId, periodYear, periodMonth])
+}
+
+model ExpenseAllocation {
+  id        String   @id @default(cuid())
+  expenseId String
+  unitId    String
+  amount    Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  unit      Unit     @relation(fields: [unitId], references: [id])
+
+  @@unique([expenseId, unitId])
+  @@index([unitId])
+}
+
+model Lead {
+  id             String         @id @default(cuid())
+  propertyId     String?
+  name           String
+  email          String
+  phone          String?
+  message        String
+  status         LeadStatus     @default(NEW)
+  assigneeId     String?
+  source         String         @default("storefront")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organizationId String?
+  assignee       User?          @relation(fields: [assigneeId], references: [id])
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property?      @relation(fields: [propertyId], references: [id])
+
+  @@index([organizationId, status, createdAt])
+  @@index([propertyId])
+}
+
+model OwnerSettlement {
+  id                  String               @id @default(cuid())
+  code                String
+  ownerId             String
+  periodYear          Int
+  periodMonth         Int
+  currency            Currency             @default(ARS)
+  grossRent           Decimal              @default(0) @db.Decimal(14, 2)
+  commissionAmount    Decimal              @default(0) @db.Decimal(14, 2)
+  deductionsAmount    Decimal              @default(0) @db.Decimal(14, 2)
+  extraordinaryAmount Decimal              @default(0) @db.Decimal(14, 2)
+  netPayout           Decimal              @default(0) @db.Decimal(14, 2)
+  status              SettlementStatus     @default(DRAFT)
+  pdfUrl              String?
+  paidAt              DateTime?
+  transferRef         String?
+  issuedAt            DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organizationId      String?
+  organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner               User                 @relation(fields: [ownerId], references: [id])
+  lines               SettlementLineItem[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, ownerId, periodYear, periodMonth, currency])
+  @@index([organizationId, status, periodYear, periodMonth])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  tenantBillId String
+  amount       Decimal       @db.Decimal(14, 2)
+  currency     Currency      @default(ARS)
+  method       PaymentMethod
+  paidAt       DateTime
+  reference    String?
+  receiptUrl   String?
+  recordedById String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  recordedBy   User?         @relation(fields: [recordedById], references: [id])
+  tenantBill   TenantBill    @relation(fields: [tenantBillId], references: [id])
+
+  @@index([paidAt])
+  @@index([tenantBillId])
+}
+
+model Property {
+  id             String              @id @default(cuid())
+  title          String
+  slug           String
+  description    String?
+  propertyType   PropertyType
+  operationType  OperationType
+  status         PropertyStatus      @default(DRAFT)
+  price          Decimal             @db.Decimal(14, 2)
+  currency       Currency            @default(ARS)
+  address        String
+  city           String
+  province       String?
+  country        String              @default("AR")
+  lat            Float?
+  lng            Float?
+  rooms          Int?
+  bathrooms      Int?
+  areaM2         Decimal?            @db.Decimal(10, 2)
+  amenities      String[]
+  videoUrl       String?
+  floorPlanUrl   String?
+  publishedAt    DateTime?
+  unitId         String?             @unique
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organizationId String?
+  contracts      Contract[]
+  leads          Lead[]
+  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit           Unit?               @relation(fields: [unitId], references: [id])
+  images         PropertyImage[]
+  ownerships     PropertyOwnership[]
+  workOrders     WorkOrder[]
+
+  @@unique([organizationId, slug])
+  @@index([city])
+  @@index([organizationId, status, operationType])
+  @@index([price])
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  propertyId String
+  url        String
+  alt        String?
+  sortOrder  Int      @default(0)
+  isCover    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, sortOrder])
+}
+
+model PropertyOwnership {
+  id         String   @id @default(cuid())
+  propertyId String
+  ownerId    String
+  sharePct   Decimal  @db.Decimal(5, 2)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  owner      User     @relation(fields: [ownerId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, ownerId])
+  @@index([ownerId])
+}
+
+model SettlementLineItem {
+  id                String           @id @default(cuid())
+  settlementId      String
+  concept           String
+  amount            Decimal          @db.Decimal(14, 2)
+  tenantBillId      String?
+  supplierInvoiceId String?
+  createdAt         DateTime         @default(now())
+  settlement        OwnerSettlement  @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  supplierInvoice   SupplierInvoice? @relation(fields: [supplierInvoiceId], references: [id])
+  tenantBill        TenantBill?      @relation(fields: [tenantBillId], references: [id])
+
+  @@index([settlementId])
+}
+
+model SupplierInvoice {
+  id                 String               @id @default(cuid())
+  workOrderId        String
+  supplierId         String
+  invoiceNumber      String?
+  amount             Decimal              @db.Decimal(14, 2)
+  currency           Currency             @default(ARS)
+  invoiceDate        DateTime             @db.Date
+  proofUrl           String?
+  costBearer         CostBearer           @default(OWNER_DEDUCTIBLE)
+  paidAt             DateTime?
+  notes              String?
+  createdAt          DateTime             @default(now())
+  settlementLineItems SettlementLineItem[]
+  supplier           User                 @relation(fields: [supplierId], references: [id])
+  workOrder          WorkOrder            @relation(fields: [workOrderId], references: [id])
+
+  @@index([supplierId])
+  @@index([workOrderId])
+}
+
+model TenantBill {
+  id                 String               @id @default(cuid())
+  contractId         String
+  periodYear         Int
+  periodMonth        Int
+  dueDate            DateTime             @db.Date
+  rentAmount         Decimal              @db.Decimal(14, 2)
+  expensesAmount     Decimal              @default(0) @db.Decimal(14, 2)
+  lateFeeAmount      Decimal              @default(0) @db.Decimal(14, 2)
+  otherAmount        Decimal              @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal              @db.Decimal(14, 2)
+  paidAmount         Decimal              @default(0) @db.Decimal(14, 2)
+  currency           Currency             @default(ARS)
+  status             BillStatus           @default(PENDING)
+  issuedAt           DateTime             @default(now())
+  notes              String?
+  commissionAmount   Decimal              @default(0) @db.Decimal(14, 2)
+  payments           Payment[]
+  settlementLineItems SettlementLineItem[]
+  contract           Contract             @relation(fields: [contractId], references: [id])
+
+  @@unique([contractId, periodYear, periodMonth])
+  @@index([status, dueDate])
+}
+
+model Unit {
+  id                   String              @id @default(cuid())
+  complexId            String
+  code                 String
+  floor                String?
+  ownershipCoefficient Decimal             @db.Decimal(8, 6)
+  areaM2               Decimal?            @db.Decimal(10, 2)
+  rooms                Int?
+  bathrooms            Int?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  allocations          ExpenseAllocation[]
+  property             Property?
+  complex              Complex             @relation(fields: [complexId], references: [id], onDelete: Cascade)
+
+  @@unique([complexId, code])
+  @@index([complexId])
+}
+
+model User {
+  id                      String                 @id @default(cuid())
+  email                   String                 @unique
+  passwordHash            String?
+  name                    String
+  phone                   String?
+  documentType            String?
+  documentNumber          String?
+  isActive                Boolean                @default(true)
+  bankAlias               String?
+  bankCbu                 String?
+  bankName                String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  authId                  String?                @unique
+  lastActivityAt          DateTime?
+  contractParties         ContractParty[]
+  leadsAssigned           Lead[]
+  settlements             OwnerSettlement[]
+  paymentsReceived        Payment[]
+  ownerships              PropertyOwnership[]
+  supplierInvoices        SupplierInvoice[]
+  workOrdersAssigned      WorkOrder[]
+  billingPaymentsApproved BillingPayment[]       @relation("BillingPaymentApprover")
+  billingPayments         BillingPayment[]       @relation("BillingPaymentPayer")
+  memberships             OrganizationMember[]
+
+  @@index([documentNumber])
+}
+
+model WorkOrder {
+  id             String            @id @default(cuid())
+  code           String
+  propertyId     String
+  contractId     String?
+  title          String
+  description    String?
+  status         WorkOrderStatus   @default(OPEN)
+  costBearer     CostBearer        @default(OWNER_DEDUCTIBLE)
+  assigneeId     String?
+  requestedAt    DateTime          @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organizationId String?
+  invoices       SupplierInvoice[]
+  assignee       User?             @relation(fields: [assigneeId], references: [id])
+  contract       Contract?         @relation(fields: [contractId], references: [id])
+  organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property          @relation(fields: [propertyId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model BillingPayment {
+  id             String               @id @default(cuid())
+  userId         String
+  organizationId String?
+  companyName    String?
+  companySlug    String?
+  plan           BillingPlan
+  method         BillingPaymentMethod
+  currency       String
+  amount         Decimal              @db.Decimal(14, 2)
+  fxRateUsed     Decimal?             @db.Decimal(18, 6)
+  discountPercent Decimal?            @db.Decimal(5, 2)
+  promoMonths    Int?
+  status         BillingPaymentStatus @default(PENDING)
+  mpPreferenceId String?
+  mpPaymentId    String?
+  transferProofUrl String?
+  notes          String?
+  approvedById   String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  approvedBy     User?                @relation("BillingPaymentApprover", fields: [approvedById], references: [id])
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  user           User                 @relation("BillingPaymentPayer", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
+  @@map("billing_payments")
+}
+
+model OrganizationMember {
+  id              String           @id @default(cuid())
+  organizationId  String
+  userId          String
+  role            OrganizationRole @default(VIEWER)
+  allowedModules  String[]         @default([])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  turneroPuestoId String?
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  turneroPuesto   TurneroPuesto?   @relation(fields: [turneroPuestoId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([turneroPuestoId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model Organization {
+  id                       String                  @id @default(cuid())
+  name                     String
+  legalName                String?
+  slug                     String                  @unique
+  taxId                    String?
+  email                    String?
+  phone                    String?
+  address                  String?
+  city                     String?
+  province                 String?
+  country                  String                  @default("AR")
+  logoUrl                  String?
+  sessionIdleMinutes       Int                     @default(30)
+  billingStatus            BillingStatus           @default(PENDING_PAYMENT)
+  billingPlan              BillingPlan?
+  paidUntil                DateTime?
+  billingPromoPercent      Decimal?                @db.Decimal(5, 2)
+  billingPromoUntil        DateTime?
+  mpPreapprovalId          String?
+  mpCustomerId             String?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  checkDueAlertDays        Int                     @default(7)
+  currency                 String                  @default("ARS")
+  enabledCurrencies        String[]                @default(["ARS", "USD"])
+  facebookUrl              String?
+  instagramUrl             String?
+  linkedinUrl              String?
+  postalCode               String?
+  themeId                  String                  @default("simpleinmo")
+  website                  String?
+  whatsapp                 String?
+  xUrl                     String?
+  complexes                Complex[]
+  contracts                Contract[]
+  expenses                 Expense[]
+  leads                    Lead[]
+  settlements              OwnerSettlement[]
+  properties               Property[]
+  workOrders               WorkOrder[]
+  billingPayments          BillingPayment[]
+  members                  OrganizationMember[]
+  turneroClientes          TurneroCliente[]
+  turneroContadoresDiarios TurneroContadorDiario[]
+  turneroPuestos           TurneroPuesto[]
+  turneroTurnos            TurneroTurno[]
+
+  @@map("organizations")
+}
+
+model PlatformBillingSettings {
+  id                  String   @id @default("default")
+  mpAccessToken       String?
+  mpPublicKey         String?
+  mpSurchargePercent  Decimal  @default(4) @db.Decimal(6, 2)
+  planPrices          Json?
+  transferAccountName String?
+  transferTaxId       String?
+  transferBankNameArs String?
+  transferCbuArs      String?
+  transferAliasArs    String?
+  transferBankNameUsd String?
+  transferAccountUsd  String?
+  transferNotes       String?
+  updatedAt           DateTime @updatedAt
+
+  @@map("platform_billing_settings")
+}
+
+model TurneroCliente {
+  id             String         @id @default(cuid())
+  organizationId String
+  dni            String
+  nombre         String
+  createdAt      DateTime       @default(now())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  turneroTurnos  TurneroTurno[]
+
+  @@unique([organizationId, dni])
+  @@map("turnero_clientes")
+}
+
+model TurneroContadorDiario {
+  id             String       @id @default(cuid())
+  organizationId String
+  fecha          String
+  categoria      String
+  valor          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, fecha, categoria])
+  @@map("turnero_contadores_diarios")
+}
+
+model TurneroPuesto {
+  id             String               @id @default(cuid())
+  organizationId String
+  nombre         String
+  categoria      String
+  activo         Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  members        OrganizationMember[]
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, nombre])
+  @@index([organizationId, categoria, activo])
+  @@map("turnero_puestos")
+}
+
+model TurneroTurno {
+  id             String          @id @default(cuid())
+  organizationId String
+  codigo         String
+  categoria      String
+  estado         String          @default("ESPERA")
+  puesto         String?
+  creadoEn       DateTime        @default(now())
+  llamadoEn      DateTime?
+  clienteId      String?
+  cliente        TurneroCliente? @relation(fields: [clienteId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([organizationId, categoria, estado, creadoEn])
+  @@index([organizationId, creadoEn])
+  @@index([organizationId, llamadoEn])
+  @@map("turnero_turnos")
+}
+
+enum AdjustmentIndex {
+  IPC
+  ICL
+  CUSTOM_PERCENT
+  FIXED
+}
+
+enum AllocationMethod {
+  OWNERSHIP_COEFFICIENT
+  FIXED_EQUAL
+  FIXED_AMOUNT
+}
+
+enum BillStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum BillingPaymentMethod {
+  MERCADOPAGO
+  TRANSFER
+}
+
+enum BillingPaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BillingPlan {
+  TRIAL
+  SOLO_MONTHLY
+  SOLO_ANNUAL
+  TEAM_MONTHLY
+  TEAM_ANNUAL
+  UNLIMITED_MONTHLY
+  UNLIMITED_ANNUAL
+}
+
+enum BillingStatus {
+  ACTIVE
+  PAST_DUE
+  PENDING_PAYMENT
+  EXEMPT
+}
+
+enum CommissionMode {
+  PERCENT_RENT
+  FIXED_AMOUNT
+  CONTRACT_TOTAL
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  RENEWED
+}
+
+enum CostBearer {
+  OWNER_DEDUCTIBLE
+  TENANT
+  AGENCY
+}
+
+enum Currency {
+  ARS
+  USD
+  EUR
+}
+
+enum ExpenseType {
+  ORDINARY
+  EXTRAORDINARY
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  CLOSED
+}
+
+enum OperationType {
+  RENT
+  SALE
+  BOTH
+}
+
+enum OrganizationRole {
+  ADMIN
+  AGENT
+  OWNER
+  TENANT
+  SUPPLIER
+  VIEWER
+}
+
+enum PartyRole {
+  OWNER
+  TENANT
+  GUARANTOR
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  CARD
+  GATEWAY
+  OTHER
+}
+
+enum PropertyStatus {
+  DRAFT
+  AVAILABLE
+  RESERVED
+  RENTED
+  SOLD
+  MAINTENANCE
+  INACTIVE
+}
+
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  COMMERCIAL
+  LAND
+  OFFICE
+  OTHER
+}
+
+enum SettlementStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}

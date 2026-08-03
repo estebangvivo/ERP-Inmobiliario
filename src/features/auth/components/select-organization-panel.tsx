@@ -1,7 +1,6 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,40 +29,51 @@ export function SelectOrganizationPanel({
   isPlatformSuperadmin,
   requireChoice,
 }: Props) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function enter(id: string) {
     startTransition(async () => {
-      const result = await switchOrganization(id);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await switchOrganization(id);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        window.location.assign("/dashboard");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo abrir la empresa. Probá de nuevo.");
       }
-      router.push("/dashboard");
-      router.refresh();
     });
   }
 
   function toAdmin() {
     startTransition(async () => {
-      await clearActiveOrganization();
-      router.push("/admin");
-      router.refresh();
+      try {
+        await clearActiveOrganization();
+        window.location.assign("/admin");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo volver al panel de plataforma.");
+      }
     });
   }
 
   function create() {
     startTransition(async () => {
-      const result = await createOrganization({ name });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await createOrganization({ name });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        window.location.assign("/dashboard");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo crear la empresa.");
       }
-      router.push("/dashboard");
-      router.refresh();
     });
   }
 

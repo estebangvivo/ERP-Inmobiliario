@@ -4,10 +4,31 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaff, slugify } from "@/lib/session";
 import {
+  publicPropertiesPath,
+  publicPropertyPath,
+  publicStorefrontPath,
+} from "@/lib/public-org";
+import {
   propertyCreateSchema,
   propertyUpdateSchema,
 } from "@/server/validators/property";
 import type { ActionResult } from "@/server/actions/users";
+
+async function revalidatePublicCatalog(
+  organizationId: string,
+  propertySlug?: string,
+) {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  if (!org) return;
+  revalidatePath(publicStorefrontPath(org.slug), "layout");
+  revalidatePath(publicPropertiesPath(org.slug));
+  if (propertySlug) {
+    revalidatePath(publicPropertyPath(org.slug, propertySlug));
+  }
+}
 
 function formDataToObject(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -18,7 +39,7 @@ function emptyToUndef<T>(v: T | "" | undefined): T | undefined {
 }
 
 async function uniqueSlug(base: string, organizationId: string, excludeId?: string) {
-  let slug = slugify(base) || `propiedad-${Date.now()}`;
+  const slug = slugify(base) || `propiedad-${Date.now()}`;
   let i = 0;
   while (true) {
     const candidate = i === 0 ? slug : `${slug}-${i}`;
@@ -89,7 +110,7 @@ export async function createPropertyAction(
   });
 
   revalidatePath("/gestion/propiedades");
-  revalidatePath("/propiedades");
+  await revalidatePublicCatalog(session.organizationId, slug);
   return { ok: true };
 }
 
@@ -153,6 +174,6 @@ export async function updatePropertyAction(
 
   revalidatePath("/gestion/propiedades");
   revalidatePath(`/gestion/propiedades/${d.id}`);
-  revalidatePath("/propiedades");
+  await revalidatePublicCatalog(session.organizationId, existing.slug);
   return { ok: true };
 }

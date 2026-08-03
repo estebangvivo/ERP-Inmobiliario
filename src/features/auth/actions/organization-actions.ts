@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import {
   getSession,
@@ -100,7 +99,8 @@ export async function switchOrganization(
       where: { id: session.user.id },
       data: { lastActivityAt: new Date() },
     });
-    revalidatePath("/", "layout");
+    // No revalidatePath global: con Turbopack puede colgar la server action.
+    // La UI hace window.location (recarga completa).
     return { ok: true, organizationId: targetOrgId };
   } catch (error) {
     console.error("switchOrganization", error);
@@ -123,9 +123,6 @@ export async function clearActiveOrganization(): Promise<OrgActionResult> {
       email: session.user.email,
     });
     await setLocalSessionCookie(token);
-    revalidatePath("/", "layout");
-    revalidatePath("/admin");
-    revalidatePath("/select-organization");
     return { ok: true };
   } catch (error) {
     console.error("clearActiveOrganization", error);
@@ -190,9 +187,6 @@ export async function createOrganization(input: {
       });
       await setLocalSessionCookie(token);
     }
-    revalidatePath("/", "layout");
-    revalidatePath("/admin");
-    revalidatePath("/select-organization");
     return { ok: true, organizationId: org.id };
   } catch (error) {
     console.error("createOrganization", error);

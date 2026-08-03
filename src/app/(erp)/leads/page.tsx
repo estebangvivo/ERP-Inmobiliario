@@ -3,6 +3,7 @@ import { LeadStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { leadScopeWhere } from "@/lib/tenant-scope";
+import { publicPropertyPath } from "@/lib/public-org";
 import { formatDateOnly } from "@/lib/dates";
 import { LEAD_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
@@ -27,14 +28,22 @@ export default async function LeadsPage({
     AND: [scope, statusFilter ? { status: statusFilter } : {}],
   };
 
-  const leads = await prisma.lead.findMany({
-    where,
-    include: {
-      property: true,
-      assignee: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [leads, org] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      include: {
+        property: true,
+        assignee: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.organization.findUnique({
+      where: { id: session.organizationId },
+      select: { slug: true },
+    }),
+  ]);
+
+  const orgSlug = org?.slug ?? "";
 
   return (
     <div>
@@ -47,10 +56,14 @@ export default async function LeadsPage({
         <Select name="status" defaultValue={statusFilter ?? ""}>
           <option value="">Todos</option>
           {(Object.keys(LEAD_STATUS_LABELS) as LeadStatus[]).map((s) => (
-            <option key={s} value={s}>{LEAD_STATUS_LABELS[s]}</option>
+            <option key={s} value={s}>
+              {LEAD_STATUS_LABELS[s]}
+            </option>
           ))}
         </Select>
-        <Button type="submit" variant="secondary">Filtrar</Button>
+        <Button type="submit" variant="secondary">
+          Filtrar
+        </Button>
       </FilterBar>
 
       <DataTable
@@ -70,9 +83,9 @@ export default async function LeadsPage({
               </p>
             </td>
             <td className="px-4 py-3">
-              {lead.property ? (
+              {lead.property && orgSlug ? (
                 <Link
-                  href={`/propiedades/${lead.property.slug}`}
+                  href={publicPropertyPath(orgSlug, lead.property.slug)}
                   className="text-[var(--primary)] underline"
                   target="_blank"
                 >

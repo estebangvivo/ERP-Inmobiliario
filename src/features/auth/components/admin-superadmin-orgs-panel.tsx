@@ -69,13 +69,17 @@ export function AdminSuperadminOrgsPanel({
   function openErp(organizationId: string) {
     setError(null);
     startTransition(async () => {
-      const result = await switchOrganization(organizationId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await switchOrganization(organizationId);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        window.location.assign("/dashboard");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo abrir la empresa. Probá de nuevo.");
       }
-      router.push("/dashboard");
-      router.refresh();
     });
   }
 

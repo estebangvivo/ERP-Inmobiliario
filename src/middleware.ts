@@ -30,6 +30,7 @@ const PROTECTED_PREFIXES = [
 const PUBLIC_EXACT = new Set(["/", "/login", "/sign-up"]);
 const PUBLIC_PREFIXES = [
   "/propiedades",
+  "/i",
   "/api/auth/login",
   "/api/billing",
   "/turnero/pantalla",

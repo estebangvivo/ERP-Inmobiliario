@@ -3,11 +3,38 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
+import {
+  publicPropertiesPath,
+  publicPropertyPath,
+  publicStorefrontPath,
+} from "@/lib/public-org";
 import { storage } from "@/lib/storage";
 import type { ActionResult } from "@/server/actions/users";
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+
+async function revalidatePublicProperty(property: {
+  slug: string;
+  organizationId: string | null;
+  id: string;
+}) {
+  if (!property.organizationId) {
+    revalidatePath(`/gestion/propiedades/${property.id}`);
+    revalidatePath("/gestion/propiedades");
+    return;
+  }
+  const org = await prisma.organization.findUnique({
+    where: { id: property.organizationId },
+    select: { slug: true },
+  });
+  revalidatePath(`/gestion/propiedades/${property.id}`);
+  revalidatePath("/gestion/propiedades");
+  if (!org) return;
+  revalidatePath(publicStorefrontPath(org.slug), "layout");
+  revalidatePath(publicPropertiesPath(org.slug));
+  revalidatePath(publicPropertyPath(org.slug, property.slug));
+}
 
 export async function uploadPropertyImagesAction(
   _prev: ActionResult | null,
@@ -59,10 +86,7 @@ export async function uploadPropertyImagesAction(
     sortOrder += 1;
   }
 
-  revalidatePath(`/gestion/propiedades/${propertyId}`);
-  revalidatePath(`/propiedades/${property.slug}`);
-  revalidatePath("/propiedades");
-  revalidatePath("/gestion/propiedades");
+  await revalidatePublicProperty(property);
   return { ok: true, message: `${files.length} imagen(es) subida(s)` };
 }
 
@@ -91,9 +115,7 @@ export async function deletePropertyImageAction(imageId: string): Promise<Action
     }
   }
 
-  revalidatePath(`/gestion/propiedades/${image.propertyId}`);
-  revalidatePath(`/propiedades/${image.property.slug}`);
-  revalidatePath("/propiedades");
+  await revalidatePublicProperty(image.property);
   return { ok: true };
 }
 
@@ -116,8 +138,6 @@ export async function setCoverPropertyImageAction(imageId: string): Promise<Acti
     }),
   ]);
 
-  revalidatePath(`/gestion/propiedades/${image.propertyId}`);
-  revalidatePath(`/propiedades/${image.property.slug}`);
-  revalidatePath("/propiedades");
+  await revalidatePublicProperty(image.property);
   return { ok: true };
 }

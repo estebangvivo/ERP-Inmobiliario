@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/erp/page-chrome";
+import { PublicCatalogLinkCard } from "@/components/erp/public-catalog-link-card";
 import { OrganizationPlanCard } from "@/features/billing/components/organization-plan-card";
 import { UsersAdminPanel } from "@/features/auth/components/users-admin-panel";
 import { listOrganizationUsers } from "@/features/auth/actions/user-actions";
@@ -41,6 +42,10 @@ export default async function AjustesPage() {
     canManageUsers ? listOrganizationUsers() : Promise.resolve([]),
   ]);
 
+  const appOrigin = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001"
+  ).replace(/\/$/, "");
+
   return (
     <div>
       <PageHeader
@@ -56,6 +61,11 @@ export default async function AjustesPage() {
         </Link>
       </p>
       <div className="space-y-10">
+        <PublicCatalogLinkCard
+          orgSlug={organization.slug}
+          orgName={organization.name}
+          appOrigin={appOrigin}
+        />
         <OrganizationSettingsForm organization={organization} />
         {billing ? (
           <OrganizationPlanCard

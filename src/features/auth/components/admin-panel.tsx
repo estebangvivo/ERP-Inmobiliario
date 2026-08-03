@@ -23,6 +23,7 @@ import {
 } from "@/features/auth/actions/admin-panel-actions";
 import { UsersAdminPanel } from "@/features/auth/components/users-admin-panel";
 import { BILLING_PLANS } from "@/features/billing/lib/plans";
+import { publicPropertiesPath } from "@/lib/public-org";
 
 type Tab = "empresas" | "usuarios" | "billing";
 
@@ -57,13 +58,20 @@ export function AdminPanel({ organizations }: Props) {
   }
 
   function enterOrg(orgId: string) {
+    setError(null);
     startTransition(async () => {
-      const result = await switchOrganization(orgId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await switchOrganization(orgId);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        // Recarga completa para aplicar cookie de sesión sin soft-nav colgado.
+        window.location.assign("/dashboard");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo abrir la empresa. Probá de nuevo.");
       }
-      window.location.href = "/dashboard";
     });
   }
 
@@ -201,6 +209,15 @@ export function AdminPanel({ organizations }: Props) {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
+                    <a
+                      href={publicPropertiesPath(org.slug)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Button size="sm" variant="ghost">
+                        Portal
+                      </Button>
+                    </a>
                     <Button
                       size="sm"
                       variant="outline"

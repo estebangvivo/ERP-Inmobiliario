@@ -14,11 +14,11 @@ export default function NotFound() {
         La propiedad o ruta que buscás no existe o ya no está publicada.
       </p>
       <div className="flex gap-2">
-        <Link href="/propiedades">
-          <Button>Ver propiedades</Button>
-        </Link>
         <Link href="/">
-          <Button variant="outline">Inicio</Button>
+          <Button>Inicio</Button>
+        </Link>
+        <Link href="/login">
+          <Button variant="outline">Ingresar</Button>
         </Link>
       </div>
     </div>

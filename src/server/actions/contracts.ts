@@ -106,7 +106,7 @@ export async function createContractAction(
   });
 
   revalidatePath("/contratos");
-  revalidatePath("/propiedades");
+  revalidatePath("/gestion/propiedades");
   return { ok: true };
 }
 

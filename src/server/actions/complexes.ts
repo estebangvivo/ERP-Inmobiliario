@@ -19,7 +19,7 @@ async function uniqueComplexSlug(
   organizationId: string,
   excludeId?: string,
 ) {
-  let slug = slugify(base) || `complejo-${Date.now()}`;
+  const slug = slugify(base) || `complejo-${Date.now()}`;
   let i = 0;
   while (true) {
     const candidate = i === 0 ? slug : `${slug}-${i}`;

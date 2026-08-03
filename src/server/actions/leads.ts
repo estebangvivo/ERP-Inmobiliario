@@ -33,7 +33,7 @@ export async function createLeadAction(
   }
 
   let organizationId: string | null = null;
-  let propertyId: string | null = parsed.data.propertyId || null;
+  const propertyId: string | null = parsed.data.propertyId || null;
 
   if (propertyId) {
     const property = await prisma.property.findUnique({

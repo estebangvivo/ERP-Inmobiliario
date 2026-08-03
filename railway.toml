@@ -4,6 +4,7 @@ buildCommand = "npm install && npm run build"
 
 [deploy]
 startCommand = "npm run start:prod"
-healthcheckPath = "/api/health"
+# /login es estático y responde apenas Next escucha (no depende de DB).
+healthcheckPath = "/login"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

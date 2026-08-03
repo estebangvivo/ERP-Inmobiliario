@@ -3,8 +3,9 @@ builder = "NIXPACKS"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-startCommand = "npm run start:prod"
-# /login es estático y responde apenas Next escucha (no depende de DB).
+# DB antes de levantar Next, para que el healthcheck no espere el seed.
+preDeployCommand = "npx prisma db push && npx tsx prisma/seed.ts"
+startCommand = "npx next start -H 0.0.0.0"
 healthcheckPath = "/login"
-healthcheckTimeout = 300
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

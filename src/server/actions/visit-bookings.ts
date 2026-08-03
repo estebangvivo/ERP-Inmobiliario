@@ -3,15 +3,44 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { VisitBookingStatus } from "@prisma/client";
+import { listInamoviblesForYears, persistEnabledHolidays } from "@/lib/ar-holidays";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import {
+  DEFAULT_VISIT_SCHEDULE,
+  effectiveEnabledHolidays,
   formatArtDisplay,
+  formatScheduleSummary,
   generateVisitSlots,
   isValidVisitSlot,
+  normalizeVisitSchedule,
+  scheduleFromOrganization,
+  type VisitScheduleConfig,
   type VisitSlot,
 } from "@/lib/visit-slots";
 import { publicPropertiesPath } from "@/lib/public-org";
+
+const ORG_SCHEDULE_SELECT = {
+  visitWeekdays: true,
+  visitHourStart: true,
+  visitHourEnd: true,
+  visitClosedDates: true,
+  visitEnabledHolidays: true,
+  slug: true,
+} as const;
+
+async function loadOrgSchedule(organizationId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: ORG_SCHEDULE_SELECT,
+  });
+  if (!org) return null;
+  return {
+    org,
+    schedule: scheduleFromOrganization(org),
+  };
+}
 
 export type VisitActionResult =
   | {
@@ -41,11 +70,16 @@ export async function getAvailableVisitDays(
 ): Promise<AvailableDay[]> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { id: true, organizationId: true },
+    select: {
+      id: true,
+      organizationId: true,
+      organization: { select: ORG_SCHEDULE_SELECT },
+    },
   });
-  if (!property?.organizationId) return [];
+  if (!property?.organizationId || !property.organization) return [];
 
-  const candidates = generateVisitSlots(new Date());
+  const schedule = scheduleFromOrganization(property.organization);
+  const candidates = generateVisitSlots(new Date(), undefined, schedule);
   if (candidates.length === 0) return [];
 
   const from = candidates[0]!.startsAt;
@@ -110,31 +144,32 @@ export async function bookPropertyVisitAction(
     };
   }
 
-  const startsAt = new Date(parsed.data.startsAt);
-  if (Number.isNaN(startsAt.getTime()) || !isValidVisitSlot(startsAt)) {
-    return {
-      ok: false,
-      error: "Ese horario no está disponible (lun–vie 8 a 16 hs).",
-    };
-  }
-
-  const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-
   const property = await prisma.property.findUnique({
     where: { id: parsed.data.propertyId },
     select: {
       id: true,
       title: true,
       organizationId: true,
-      organization: { select: { slug: true } },
+      organization: { select: ORG_SCHEDULE_SELECT },
       status: true,
       slug: true,
     },
   });
 
-  if (!property?.organizationId) {
+  if (!property?.organizationId || !property.organization) {
     return { ok: false, error: "Propiedad no encontrada." };
   }
+
+  const startsAt = new Date(parsed.data.startsAt);
+  const schedule = scheduleFromOrganization(property.organization);
+  if (Number.isNaN(startsAt.getTime()) || !isValidVisitSlot(startsAt, new Date(), schedule)) {
+    return {
+      ok: false,
+      error: `Ese horario no está disponible (${formatScheduleSummary(schedule)}).`,
+    };
+  }
+
+  const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
 
   const existing = await prisma.propertyVisitBooking.findFirst({
     where: {
@@ -232,7 +267,10 @@ export async function listVisitStaffOptions(): Promise<VisitStaffOption[]> {
     where: {
       organizationId: session.organizationId,
       role: { in: ["ADMIN", "AGENT"] },
-      user: { isActive: true },
+      user: {
+        isActive: true,
+        ...excludePlatformSuperadminFromUser(),
+      },
     },
     include: { user: { select: { id: true, name: true } } },
     orderBy: { user: { name: "asc" } },
@@ -292,7 +330,10 @@ export async function assignVisitBookingAction(
         organizationId: session.organizationId,
         userId: assigneeId,
         role: { in: ["ADMIN", "AGENT"] },
-        user: { isActive: true },
+        user: {
+          isActive: true,
+          ...excludePlatformSuperadminFromUser(),
+        },
       },
     });
     if (!member) {
@@ -306,4 +347,98 @@ export async function assignVisitBookingAction(
   });
   revalidatePath("/visitas");
   return { ok: true };
+}
+
+export type VisitScheduleSettingsPayload = {
+  schedule: VisitScheduleConfig;
+  /** MM-DD efectivamente marcados (para checkboxes). */
+  enabledHolidayMonthDays: string[];
+  summary: string;
+  canEdit: boolean;
+  holidays: Array<{
+    dateKey: string;
+    monthDay: string;
+    name: string;
+    year: number;
+  }>;
+};
+
+export async function getVisitScheduleSettings(): Promise<VisitScheduleSettingsPayload> {
+  const session = await requireModule("consultas");
+  const loaded = await loadOrgSchedule(session.organizationId);
+  const schedule = loaded?.schedule ?? DEFAULT_VISIT_SCHEDULE;
+  const now = new Date();
+  const year = now.getFullYear();
+  const holidays = listInamoviblesForYears([year, year + 1]);
+
+  return {
+    schedule,
+    enabledHolidayMonthDays: effectiveEnabledHolidays(schedule),
+    summary: formatScheduleSummary(schedule),
+    canEdit: session.organizationRole === "ADMIN",
+    holidays,
+  };
+}
+
+const scheduleUpdateSchema = z.object({
+  weekdays: z.array(z.number().int().min(1).max(7)).min(1),
+  hourStart: z.number().int().min(0).max(23),
+  hourEnd: z.number().int().min(1).max(24),
+  closedDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+  enabledHolidays: z.array(z.string().regex(/^\d{2}-\d{2}$/)),
+});
+
+export async function updateVisitScheduleAction(
+  input: z.infer<typeof scheduleUpdateSchema>,
+): Promise<VisitActionResult> {
+  const session = await requireModule("consultas");
+  if (session.organizationRole !== "ADMIN") {
+    return { ok: false, error: "Solo un administrador puede cambiar la agenda." };
+  }
+
+  const parsed = scheduleUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Datos inválidos",
+    };
+  }
+
+  if (parsed.data.hourEnd <= parsed.data.hourStart) {
+    return { ok: false, error: "La hora de fin debe ser posterior a la de inicio." };
+  }
+
+  const schedule = normalizeVisitSchedule({
+    weekdays: parsed.data.weekdays,
+    hourStart: parsed.data.hourStart,
+    hourEnd: parsed.data.hourEnd,
+    closedDates: [...new Set(parsed.data.closedDates)].sort(),
+    enabledHolidays: persistEnabledHolidays(parsed.data.enabledHolidays),
+  });
+
+  await prisma.organization.update({
+    where: { id: session.organizationId },
+    data: {
+      visitWeekdays: schedule.weekdays,
+      visitHourStart: schedule.hourStart,
+      visitHourEnd: schedule.hourEnd,
+      visitClosedDates: schedule.closedDates,
+      visitEnabledHolidays: schedule.enabledHolidays,
+    },
+  });
+
+  const org = await prisma.organization.findUnique({
+    where: { id: session.organizationId },
+    select: { slug: true },
+  });
+  revalidatePath("/visitas");
+  if (org?.slug) {
+    revalidatePath(publicPropertiesPath(org.slug));
+    revalidatePath(`${publicPropertiesPath(org.slug)}/propiedades`);
+  }
+
+  return {
+    ok: true,
+    message: `Agenda actualizada (${formatScheduleSummary(schedule)}).`,
+  };
 }

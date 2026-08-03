@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/erp/page-chrome";
 import { PropertyForm } from "@/components/erp/property-form";
 import { PropertyImagesManager } from "@/components/erp/property-images-manager";
 import { Button } from "@/components/ui/button";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 
@@ -26,7 +27,10 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
       where: {
         organizationId: session.organizationId,
         role: "OWNER",
-        user: { isActive: true },
+        user: {
+          isActive: true,
+          ...excludePlatformSuperadminFromUser(),
+        },
       },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { user: { name: "asc" } },

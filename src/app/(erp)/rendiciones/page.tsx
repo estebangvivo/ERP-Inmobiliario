@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, PageHeader } from "@/components/erp/page-chrome";
 import { GenerateSettlementForm } from "@/components/erp/settlement-forms";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 
 export default async function RendicionesPage() {
   const session = await requireModule("rendiciones");
@@ -20,7 +21,10 @@ export default async function RendicionesPage() {
           where: {
             organizationId: session.organizationId,
             role: "OWNER",
-            user: { isActive: true },
+            user: {
+              isActive: true,
+              ...excludePlatformSuperadminFromUser(),
+            },
           },
           include: { user: { select: { id: true, name: true } } },
           orderBy: { user: { name: "asc" } },

@@ -26,6 +26,13 @@ export function isPlatformSuperadminEmail(
   return getPlatformSuperadminEmails().includes(email.trim().toLowerCase());
 }
 
+/** Filtro Prisma: excluye al superadmin de plataforma de listas de asignación. */
+export function excludePlatformSuperadminFromUser() {
+  const emails = getPlatformSuperadminEmails();
+  if (emails.length === 0) return {};
+  return { email: { notIn: emails } };
+}
+
 export function isPlatformSuperadmin(
   session: Pick<SessionContext, "user"> | { user: { email: string } },
 ): boolean {

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/dates";
 import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 
@@ -31,7 +32,10 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
       where: {
         organizationId: session.organizationId,
         role: "SUPPLIER",
-        user: { isActive: true },
+        user: {
+          isActive: true,
+          ...excludePlatformSuperadminFromUser(),
+        },
       },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { user: { name: "asc" } },

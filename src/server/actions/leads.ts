@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 
 const leadSchema = z.object({
@@ -63,7 +64,10 @@ export async function createLeadAction(
     where: {
       organizationId,
       role: { in: ["AGENT", "ADMIN"] },
-      user: { isActive: true },
+      user: {
+        isActive: true,
+        ...excludePlatformSuperadminFromUser(),
+      },
     },
     orderBy: { createdAt: "asc" },
     select: { userId: true },

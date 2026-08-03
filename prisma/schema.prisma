@@ -488,6 +488,15 @@ model Organization {
   website                  String?
   whatsapp                 String?
   xUrl                     String?
+  /// 1=lun … 7=dom
+  visitWeekdays            Int[]                   @default([1, 2, 3, 4, 5])
+  visitHourStart           Int                     @default(8)
+  /// Exclusivo: último slot empieza en end-1
+  visitHourEnd             Int                     @default(16)
+  /// YYYY-MM-DD cierres extra
+  visitClosedDates         String[]                @default([])
+  /// MM-DD inamovibles activos; vacío = todos
+  visitEnabledHolidays     String[]                @default([])
   complexes                Complex[]
   contracts                Contract[]
   expenses                 Expense[]

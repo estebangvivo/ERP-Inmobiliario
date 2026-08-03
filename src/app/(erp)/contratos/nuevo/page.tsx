@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/erp/page-chrome";
 import { ContractCreateForm } from "@/components/erp/contract-form";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import { propertyScopeWhere } from "@/lib/tenant-scope";
@@ -12,7 +13,10 @@ async function membersAsUsers(
     where: {
       organizationId,
       role: { in: roles },
-      user: { isActive: true },
+      user: {
+        isActive: true,
+        ...excludePlatformSuperadminFromUser(),
+      },
     },
     include: { user: { select: { id: true, name: true } } },
     orderBy: { user: { name: "asc" } },

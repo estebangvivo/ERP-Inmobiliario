@@ -11,11 +11,12 @@ import {
   type VisitStaffOption,
 } from "@/server/actions/visit-bookings";
 import {
-  VISIT_SLOT_HOURS,
   artLocalToUtc,
   formatArtDateKey,
   formatArtDisplay,
   formatArtTimeLabel,
+  slotHoursForRange,
+  type VisitScheduleConfig,
 } from "@/lib/visit-slots";
 
 const STATUS_LABEL: Record<VisitBookingRow["status"], string> = {
@@ -56,12 +57,18 @@ function addDaysYmd(y: number, m: number, d: number, days: number) {
   };
 }
 
-function weekDayKeys(anchor: Date): string[] {
+function weekDayKeys(anchor: Date, weekdays: number[]): string[] {
   const mon = startOfArtWeekMonday(anchor);
-  return [0, 1, 2, 3, 4].map((i) => {
-    const day = addDaysYmd(mon.y, mon.m, mon.d, i);
-    return `${day.y}-${String(day.m).padStart(2, "0")}-${String(day.d).padStart(2, "0")}`;
-  });
+  const wanted = new Set(weekdays);
+  // Mostrar lun–dom de la semana, filtrando a días configurados
+  return [0, 1, 2, 3, 4, 5, 6]
+    .map((i) => {
+      const day = addDaysYmd(mon.y, mon.m, mon.d, i);
+      const iso = i + 1; // 0=lun → 1
+      return { iso, key: `${day.y}-${String(day.m).padStart(2, "0")}-${String(day.d).padStart(2, "0")}` };
+    })
+    .filter((d) => wanted.has(d.iso))
+    .map((d) => d.key);
 }
 
 function dayLabel(dateKey: string): string {
@@ -78,15 +85,25 @@ function dayLabel(dateKey: string): string {
 export function VisitBookingsPanel({
   bookings,
   staff,
+  schedule,
 }: {
   bookings: VisitBookingRow[];
   staff: VisitStaffOption[];
+  schedule: VisitScheduleConfig;
 }) {
   const [view, setView] = useState<ViewMode>("calendar");
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [pending, startTransition] = useTransition();
 
-  const days = useMemo(() => weekDayKeys(weekAnchor), [weekAnchor]);
+  const hours = useMemo(
+    () => slotHoursForRange(schedule.hourStart, schedule.hourEnd),
+    [schedule.hourStart, schedule.hourEnd],
+  );
+
+  const days = useMemo(
+    () => weekDayKeys(weekAnchor, schedule.weekdays),
+    [weekAnchor, schedule.weekdays],
+  );
 
   function reload() {
     window.location.reload();
@@ -200,7 +217,7 @@ export function VisitBookingsPanel({
               </tr>
             </thead>
             <tbody>
-              {VISIT_SLOT_HOURS.map((hour) => (
+              {hours.map((hour) => (
                 <tr key={hour} className="align-top">
                   <td className="border-b border-[var(--border)] px-2 py-2 font-medium text-[var(--muted-foreground)]">
                     {String(hour).padStart(2, "0")}:00

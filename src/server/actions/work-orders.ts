@@ -2,6 +2,7 @@
 
 import { CostBearer, WorkOrderStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import type { ActionResult } from "@/server/actions/users";
@@ -38,6 +39,23 @@ export async function createWorkOrderAction(
   });
   if (!property) {
     return { ok: false, error: "Propiedad no encontrada." };
+  }
+
+  if (assigneeId) {
+    const supplier = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: session.organizationId,
+        userId: assigneeId,
+        role: "SUPPLIER",
+        user: {
+          isActive: true,
+          ...excludePlatformSuperadminFromUser(),
+        },
+      },
+    });
+    if (!supplier) {
+      return { ok: false, error: "Proveedor no válido." };
+    }
   }
 
   await prisma.workOrder.create({

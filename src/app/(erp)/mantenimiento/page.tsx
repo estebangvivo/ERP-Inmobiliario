@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, PageHeader } from "@/components/erp/page-chrome";
 import { WorkOrderForm } from "@/components/erp/work-order-forms";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 
 export default async function MantenimientoPage() {
   const session = await requireModule("mantenimiento");
@@ -29,7 +30,10 @@ export default async function MantenimientoPage() {
           where: {
             organizationId: session.organizationId,
             role: "SUPPLIER",
-            user: { isActive: true },
+            user: {
+              isActive: true,
+              ...excludePlatformSuperadminFromUser(),
+            },
           },
           include: { user: { select: { id: true, name: true } } },
           orderBy: { user: { name: "asc" } },

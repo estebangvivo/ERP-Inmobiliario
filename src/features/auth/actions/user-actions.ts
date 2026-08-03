@@ -59,8 +59,6 @@ export async function listOrganizationUsers(
   const orgId = organizationId ?? session.organizationId;
   await assertCanManageUsers(orgId);
 
-  const viewerIsSuper = isPlatformSuperadminEmail(session.user.email);
-
   const members = await prisma.organizationMember.findMany({
     where: { organizationId: orgId },
     include: { user: true },
@@ -69,8 +67,7 @@ export async function listOrganizationUsers(
 
   return members
     .filter((m) => {
-      // Los admins de inmobiliaria no ven ni gestionan al superadmin.
-      if (viewerIsSuper) return true;
+      // El superadmin de plataforma no forma parte del staff de la inmobiliaria.
       return !isPlatformSuperadminEmail(m.user.email);
     })
     .map((m) => ({

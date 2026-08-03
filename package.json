@@ -2,12 +2,22 @@
   "name": "erp-inmobiliario",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev --turbopack --port 3001",
     "build": "prisma generate && next build --turbopack",
     "start": "next start",
+    "start:prod": "prisma db push && tsx prisma/seed.ts && next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:setup": "prisma db push && tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
@@ -20,10 +30,12 @@
     "jose": "^6.2.7",
     "lucide-react": "^1.28.0",
     "next": "15.5.22",
+    "prisma": "^6.19.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.84.0",
     "tailwind-merge": "^3.6.0",
+    "tsx": "^4.23.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -36,9 +48,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "15.5.22",
-    "prisma": "^6.19.3",
     "tailwindcss": "^4",
-    "tsx": "^4.23.5",
     "typescript": "^5"
   }
 }

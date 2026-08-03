@@ -1,19 +1,25 @@
 import { PageHeader } from "@/components/erp/page-chrome";
-import { VisitBookingsTable } from "@/components/erp/visit-bookings-table";
-import { listOrganizationVisitBookings } from "@/server/actions/visit-bookings";
+import { VisitBookingsPanel } from "@/components/erp/visit-bookings-panel";
+import {
+  listOrganizationVisitBookings,
+  listVisitStaffOptions,
+} from "@/server/actions/visit-bookings";
 
 export const dynamic = "force-dynamic";
 
 export default async function VisitasPage() {
-  const bookings = await listOrganizationVisitBookings();
+  const [bookings, staff] = await Promise.all([
+    listOrganizationVisitBookings(),
+    listVisitStaffOptions(),
+  ]);
 
   return (
     <div>
       <PageHeader
         title="Visitas"
-        description="Turnos reservados desde el portal público (lun–vie 8 a 16 hs)."
+        description="Turnos del portal (lun–vie 8 a 16 hs). Asigná un agente y mirá el calendario semanal."
       />
-      <VisitBookingsTable bookings={bookings} />
+      <VisitBookingsPanel bookings={bookings} staff={staff} />
     </div>
   );
 }

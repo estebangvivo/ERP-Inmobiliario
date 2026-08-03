@@ -215,8 +215,34 @@ export type VisitBookingRow = {
   email: string;
   phone: string | null;
   status: VisitBookingStatus;
+  assigneeId: string | null;
   property: { id: string; title: string; slug: string };
+  assignee: { id: string; name: string } | null;
 };
+
+export type VisitStaffOption = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+export async function listVisitStaffOptions(): Promise<VisitStaffOption[]> {
+  const session = await requireModule("consultas");
+  const members = await prisma.organizationMember.findMany({
+    where: {
+      organizationId: session.organizationId,
+      role: { in: ["ADMIN", "AGENT"] },
+      user: { isActive: true },
+    },
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: { user: { name: "asc" } },
+  });
+  return members.map((m) => ({
+    id: m.user.id,
+    name: m.user.name,
+    role: m.role,
+  }));
+}
 
 export async function listOrganizationVisitBookings(): Promise<
   VisitBookingRow[]
@@ -227,6 +253,7 @@ export async function listOrganizationVisitBookings(): Promise<
     orderBy: { startsAt: "asc" },
     include: {
       property: { select: { id: true, title: true, slug: true } },
+      assignee: { select: { id: true, name: true } },
     },
   });
 }
@@ -244,6 +271,38 @@ export async function updateVisitBookingStatusAction(
   await prisma.propertyVisitBooking.update({
     where: { id },
     data: { status },
+  });
+  revalidatePath("/visitas");
+  return { ok: true };
+}
+
+export async function assignVisitBookingAction(
+  id: string,
+  assigneeId: string | null,
+): Promise<VisitActionResult> {
+  const session = await requireModule("consultas");
+  const booking = await prisma.propertyVisitBooking.findFirst({
+    where: { id, organizationId: session.organizationId },
+  });
+  if (!booking) return { ok: false, error: "Reserva no encontrada." };
+
+  if (assigneeId) {
+    const member = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: session.organizationId,
+        userId: assigneeId,
+        role: { in: ["ADMIN", "AGENT"] },
+        user: { isActive: true },
+      },
+    });
+    if (!member) {
+      return { ok: false, error: "Ese usuario no puede asignarse a visitas." };
+    }
+  }
+
+  await prisma.propertyVisitBooking.update({
+    where: { id },
+    data: { assigneeId },
   });
   revalidatePath("/visitas");
   return { ok: true };

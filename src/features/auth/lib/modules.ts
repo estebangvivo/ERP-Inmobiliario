@@ -13,6 +13,7 @@ export const APP_MODULE_KEYS = [
   "turnero",
   "usuarios",
   "ajustes",
+  "manual",
   "admin",
 ] as const;
 
@@ -45,6 +46,7 @@ export const APP_MODULES: AppModuleDef[] = [
   { key: "turnero", label: "Turnero", pathPrefixes: ["/turnero"] },
   { key: "usuarios", label: "Usuarios", pathPrefixes: ["/usuarios"] },
   { key: "ajustes", label: "Ajustes", pathPrefixes: ["/ajustes"] },
+  { key: "manual", label: "Manual", pathPrefixes: ["/manual"] },
   { key: "admin", label: "Administración", pathPrefixes: ["/admin"] },
 ];
 
@@ -65,6 +67,7 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "rendiciones",
     "consultas",
     "turnero",
+    "manual",
   ],
   OWNER: [
     "home",
@@ -73,10 +76,11 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "expensas",
     "mantenimiento",
     "rendiciones",
+    "manual",
   ],
-  TENANT: ["home", "contratos", "cobros", "mantenimiento"],
-  SUPPLIER: ["home", "mantenimiento"],
-  VIEWER: ["home", "contratos"],
+  TENANT: ["home", "contratos", "cobros", "mantenimiento", "manual"],
+  SUPPLIER: ["home", "mantenimiento", "manual"],
+  VIEWER: ["home", "contratos", "manual"],
 };
 
 export function resolveAllowedModules(
@@ -84,12 +88,18 @@ export function resolveAllowedModules(
   stored: string[] | null | undefined,
 ): AppModuleKey[] {
   // Nunca incluir "admin": ese módulo es exclusivo del superadmin de plataforma.
-  if (role === "ADMIN") return [...ORG_MODULE_KEYS];
-  if (stored && stored.length > 0) {
+  let modules: AppModuleKey[];
+  if (role === "ADMIN") {
+    modules = [...ORG_MODULE_KEYS];
+  } else if (stored && stored.length > 0) {
     const set = new Set(stored.filter((k) => k !== "admin"));
-    return ORG_MODULE_KEYS.filter((k) => set.has(k));
+    modules = ORG_MODULE_KEYS.filter((k) => set.has(k));
+  } else {
+    modules = [...ROLE_DEFAULT_MODULES[role]];
   }
-  return [...ROLE_DEFAULT_MODULES[role]];
+  // El manual de usuario está disponible para todos los roles de la org.
+  if (!modules.includes("manual")) modules.push("manual");
+  return modules;
 }
 
 export function hasModule(
@@ -113,6 +123,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/turnero": "turnero",
   "/usuarios": "usuarios",
   "/ajustes": "ajustes",
+  "/manual": "manual",
   "/admin": "admin",
 };
 
@@ -130,6 +141,7 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/visitas")) return "consultas";
   if (pathname.startsWith("/turnero")) return "turnero";
   if (pathname.startsWith("/ajustes")) return "ajustes";
+  if (pathname.startsWith("/manual")) return "manual";
   if (pathname.startsWith("/dashboard") || pathname === "/") return "home";
   if (
     pathname.startsWith("/login") ||

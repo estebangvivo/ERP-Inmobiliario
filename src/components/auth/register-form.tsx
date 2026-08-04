@@ -37,14 +37,13 @@ export function RegisterForm() {
       return;
     }
     startTransition(async () => {
-      const firstName = String(fd.get("firstName") ?? "").trim();
-      const lastName = String(fd.get("lastName") ?? "").trim();
-      const name = [firstName, lastName].filter(Boolean).join(" ") || firstName;
-
       const result = await registerWithPassword({
-        name,
         email: String(fd.get("email") ?? ""),
         password,
+        confirmPassword,
+        phone: String(fd.get("phone") ?? ""),
+        firstName: String(fd.get("firstName") ?? "") || undefined,
+        lastName: String(fd.get("lastName") ?? "") || undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -76,6 +75,7 @@ export function RegisterForm() {
             <span className="text-sm font-medium">Nombre</span>
             <input
               name="firstName"
+              required
               className={fieldClass.replace(" pr-10", "")}
               autoComplete="given-name"
             />
@@ -84,6 +84,7 @@ export function RegisterForm() {
             <span className="text-sm font-medium">Apellido</span>
             <input
               name="lastName"
+              required
               className={fieldClass.replace(" pr-10", "")}
               autoComplete="family-name"
             />

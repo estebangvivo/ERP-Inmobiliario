@@ -19,6 +19,9 @@ function titleFromPath(pathname: string): string {
     rendiciones: "Rendiciones",
     usuarios: "Usuarios",
     leads: "Consultas",
+    visitas: "Visitas",
+    turnero: "Turnero",
+    manual: "Manual",
     admin: "Plataforma",
   };
   return map[segment] ?? segment;

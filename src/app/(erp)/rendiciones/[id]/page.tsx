@@ -11,7 +11,7 @@ import { requireStaff } from "@/lib/session";
 type Params = Promise<{ id: string }>;
 
 export default async function RendicionDetailPage({ params }: { params: Params }) {
-  await requireStaff();
+  const session = await requireStaff();
   const { id } = await params;
 
   const settlement = await prisma.ownerSettlement.findUnique({
@@ -22,6 +22,15 @@ export default async function RendicionDetailPage({ params }: { params: Params }
     },
   });
   if (!settlement) notFound();
+
+  const bankAccounts = await prisma.bankAccount.findMany({
+    where: {
+      organizationId: session.organizationId!,
+      isActive: true,
+    },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, bankName: true, currency: true },
+  });
 
   return (
     <div className="space-y-6">
@@ -44,7 +53,16 @@ export default async function RendicionDetailPage({ params }: { params: Params }
         }
       />
 
-      <SettlementActions id={settlement.id} status={settlement.status} />
+      <SettlementActions
+        id={settlement.id}
+        status={settlement.status}
+        currency={settlement.currency}
+        bankAccounts={bankAccounts.map((b) => ({
+          id: b.id,
+          currency: b.currency,
+          label: `${b.name} · ${b.bankName} (${b.currency})`,
+        }))}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Stat

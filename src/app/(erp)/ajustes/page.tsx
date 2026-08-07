@@ -7,7 +7,10 @@ import { UsersAdminPanel } from "@/features/auth/components/users-admin-panel";
 import { listOrganizationUsers } from "@/features/auth/actions/user-actions";
 import { hasModule } from "@/features/auth/lib/modules";
 import { OrganizationSettingsForm } from "@/features/settings/components/organization-settings-form";
-import { getOrganizationProfile } from "@/features/settings/queries/get-organization";
+import { getOrganizationProfile, getEnabledCurrencies } from "@/features/settings/queries/get-organization";
+import { BanksSettingsPanel } from "@/features/settings/components/banks-settings-panel";
+import { listBankAccounts } from "@/features/treasury/queries/bank-queries";
+import { isStaffRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 
@@ -30,7 +33,7 @@ export default async function AjustesPage() {
     session.organizationRole === "ADMIN" ||
     hasModule(session.allowedModules, "usuarios");
 
-  const [billing, users] = await Promise.all([
+  const [billing, users, bankAccounts, enabledCurrencies] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: session.organizationId },
       select: {
@@ -40,6 +43,8 @@ export default async function AjustesPage() {
       },
     }),
     canManageUsers ? listOrganizationUsers() : Promise.resolve([]),
+    listBankAccounts(),
+    getEnabledCurrencies(),
   ]);
 
   const appOrigin = (
@@ -67,6 +72,11 @@ export default async function AjustesPage() {
           appOrigin={appOrigin}
         />
         <OrganizationSettingsForm organization={organization} />
+        <BanksSettingsPanel
+          accounts={bankAccounts}
+          enabledCurrencies={enabledCurrencies}
+          canManage={isStaffRole(session.organizationRole)}
+        />
         {billing ? (
           <OrganizationPlanCard
             billingPlan={billing.billingPlan}

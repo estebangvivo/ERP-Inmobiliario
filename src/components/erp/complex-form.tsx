@@ -71,7 +71,7 @@ export function ComplexForm(props: ComplexFormProps) {
       ) : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Guardando…" : props.mode === "create" ? "Crear complejo" : "Guardar"}
+          {pending ? "Guardando…" : props.mode === "create" ? "Crear edificio" : "Guardar"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.push("/complejos")}>
           Cancelar

@@ -8,6 +8,7 @@ import type {
   PartyRole,
   PaymentMethod,
   PropertyStatus,
+  SaleDealStage,
   SettlementStatus,
   WorkOrderStatus,
 } from "@prisma/client";
@@ -82,6 +83,26 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   QUALIFIED: "Calificado",
   CONVERTED: "Convertido",
   CLOSED: "Cerrado",
+};
+
+export const SERVICE_COST_CATEGORY_LABELS: Record<
+  import("@prisma/client").ServiceCostCategory,
+  string
+> = {
+  WATER: "Agua",
+  GAS: "Gas",
+  ELECTRICITY: "Luz",
+  MUNICIPAL: "Tasa municipal",
+  WORKS: "Obras",
+  OTHER: "Otro / ajuste",
+};
+
+export const SALE_DEAL_STAGE_LABELS: Record<SaleDealStage, string> = {
+  LEAD: "Interés",
+  NEGOTIATION: "Negociación",
+  RESERVED: "Seña / reserva",
+  SOLD: "Vendida",
+  LOST: "Perdida",
 };
 
 export const SETTLEMENT_STATUS_LABELS: Record<SettlementStatus, string> = {

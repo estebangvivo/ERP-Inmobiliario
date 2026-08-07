@@ -124,6 +124,17 @@ export async function updateOrganizationProfile(
       };
     }
 
+    const rawDueDay = emptyToNull(formData.get("billDueDay"));
+    const billDueDay = rawDueDay
+      ? Math.min(28, Math.max(1, Math.round(Number(rawDueDay))))
+      : 10;
+    if (!Number.isFinite(billDueDay)) {
+      return {
+        ok: false,
+        error: "El día de vencimiento de cuotas debe ser entre 1 y 28.",
+      };
+    }
+
     const rawIdle = emptyToNull(formData.get("sessionIdleMinutes"));
     const sessionIdleMinutes = rawIdle
       ? Math.min(480, Math.max(5, Math.round(Number(rawIdle))))
@@ -158,6 +169,7 @@ export async function updateOrganizationProfile(
         currency,
         enabledCurrencies,
         checkDueAlertDays,
+        billDueDay,
         sessionIdleMinutes,
         ...(logoUrl ? { logoUrl } : clearLogo ? { logoUrl: null } : {}),
       },

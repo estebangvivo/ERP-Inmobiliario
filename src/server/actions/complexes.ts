@@ -70,7 +70,7 @@ export async function updateComplexAction(
   const existing = await prisma.complex.findFirst({
     where: { id: parsed.data.id, organizationId: session.organizationId },
   });
-  if (!existing) return { ok: false, error: "Complejo no encontrado." };
+  if (!existing) return { ok: false, error: "Edificio no encontrado." };
 
   await prisma.complex.update({
     where: { id: parsed.data.id },

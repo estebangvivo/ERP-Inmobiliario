@@ -6,7 +6,7 @@ export default async function NuevoComplejoPage() {
   await requireStaff();
   return (
     <div>
-      <PageHeader title="Nuevo complejo" description="Alta de edificio o complejo." />
+      <PageHeader title="Nuevo edificio" description="Alta de edificio con sus unidades." />
       <ComplexForm mode="create" />
     </div>
   );

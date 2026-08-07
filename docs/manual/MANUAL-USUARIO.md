@@ -13,7 +13,7 @@ Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingres
 3. [Dashboard](#3-dashboard)
 4. [Ajustes de la inmobiliaria](#4-ajustes-de-la-inmobiliaria)
 5. [Usuarios y roles](#5-usuarios-y-roles)
-6. [Complejos y unidades](#6-complejos-y-unidades)
+6. [Edificios y unidades](#6-edificios-y-unidades)
 7. [Propiedades](#7-propiedades)
 8. [Contratos](#8-contratos)
 9. [Expensas](#9-expensas)
@@ -22,10 +22,12 @@ Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingres
 12. [Rendiciones](#12-rendiciones)
 13. [Consultas](#13-consultas)
 14. [Visitas](#14-visitas)
-15. [Turnero](#15-turnero)
-16. [Portal público](#16-portal-público)
-17. [Flujo completo de ejemplo](#17-flujo-completo-de-ejemplo)
-18. [Preguntas frecuentes](#18-preguntas-frecuentes)
+15. [Agenda unificada](#15-agenda-unificada)
+16. [Ventas](#16-ventas)
+17. [Turnero](#17-turnero)
+18. [Portal público](#18-portal-público)
+19. [Flujo completo de ejemplo](#19-flujo-completo-de-ejemplo)
+20. [Preguntas frecuentes](#20-preguntas-frecuentes)
 
 ---
 
@@ -47,14 +49,16 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 |--------|----------------|
 | Dashboard | Resumen del mes |
 | Propiedades | Portfolio de alquiler/venta |
-| Complejos | Edificios y unidades |
+| Edificios | Edificios y unidades |
 | Contratos | Alquileres vigentes |
 | Cobros | Cuotas y pagos |
-| Expensas | Prorrateo por complejo |
+| Expensas | Prorrateo por edificio |
 | Mantenimiento | Órdenes de trabajo |
 | Rendiciones | Liquidación a propietarios |
 | Consultas | Leads del portal |
 | Visitas | Agenda de visitas del portal |
+| Agenda | Visitas de la semana + turnero de hoy |
+| Ventas | Pipeline de oportunidades de venta |
 | Turnero | Turnos presenciales en sucursal |
 | Usuarios | Alta de personas (solo admin) |
 | Ajustes | Datos de la inmobiliaria (solo admin) |
@@ -66,17 +70,18 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 Para poner la inmobiliaria en marcha seguí este orden:
 
 ```text
-Ajustes → Usuarios → Complejos/Unidades → Propiedades
+Ajustes → Usuarios → Edificios/Unidades → Propiedades
         → Contratos → Expensas → Cobros → Mantenimiento → Rendiciones
         → Portal (Consultas + Visitas)
 ```
 
 1. **Configurá** la inmobiliaria (nombre, monedas, link del portal).
 2. **Cargá personas**: agentes, propietarios, inquilinos, proveedores.
-3. **Armá el stock**: complejos/unidades y propiedades publicables.
+3. **Armá el stock**: edificios/unidades y propiedades publicables.
 4. **Formalizá alquileres** con contratos.
-5. **Operá el mes**: expensas → cuotas → cobros → OT → rendiciones.
-6. **Atendé demanda** del portal: consultas y visitas.
+5. **Operá el mes**: expensas → cuotas (o **Cierre del mes**) → cobros → OT → rendiciones.
+6. **Atendé demanda** del portal: consultas, visitas y agenda.
+7. Si vendés: oportunidades en **Ventas** (interés → seña → cierre).
 
 ---
 
@@ -88,7 +93,8 @@ El dashboard muestra un resumen del período: propiedades, contratos activos, cu
 
 **Cómo usarlo**
 - Hacé clic en las tarjetas para ir al módulo correspondiente.
-- Revisá cuotas vencidas y consultas nuevas al empezar el día.
+- Revisá cuotas vencidas, **por vencer (7 días)** y consultas nuevas al empezar el día.
+- Staff ve **Pendientes de rendir** cuando hay cobros del mes sin liquidación al propietario.
 - El contenido se filtra según tu rol (un propietario no ve lo mismo que un agente).
 
 ---
@@ -98,6 +104,8 @@ El dashboard muestra un resumen del período: propiedades, contratos activos, cu
 > Disponible para el rol **Administrador**.
 
 ![Ajustes](images/16-ajustes.png)
+
+Configurá nombre, logo, monedas, datos de contacto y el **día de vencimiento de cuotas** (1–28, por defecto 10). Ese día se usa al generar cuotas en Cobros.
 
 Acá configurás la identidad de la empresa y el catálogo público.
 
@@ -141,15 +149,15 @@ Cada persona que opera el sistema (o figura como propietario/inquilino/proveedor
 
 ---
 
-## 6. Complejos y unidades
+## 6. Edificios y unidades
 
-![Complejos](images/05-complejos.png)
+![Edificios](images/05-complejos.png)
 
-Los **complejos** son edificios o condominios. Cada uno tiene **unidades** (deptos, locales) con un **coeficiente** de prorrateo para expensas.
+Los **edificios** agrupan **unidades** (deptos, locales) con un **coeficiente** de prorrateo para expensas.
 
 ### Pasos
 
-1. Creá un complejo (nombre, dirección, ciudad).
+1. Creá un edificio (nombre, dirección, ciudad).
 2. Entrá al detalle y **agregá unidades** (código, piso, coeficiente, m², ambientes).
 3. Más adelante vinculá cada unidad a una **propiedad** del portfolio.
 
@@ -171,7 +179,7 @@ Los **complejos** son edificios o condominios. Cada uno tiene **unidades** (dept
 
 1. **Propiedades** → **Nueva propiedad**.
 2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio, ubicación.
-3. Asigná **propietario** y, si corresponde, la **unidad** del complejo.
+3. Asigná **propietario** y, si corresponde, la **unidad** del edificio.
 4. Definí el **estado**. Para aparecer en el portal usá **Disponible** (también se publican las **Reservadas**).
 5. Guardá. En la edición podés subir **fotos** y video.
 
@@ -205,7 +213,14 @@ Los contratos formalizan el alquiler: partes, montos, índices y reglas de expen
 4. Configurá el **índice** de actualización (ICL, IPC, %, fijo).
 5. Indicá la **comisión** de la inmobiliaria y quién la paga.
 6. Marcá si el contrato **incluye expensas** ordinarias/extraordinarias.
-7. Guardá: el contrato queda **Activo**.
+7. Guardá: el contrato queda **Activo** y la propiedad pasa a **Alquilada**.
+
+### Detalle del contrato
+
+- Ves el **alquiler vigente** (incluye ajustes de índice ya aplicados).
+- Staff puede **aplicar un ajuste** cargando el % publicado (ICL/IPC/custom).
+- Card de **Depósito / garantía**: en custodia, devolver, o **Aplicar a saldo** de una cuota abierta.
+- Al pasar el contrato a **Rescindido** o **Vencido**, la propiedad vuelve a Disponible (si no hay otro contrato activo). Si el depósito sigue en custodia, el sistema te avisa.
 
 **Tips**
 - El inquilino y el propietario deben existir como usuarios.
@@ -217,11 +232,11 @@ Los contratos formalizan el alquiler: partes, montos, índices y reglas de expen
 
 ![Expensas](images/09-expensas.png)
 
-Cargás el total del mes por complejo y el sistema lo **prorratea** a cada unidad según su coeficiente.
+Cargás el total del mes por edificio y el sistema lo **prorratea** a cada unidad según su coeficiente.
 
 ### Cómo cargar
 
-1. Elegí el complejo.
+1. Elegí el edificio.
 2. Indicá si es ordinaria o extraordinaria, el concepto y el período.
 3. Ingresá el monto total.
 4. Si corresponde, marcá **Facturar a inquilinos** (se sumará a la cuota al generar cobros).
@@ -241,7 +256,11 @@ Acá viven las **cuotas** (alquiler + expensas + mora) y el registro de pagos.
 
 1. Como staff, usá **Generar cuotas del período**.
 2. Elegí año y mes.
-3. El sistema arma las cuotas de los contratos activos.
+3. El sistema arma (o actualiza expensas de) las cuotas de los contratos activos, con vencimiento el **día configurado en Ajustes**.
+
+### Cierre del mes
+
+El botón **Ejecutar cierre del mes** genera las cuotas del mes en curso y sincroniza vencimientos/mora. En producción también puede correrse automáticamente el día 1 (cron).
 
 ### Registrar un pago
 
@@ -249,11 +268,49 @@ Acá viven las **cuotas** (alquiler + expensas + mora) y el registro de pagos.
 2. **Registrar pago**: monto, medio (transferencia, efectivo, etc.), referencia y notas.
 3. Descargá el **recibo PDF** si lo necesitás.
 
+Inquilinos y propietarios ven sus cuotas en modo lectura (sin registrar pagos).
+
 **Estados de cuota:** Pendiente · Parcial · Pagada · Vencida · Cancelada.
 
 ---
 
-## 11. Mantenimiento
+
+## 11. Tesorer�a
+
+M�dulo operativo de dinero de la inmobiliaria (staff): recibos, �rdenes de pago, caja, bancos y cheques. El men� **Tesorer�a** apunta a `/tesoreria`.
+
+### Conceptos
+
+- **Recibo**: cobro (ingreso). Ciclo borrador ? emitido ? **imputado** ? anulado.
+- **Orden de pago (OP)**: egreso a proveedor, propietario u otro beneficiario.
+- **Caja diaria**: se abre por d�a/moneda; el efectivo de recibos/OP impacta ac�.
+- **Caja tesorer�a**: recibe cierres de caja diaria y movimientos de control.
+- **Bancos**: cuentas propias; transferencias y dep�sitos.
+- **Cheques**: cartera de terceros y cheques propios.
+
+### Flujo t�pico de cobro
+
+1. Abr� **Caja** y una sesi�n diaria (si vas a cobrar en efectivo).
+2. **Recibos ? Nuevo**: inquilino o nombre libre, l�neas (contrato/propiedad), medios de pago (efectivo / transferencia / cheque).
+3. Pod�s aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
+4. Imprim� o descarg� el PDF del recibo.
+
+### Flujo t�pico de pago
+
+1. **�rdenes de pago ? Nueva**: proveedor o beneficiario, l�neas y medios.
+2. Aplic� a facturas de mantenimiento o a **rendiciones** pendientes.
+3. Al imputar, se actualiza el estado de esas facturas/rendiciones.
+
+### Bancos y cheques
+
+- En **Ajustes** das de alta las cuentas bancarias.
+- **Depositar**: efectivo desde caja o cheques de cartera hacia un banco.
+- **Cheques**: cartera, entrega en OP, dep�sito, rechazo y d�bito de cheques propios.
+
+Los cobros r�pidos desde `/cobros` siguen disponibles en paralelo.
+
+---
+## 12. Mantenimiento
 
 ![Mantenimiento](images/10-mantenimiento.png)
 
@@ -274,7 +331,7 @@ Los trabajos a cargo del propietario suelen impactar la **rendición**.
 
 ---
 
-## 12. Rendiciones
+## 13. Rendiciones
 
 ![Rendiciones](images/11-rendiciones.png)
 
@@ -290,9 +347,11 @@ Liquidación al propietario del período:
 4. **Marcar pagada** al hacer la transferencia (podés cargar referencia).
 5. Descargá el **PDF** para enviar al propietario.
 
+También podés **Generar todas (ARS)** para crear borradores de todos los propietarios del período.
+
 ---
 
-## 13. Consultas
+## 14. Consultas
 
 ![Consultas](images/12-consultas.png)
 
@@ -305,7 +364,7 @@ Inbox de interesados que escriben o agendan desde el **portal**.
 
 ---
 
-## 14. Visitas
+## 15. Visitas
 
 ![Visitas](images/13-visitas.png)
 
@@ -329,7 +388,33 @@ Cada reserva también genera una **consulta** vinculada.
 
 ---
 
-## 15. Turnero
+## 16. Agenda unificada
+
+![Agenda](images/21-agenda.png)
+
+Vista de apoyo del día/semana:
+- **Visitas** de la semana (con horario).
+- **Turnero de hoy**: turnos en espera o llamados (cola presencial, sin hora fija).
+
+No reemplaza Visitas ni Turnero: es un tablero para ver ambos juntos. Links rápidos a cada módulo.
+
+---
+
+## 17. Ventas
+
+![Ventas](images/20-ventas.png)
+
+Pipeline para propiedades en **Venta** o **Ambos**:
+
+1. Creá una **oportunidad** (comprador, oferta, seña).
+2. Mové las etapas: Interés → Negociación → Seña/reserva → Vendida (o Perdida).
+3. Al pasar a **Seña**, la propiedad pasa a **Reservada**; al **Vendida**, a **SOLD** (sale del portal).
+
+Desde la ficha de una propiedad de venta: botón **Crear oportunidad**.
+
+---
+
+## 18. Turnero
 
 ![Turnero](images/14-turnero.png)
 
@@ -342,7 +427,7 @@ Abrí según el dispositivo:
 
 ---
 
-## 16. Portal público
+## 18. Portal público
 
 El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes**.
 
@@ -350,7 +435,7 @@ El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes*
 
 ![Portal — listado](images/17-portal-propiedades.png)
 
-Los visitantes filtran por operación, ciudad, ambientes y precio. Solo ven propiedades publicadas.
+Los visitantes filtran por operación, ciudad, ambientes y precio. Solo ven propiedades publicadas (Disponible / Reservada).
 
 ### Ficha e agendar visita
 
@@ -364,37 +449,43 @@ Eso crea automáticamente:
 
 ---
 
-## 17. Flujo completo de ejemplo
+## 20. Flujo completo de ejemplo
 
 Caso típico de alquiler de un departamento:
 
 1. En **Usuarios**, creá al propietario y al futuro inquilino.
-2. En **Complejos**, cargá el edificio y la unidad (con coeficiente).
+2. En **Edificios**, cargá el edificio y la unidad (con coeficiente).
 3. En **Propiedades**, publicá el depto en estado **Disponible** y vinculá propietario + unidad. Subí fotos.
 4. Compartí el **link del portal** desde Ajustes.
-5. Un interesado agenda visita → aparece en **Visitas** y **Consultas**. Contactalo y asigná un agente.
-6. Cuando concreten, creá el **Contrato** activo.
-7. Cada mes: cargá **Expensas** → **Generá cuotas** en Cobros → registrá **pagos**.
+5. Un interesado agenda visita → aparece en **Visitas**, **Agenda** y **Consultas**. Contactalo y asigná un agente.
+6. Cuando concreten, creá el **Contrato** activo (depósito en custodia).
+7. Cada mes: cargá **Expensas** → **Cierre del mes** o generá cuotas en Cobros → registrá **pagos** → **Rendiciones**.
 8. Si hay una reparación: **Mantenimiento** → al cierre del mes, **Rendición** al propietario.
+9. Al terminar el alquiler: estado Rescindido/Vencido, devolvé o aplicá el **depósito**.
+
+Caso de venta: propiedad SALE → **Ventas** → seña (Reservada) → Vendida.
 
 ---
 
-## 18. Preguntas frecuentes
+## 21. Preguntas frecuentes
 
 **¿Por qué no veo una propiedad en el portal?**  
 Revisá que el estado sea Disponible o Reservada y que esté publicada. Borradores, inactivas o alquiladas no se muestran.
 
 **¿No puedo generar cuotas?**  
-Necesitás contratos activos. Si incluyen expensas, cargalas antes del período.
+Necesitás contratos activos. Si incluyen expensas, cargalas antes del período. El día de vencimiento se configura en Ajustes.
 
 **¿Un agente no ve Usuarios o Ajustes?**  
 Es esperado: esas secciones son del administrador de la inmobiliaria.
 
-**¿Turnero y Visitas son lo mismo?**  
-No. Visitas = agenda web del portal. Turnero = fila presencial en oficina.
+**¿Turnero, Visitas y Agenda son lo mismo?**  
+No. Visitas = agenda web del portal. Turnero = fila presencial. Agenda = vista unificada de apoyo.
 
 **¿Cómo cambio los horarios de visitas?**  
 En **Visitas**, panel *Horarios y feriados* (administrador).
+
+**¿Dónde está el pipeline de venta?**  
+Menú **Ventas**. Solo aplica a propiedades con operación Venta o Ambos.
 
 ---
 
@@ -407,6 +498,6 @@ npm run dev
 node scripts/capture-manual-screens.mjs
 ```
 
-Quedan guardadas en `docs/manual/images/`.
+Quedan guardadas en `docs/manual/images/` y `public/manual/images/`.
 
 *SimpleInmo — Manual de usuario*

@@ -145,7 +145,7 @@ export function PropertyForm(props: PropertyFormProps) {
           <Input id="province" name="province" defaultValue={p?.province ?? ""} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="unitId">Unidad (complejo)</Label>
+          <Label htmlFor="unitId">Unidad (edificio)</Label>
           <Select id="unitId" name="unitId" defaultValue={p?.unitId ?? ""}>
             <option value="">Propiedad independiente</option>
             {props.units.map((u) => (

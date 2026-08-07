@@ -43,6 +43,9 @@ const screens = [
     title: "Portal público — listado",
     public: true,
   },
+  { id: "20-ventas", path: "/ventas", title: "Ventas" },
+  { id: "21-agenda", path: "/agenda", title: "Agenda" },
+  { id: "22-cierre-cobros", path: "/cobros", title: "Cobros / cierre" },
 ];
 
 fs.mkdirSync(OUT_DOCS, { recursive: true });

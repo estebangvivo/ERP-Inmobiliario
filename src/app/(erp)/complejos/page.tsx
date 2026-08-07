@@ -44,18 +44,18 @@ export default async function ComplejosPage({
   return (
     <div>
       <PageHeader
-        title="Complejos"
-        description="Edificios y conjuntos de unidades con coeficientes."
+        title="Edificios"
+        description="Edificios y unidades; las expensas se prorratean por m²."
         actions={
           staff ? (
             <Link href="/complejos/nuevo">
-              <Button>Nuevo complejo</Button>
+              <Button>Nuevo edificio</Button>
             </Link>
           ) : undefined
         }
       />
       <FilterBar className="lg:grid-cols-3">
-        <Input name="q" placeholder="Buscar complejo" defaultValue={query} />
+        <Input name="q" placeholder="Buscar edificio" defaultValue={query} />
         <Button type="submit" variant="secondary">Filtrar</Button>
       </FilterBar>
       <DataTable

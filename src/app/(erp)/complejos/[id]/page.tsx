@@ -44,10 +44,11 @@ export default async function ComplejoDetailPage({ params }: { params: Params })
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Expensas de este complejo</CardTitle>
+          <CardTitle className="text-base">Expensas de este edificio</CardTitle>
           <CardDescription>
             El monto total se carga en el módulo Expensas y se prorratea
-            automáticamente a cada unidad según su coeficiente.
+            automáticamente a cada unidad según sus metros cuadrados sobre el
+            total del edificio.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">

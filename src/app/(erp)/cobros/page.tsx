@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
 import { GenerateBillsForm } from "@/components/erp/billing-forms";
+import { syncOverdueBills } from "@/server/services/billing";
 
 function statusVariant(status: BillStatus) {
   if (status === "PAID") return "success" as const;
@@ -31,6 +32,8 @@ export default async function CobrosPage({
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status as BillStatus | undefined;
+
+  await syncOverdueBills(session.organizationId);
 
   const scope = billScopeWhere(session);
   const where: Prisma.TenantBillWhereInput = {
@@ -65,6 +68,15 @@ export default async function CobrosPage({
       <PageHeader
         title="Cobros"
         description="Cuotas de alquiler, expensas y registro de pagos."
+        actions={
+          staff ? (
+            <Link href="/cobros/cuenta-corriente">
+              <Button variant="outline" size="sm">
+                Cuenta corriente
+              </Button>
+            </Link>
+          ) : undefined
+        }
       />
 
       {staff ? <GenerateBillsForm /> : null}

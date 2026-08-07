@@ -6,10 +6,12 @@ export const APP_MODULE_KEYS = [
   "complejos",
   "contratos",
   "cobros",
+  "tesoreria",
   "expensas",
   "mantenimiento",
   "rendiciones",
   "consultas",
+  "ventas",
   "turnero",
   "usuarios",
   "ajustes",
@@ -32,9 +34,10 @@ export const APP_MODULES: AppModuleDef[] = [
     label: "Propiedades",
     pathPrefixes: ["/gestion/propiedades"],
   },
-  { key: "complejos", label: "Complejos", pathPrefixes: ["/complejos"] },
+  { key: "complejos", label: "Edificios", pathPrefixes: ["/complejos"] },
   { key: "contratos", label: "Contratos", pathPrefixes: ["/contratos"] },
   { key: "cobros", label: "Cobros", pathPrefixes: ["/cobros"] },
+  { key: "tesoreria", label: "Tesorería", pathPrefixes: ["/tesoreria"] },
   { key: "expensas", label: "Expensas", pathPrefixes: ["/expensas"] },
   {
     key: "mantenimiento",
@@ -42,7 +45,8 @@ export const APP_MODULES: AppModuleDef[] = [
     pathPrefixes: ["/mantenimiento"],
   },
   { key: "rendiciones", label: "Rendiciones", pathPrefixes: ["/rendiciones"] },
-  { key: "consultas", label: "Consultas", pathPrefixes: ["/leads", "/visitas"] },
+  { key: "consultas", label: "Consultas", pathPrefixes: ["/leads", "/visitas", "/agenda"] },
+  { key: "ventas", label: "Ventas", pathPrefixes: ["/ventas"] },
   { key: "turnero", label: "Turnero", pathPrefixes: ["/turnero"] },
   { key: "usuarios", label: "Usuarios", pathPrefixes: ["/usuarios"] },
   { key: "ajustes", label: "Ajustes", pathPrefixes: ["/ajustes"] },
@@ -62,10 +66,12 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "complejos",
     "contratos",
     "cobros",
+    "tesoreria",
     "expensas",
     "mantenimiento",
     "rendiciones",
     "consultas",
+    "ventas",
     "turnero",
     "manual",
   ],
@@ -73,6 +79,7 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "home",
     "propiedades",
     "contratos",
+    "cobros",
     "expensas",
     "mantenimiento",
     "rendiciones",
@@ -115,11 +122,14 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/complejos": "complejos",
   "/contratos": "contratos",
   "/cobros": "cobros",
+  "/tesoreria": "tesoreria",
   "/expensas": "expensas",
   "/mantenimiento": "mantenimiento",
   "/rendiciones": "rendiciones",
   "/leads": "consultas",
   "/visitas": "consultas",
+  "/agenda": "consultas",
+  "/ventas": "ventas",
   "/turnero": "turnero",
   "/usuarios": "usuarios",
   "/ajustes": "ajustes",
@@ -134,11 +144,14 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/complejos")) return "complejos";
   if (pathname.startsWith("/contratos")) return "contratos";
   if (pathname.startsWith("/cobros")) return "cobros";
+  if (pathname.startsWith("/tesoreria")) return "tesoreria";
   if (pathname.startsWith("/expensas")) return "expensas";
   if (pathname.startsWith("/mantenimiento")) return "mantenimiento";
   if (pathname.startsWith("/rendiciones")) return "rendiciones";
   if (pathname.startsWith("/leads")) return "consultas";
   if (pathname.startsWith("/visitas")) return "consultas";
+  if (pathname.startsWith("/agenda")) return "consultas";
+  if (pathname.startsWith("/ventas")) return "ventas";
   if (pathname.startsWith("/turnero")) return "turnero";
   if (pathname.startsWith("/ajustes")) return "ajustes";
   if (pathname.startsWith("/manual")) return "manual";

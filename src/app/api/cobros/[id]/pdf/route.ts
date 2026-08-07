@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { auth } from "@/lib/auth";
 import { formatDateOnly } from "@/lib/dates";
 import { BILL_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
+import { getOrganizationSession } from "@/lib/auth";
+import { billScopeWhere } from "@/lib/tenant-scope";
+import { hasModule } from "@/features/auth/lib/modules";
 import { RentReceiptPdfDocument } from "@/components/pdf/rent-receipt-pdf";
 
 type Params = Promise<{ id: string }>;
@@ -12,14 +14,21 @@ export async function GET(
   _request: Request,
   { params }: { params: Params },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const session = await getOrganizationSession();
+  if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  if (
+    session.organizationRole !== "ADMIN" &&
+    !hasModule(session.allowedModules, "cobros")
+  ) {
+    return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
+  }
+
   const { id } = await params;
-  const bill = await prisma.tenantBill.findUnique({
-    where: { id },
+  const bill = await prisma.tenantBill.findFirst({
+    where: { id, AND: [billScopeWhere(session)] },
     include: {
       contract: {
         include: {

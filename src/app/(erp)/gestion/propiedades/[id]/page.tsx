@@ -49,13 +49,23 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
         title={`Editar · ${property.title}`}
         description={property.slug}
         actions={
-          property.unit ? (
-            <Link href="/expensas">
-              <Button size="sm" variant="outline">
-                Cargar expensas ({property.unit.complex.name})
-              </Button>
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {property.operationType === "SALE" ||
+            property.operationType === "BOTH" ? (
+              <Link href={`/ventas?propertyId=${property.id}`}>
+                <Button size="sm" variant="outline">
+                  Crear oportunidad
+                </Button>
+              </Link>
+            ) : null}
+            {property.unit ? (
+              <Link href="/expensas">
+                <Button size="sm" variant="outline">
+                  Cargar expensas ({property.unit.complex.name})
+                </Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

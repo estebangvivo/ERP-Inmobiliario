@@ -23,6 +23,7 @@ model Complex {
   organizationId String?
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   expenses       Expense[]
+  serviceCosts   ServiceCost[]
   units          Unit[]
 
   @@unique([organizationId, slug])
@@ -58,6 +59,8 @@ model Contract {
   parties             ContractParty[]
   tenantBills         TenantBill[]
   workOrders          WorkOrder[]
+  receiptLines        ReceiptLine[]
+  paymentOrderLines   PaymentOrderLine[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -128,6 +131,39 @@ model ExpenseAllocation {
   @@index([unitId])
 }
 
+enum ServiceCostCategory {
+  WATER
+  GAS
+  ELECTRICITY
+  MUNICIPAL
+  WORKS
+  OTHER
+}
+
+/// Gasto de servicio u obra que alimenta el cálculo de expensas.
+/// Exactamente uno de complexId (edificio) o propertyId (propiedad).
+model ServiceCost {
+  id             String              @id @default(cuid())
+  organizationId String
+  complexId      String?
+  propertyId     String?
+  category       ServiceCostCategory
+  concept        String
+  periodYear     Int
+  periodMonth    Int
+  amount         Decimal             @db.Decimal(14, 2)
+  currency       Currency            @default(ARS)
+  notes          String?
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  complex        Complex?            @relation(fields: [complexId], references: [id], onDelete: Cascade)
+  property       Property?           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, periodYear, periodMonth])
+  @@index([complexId, periodYear, periodMonth])
+  @@index([propertyId, periodYear, periodMonth])
+}
+
 model Lead {
   id             String         @id @default(cuid())
   propertyId     String?
@@ -145,6 +181,7 @@ model Lead {
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   property       Property?      @relation(fields: [propertyId], references: [id])
   visitBookings  PropertyVisitBooking[]
+  saleDeals      SaleDeal[]
 
   @@index([organizationId, status, createdAt])
   @@index([propertyId])
@@ -173,6 +210,7 @@ model OwnerSettlement {
   organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   owner               User                 @relation(fields: [ownerId], references: [id])
   lines               SettlementLineItem[]
+  paymentOrderApps    PaymentOrderSettlementApplication[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, ownerId, periodYear, periodMonth, currency])
@@ -190,12 +228,17 @@ model Payment {
   receiptUrl   String?
   recordedById String?
   notes        String?
+  /// Recibo de tesorería que originó este cobro (si aplica)
+  receiptId    String?
   createdAt    DateTime      @default(now())
   recordedBy   User?         @relation(fields: [recordedById], references: [id])
   tenantBill   TenantBill    @relation(fields: [tenantBillId], references: [id])
+  receipt      Receipt?      @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  billApps     ReceiptBillApplication[]
 
   @@index([paidAt])
   @@index([tenantBillId])
+  @@index([receiptId])
 }
 
 model Property {
@@ -230,9 +273,14 @@ model Property {
   organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   unit           Unit?               @relation(fields: [unitId], references: [id])
   images         PropertyImage[]
-  ownerships     PropertyOwnership[]
-  workOrders     WorkOrder[]
-  visitBookings  PropertyVisitBooking[]
+  ownerships          PropertyOwnership[]
+  workOrders          WorkOrder[]
+  visitBookings       PropertyVisitBooking[]
+  saleDeals           SaleDeal[]
+  serviceCosts        ServiceCost[]
+  receiptLines        ReceiptLine[]
+  paymentOrderLines   PaymentOrderLine[]
+  checkRejectionFees  CheckRejectionFee[]
 
   @@unique([organizationId, slug])
   @@index([city])
@@ -298,6 +346,7 @@ model SupplierInvoice {
   settlementLineItems SettlementLineItem[]
   supplier           User                 @relation(fields: [supplierId], references: [id])
   workOrder          WorkOrder            @relation(fields: [workOrderId], references: [id])
+  paymentOrderApps   PaymentOrderInvoiceApplication[]
 
   @@index([supplierId])
   @@index([workOrderId])
@@ -323,6 +372,7 @@ model TenantBill {
   payments           Payment[]
   settlementLineItems SettlementLineItem[]
   contract           Contract             @relation(fields: [contractId], references: [id])
+  receiptBillApps    ReceiptBillApplication[]
 
   @@unique([contractId, periodYear, periodMonth])
   @@index([status, dueDate])
@@ -374,11 +424,20 @@ model User {
   billingPayments         BillingPayment[]       @relation("BillingPaymentPayer")
   memberships             OrganizationMember[]
   visitBookingsAssigned   PropertyVisitBooking[] @relation("VisitBookingAssignee")
+  saleDealsAssigned       SaleDeal[]             @relation("SaleDealAssignee")
   platformSystemExpenses  PlatformSystemExpense[] @relation("PlatformSystemExpenseCreator")
   featureRequestsCreated  FeatureRequest[]       @relation("FeatureRequestCreator")
   featureRequestsQuoted   FeatureRequest[]       @relation("FeatureRequestQuoter")
   featureRequestsDecided  FeatureRequest[]       @relation("FeatureRequestDecider")
   featureRequestMessages  FeatureRequestMessage[]
+  receiptsAsTenant        Receipt[]              @relation("ReceiptTenant")
+  receiptsCreated         Receipt[]              @relation("ReceiptCreator")
+  paymentOrdersAsSupplier PaymentOrder[]         @relation("PaymentOrderSupplier")
+  paymentOrdersCreated    PaymentOrder[]         @relation("PaymentOrderCreator")
+  cashSessionsOpened      CashSession[]          @relation("CashSessionOpener")
+  cashSessionsClosed      CashSession[]          @relation("CashSessionCloser")
+  cashMovementsCreated    CashMovement[]         @relation("CashMovementCreator")
+  bankMovementsCreated    BankMovement[]         @relation("BankMovementCreator")
 
   @@index([documentNumber])
 }
@@ -483,6 +542,8 @@ model Organization {
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
   checkDueAlertDays        Int                     @default(7)
+  /// Día del mes (1–28) para vencimiento de cuotas de alquiler
+  billDueDay               Int                     @default(10)
   currency                 String                  @default("ARS")
   enabledCurrencies        String[]                @default(["ARS", "USD"])
   facebookUrl              String?
@@ -510,6 +571,8 @@ model Organization {
   properties               Property[]
   workOrders               WorkOrder[]
   visitBookings            PropertyVisitBooking[]
+  saleDeals                SaleDeal[]
+  serviceCosts             ServiceCost[]
   billingPayments          BillingPayment[]
   members                  OrganizationMember[]
   featureRequests          FeatureRequest[]
@@ -517,6 +580,15 @@ model Organization {
   turneroContadoresDiarios TurneroContadorDiario[]
   turneroPuestos           TurneroPuesto[]
   turneroTurnos            TurneroTurno[]
+  bankAccounts             BankAccount[]
+  bankMovements            BankMovement[]
+  cashRegisters            CashRegister[]
+  cashSessions             CashSession[]
+  cashMovements            CashMovement[]
+  receipts                 Receipt[]
+  paymentOrders            PaymentOrder[]
+  checkInstruments         CheckInstrument[]
+  checkRejectionFees       CheckRejectionFee[]
 
   @@map("organizations")
 }
@@ -873,10 +945,516 @@ enum SettlementStatus {
   CANCELLED
 }
 
+enum SaleDealStage {
+  LEAD
+  NEGOTIATION
+  RESERVED
+  SOLD
+  LOST
+}
+
+model SaleDeal {
+  id                 String        @id @default(cuid())
+  organizationId     String
+  propertyId         String
+  leadId             String?
+  buyerName          String
+  buyerEmail         String?
+  buyerPhone         String?
+  stage              SaleDealStage @default(LEAD)
+  offerAmount        Decimal?      @db.Decimal(14, 2)
+  reservationAmount  Decimal?      @db.Decimal(14, 2)
+  currency           Currency      @default(ARS)
+  reservedAt         DateTime?
+  closedAt           DateTime?
+  notes              String?
+  assigneeId         String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property           Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lead               Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  assignee           User?         @relation("SaleDealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, stage, updatedAt])
+  @@index([propertyId, stage])
+  @@index([assigneeId])
+}
+
 enum WorkOrderStatus {
   OPEN
   ASSIGNED
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+// =============================================================================
+// TESORERÍA — Recibos, OP, caja, bancos, cheques
+// =============================================================================
+
+enum TreasuryDocStatus {
+  DRAFT
+  ISSUED
+  POSTED
+  CANCELLED
+}
+
+enum TreasuryPaymentMethod {
+  CASH
+  TRANSFER
+  CHECK
+  OTHER
+}
+
+enum CheckStatus {
+  IN_PORTFOLIO
+  DELIVERED
+  DEPOSITED
+  BOUNCED
+  CANCELLED
+}
+
+enum CheckKind {
+  THIRD_PARTY
+  OWN
+}
+
+enum CashRegisterType {
+  DAILY
+  TREASURY
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum CashMovementType {
+  OPENING
+  INCOME
+  EXPENSE
+  ADJUSTMENT
+  CLOSE_TRANSFER
+  TREASURY_IN
+  TREASURY_DEPOSIT
+  TREASURY_WITHDRAWAL
+  BANK_DEPOSIT
+  BANK_WITHDRAWAL
+}
+
+enum BankMovementType {
+  OPENING
+  INCOME
+  EXPENSE
+  ADJUSTMENT
+  DEPOSIT
+  WITHDRAWAL
+  BOUNCE
+}
+
+model CheckInstrument {
+  id                      String      @id @default(cuid())
+  organizationId          String
+  kind                    CheckKind   @default(THIRD_PARTY)
+  number                  String
+  bank                    String
+  isElectronic            Boolean     @default(false)
+  amount                  Decimal     @db.Decimal(14, 2)
+  currency                String      @default("ARS")
+  issueDate               DateTime?   @db.Date
+  dueDate                 DateTime?   @db.Date
+  account                 String?
+  drawerName              String?
+  status                  CheckStatus @default(IN_PORTFOLIO)
+  receiptId               String?
+  paymentOrderId          String?
+  depositedBankAccountId  String?
+  issuedFromBankAccountId String?
+  depositedAt             DateTime?
+  bouncedAt               DateTime?
+  bounceReason            String?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  receipt               Receipt?               @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  paymentOrder          PaymentOrder?          @relation(fields: [paymentOrderId], references: [id], onDelete: SetNull)
+  depositedBankAccount  BankAccount?           @relation("CheckDeposits", fields: [depositedBankAccountId], references: [id], onDelete: SetNull)
+  issuedFromBankAccount BankAccount?           @relation("CheckIssues", fields: [issuedFromBankAccountId], references: [id], onDelete: SetNull)
+  paymentOrderPayments  PaymentOrderPayment[]
+  bankMovements         BankMovement[]
+  rejectionFees         CheckRejectionFee[]
+
+  @@unique([organizationId, bank, number])
+  @@index([organizationId, status])
+  @@index([organizationId, kind])
+  @@index([receiptId])
+  @@index([paymentOrderId])
+  @@map("check_instruments")
+}
+
+model CheckRejectionFee {
+  id                String   @id @default(cuid())
+  organizationId    String
+  checkInstrumentId String
+  description       String
+  amount            Decimal  @db.Decimal(14, 2)
+  currency          String   @default("ARS")
+  propertyId        String?
+  passedToDrawer    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checkInstrument CheckInstrument @relation(fields: [checkInstrumentId], references: [id], onDelete: Cascade)
+  property        Property?       @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([checkInstrumentId])
+  @@map("check_rejection_fees")
+}
+
+model Receipt {
+  id             String                 @id @default(cuid())
+  organizationId String
+  createdById    String?
+  tenantId       String?
+  number         String
+  issueDate      DateTime               @db.Date
+  status         TreasuryDocStatus      @default(DRAFT)
+  paymentMethod  TreasuryPaymentMethod  @default(CASH)
+  partyName      String?
+  concept        String?
+  currency       String                 @default("ARS")
+  totalAmount    Decimal                @default(0) @db.Decimal(14, 2)
+  checkNumber    String?
+  checkBank      String?
+  checkIssueDate DateTime?              @db.Date
+  checkDueDate   DateTime?              @db.Date
+  checkAccount   String?
+  notes          String?
+  postedAt       DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                    @relation("ReceiptCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  tenant       User?                    @relation("ReceiptTenant", fields: [tenantId], references: [id], onDelete: SetNull)
+  lines        ReceiptLine[]
+  payments     ReceiptPayment[]
+  checks       CheckInstrument[]
+  billApps     ReceiptBillApplication[]
+  ledgerPayments Payment[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([tenantId])
+  @@map("receipts")
+}
+
+model ReceiptPayment {
+  id                String                @id @default(cuid())
+  receiptId         String
+  method            TreasuryPaymentMethod
+  amount            Decimal               @db.Decimal(14, 2)
+  bankAccountId     String?
+  checkNumber       String?
+  checkBank         String?
+  checkIssueDate    DateTime?             @db.Date
+  checkDueDate      DateTime?             @db.Date
+  checkAccount      String?
+  isElectronicCheck Boolean               @default(false)
+  sortOrder         Int                   @default(0)
+  createdAt         DateTime              @default(now())
+
+  receipt     Receipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  @@index([receiptId])
+  @@index([bankAccountId])
+  @@map("receipt_payments")
+}
+
+model ReceiptLine {
+  id          String  @id @default(cuid())
+  receiptId   String
+  contractId  String?
+  propertyId  String?
+  description String
+  amount      Decimal @db.Decimal(14, 2)
+  sortOrder   Int     @default(0)
+
+  receipt  Receipt    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  contract Contract?  @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  property Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId])
+  @@index([contractId])
+  @@index([propertyId])
+  @@map("receipt_lines")
+}
+
+model ReceiptBillApplication {
+  id           String   @id @default(cuid())
+  receiptId    String
+  tenantBillId String
+  amount       Decimal  @db.Decimal(14, 2)
+  paymentId    String?
+  createdAt    DateTime @default(now())
+
+  receipt    Receipt    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  tenantBill TenantBill @relation(fields: [tenantBillId], references: [id], onDelete: Restrict)
+  payment    Payment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@unique([receiptId, tenantBillId])
+  @@index([tenantBillId])
+  @@map("receipt_bill_applications")
+}
+
+model PaymentOrder {
+  id             String                @id @default(cuid())
+  organizationId String
+  createdById    String?
+  supplierId     String?
+  number         String
+  issueDate      DateTime              @db.Date
+  status         TreasuryDocStatus     @default(DRAFT)
+  paymentMethod  TreasuryPaymentMethod @default(CASH)
+  partyName      String?
+  concept        String?
+  currency       String                @default("ARS")
+  totalAmount    Decimal               @default(0) @db.Decimal(14, 2)
+  checkNumber    String?
+  checkBank      String?
+  checkIssueDate DateTime?             @db.Date
+  checkDueDate   DateTime?             @db.Date
+  checkAccount   String?
+  notes          String?
+  postedAt       DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization    Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User?                                @relation("PaymentOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  supplier        User?                                @relation("PaymentOrderSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  lines           PaymentOrderLine[]
+  payments        PaymentOrderPayment[]
+  checksDelivered CheckInstrument[]
+  invoiceApps     PaymentOrderInvoiceApplication[]
+  settlementApps  PaymentOrderSettlementApplication[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([supplierId])
+  @@map("payment_orders")
+}
+
+model PaymentOrderPayment {
+  id                String                @id @default(cuid())
+  paymentOrderId    String
+  method            TreasuryPaymentMethod
+  amount            Decimal               @db.Decimal(14, 2)
+  bankAccountId     String?
+  checkInstrumentId String?
+  isOwnCheck        Boolean               @default(false)
+  checkNumber       String?
+  checkBank         String?
+  checkIssueDate    DateTime?             @db.Date
+  checkDueDate      DateTime?             @db.Date
+  checkAccount      String?
+  isElectronicCheck Boolean               @default(false)
+  sortOrder         Int                   @default(0)
+  createdAt         DateTime              @default(now())
+
+  paymentOrder    PaymentOrder     @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  bankAccount     BankAccount?     @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  checkInstrument CheckInstrument? @relation(fields: [checkInstrumentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentOrderId])
+  @@index([bankAccountId])
+  @@index([checkInstrumentId])
+  @@map("payment_order_payments")
+}
+
+model PaymentOrderLine {
+  id             String  @id @default(cuid())
+  paymentOrderId String
+  contractId     String?
+  propertyId     String?
+  description    String
+  amount         Decimal @db.Decimal(14, 2)
+  sortOrder      Int     @default(0)
+
+  paymentOrder PaymentOrder @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  contract     Contract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  property     Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([paymentOrderId])
+  @@index([contractId])
+  @@index([propertyId])
+  @@map("payment_order_lines")
+}
+
+model PaymentOrderInvoiceApplication {
+  id                String   @id @default(cuid())
+  paymentOrderId    String
+  supplierInvoiceId String
+  amount            Decimal  @db.Decimal(14, 2)
+  createdAt         DateTime @default(now())
+
+  paymentOrder    PaymentOrder    @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  supplierInvoice SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentOrderId, supplierInvoiceId])
+  @@index([supplierInvoiceId])
+  @@map("payment_order_invoice_applications")
+}
+
+model PaymentOrderSettlementApplication {
+  id                String   @id @default(cuid())
+  paymentOrderId    String
+  ownerSettlementId String
+  amount            Decimal  @db.Decimal(14, 2)
+  createdAt         DateTime @default(now())
+
+  paymentOrder    PaymentOrder    @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  ownerSettlement OwnerSettlement @relation(fields: [ownerSettlementId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentOrderId, ownerSettlementId])
+  @@index([ownerSettlementId])
+  @@map("payment_order_settlement_applications")
+}
+
+model CashRegister {
+  id             String           @id @default(cuid())
+  organizationId String
+  type           CashRegisterType
+  name           String
+  currency       String           @default("ARS")
+  balance        Decimal          @default(0) @db.Decimal(14, 2)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions     CashSession[]
+  movements    CashMovement[]
+
+  @@unique([organizationId, type, currency])
+  @@index([organizationId, type])
+  @@map("cash_registers")
+}
+
+model CashSession {
+  id                String            @id @default(cuid())
+  organizationId    String
+  registerId        String
+  number            String
+  businessDate      DateTime          @db.Date
+  status            CashSessionStatus @default(OPEN)
+  currency          String            @default("ARS")
+  openingBalance    Decimal           @default(0) @db.Decimal(14, 2)
+  expectedBalance   Decimal?          @db.Decimal(14, 2)
+  countedBalance    Decimal?          @db.Decimal(14, 2)
+  difference        Decimal?          @db.Decimal(14, 2)
+  transferredAmount Decimal?          @db.Decimal(14, 2)
+  notes             String?
+  openedAt          DateTime          @default(now())
+  closedAt          DateTime?
+  openedById        String?
+  closedById        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  register     CashRegister   @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  openedBy     User?          @relation("CashSessionOpener", fields: [openedById], references: [id], onDelete: SetNull)
+  closedBy     User?          @relation("CashSessionCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  movements    CashMovement[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status, businessDate])
+  @@index([registerId])
+  @@map("cash_sessions")
+}
+
+model CashMovement {
+  id              String           @id @default(cuid())
+  organizationId  String
+  registerId      String
+  sessionId       String?
+  type            CashMovementType
+  amount          Decimal          @db.Decimal(14, 2)
+  balanceAfter    Decimal?         @db.Decimal(14, 2)
+  description     String
+  occurredAt      DateTime         @default(now())
+  receiptId       String?
+  paymentOrderId  String?
+  sourceSessionId String?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  register     CashRegister @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  session      CashSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("CashMovementCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, occurredAt])
+  @@index([registerId, occurredAt])
+  @@index([sessionId])
+  @@map("cash_movements")
+}
+
+model BankAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  bankName       String
+  accountNumber  String?
+  cbu            String?
+  alias          String?
+  currency       String   @default("ARS")
+  balance        Decimal  @default(0) @db.Decimal(14, 2)
+  isActive       Boolean  @default(true)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movements            BankMovement[]
+  receiptPayments      ReceiptPayment[]
+  paymentOrderPayments PaymentOrderPayment[]
+  depositedChecks      CheckInstrument[]     @relation("CheckDeposits")
+  issuedChecks         CheckInstrument[]     @relation("CheckIssues")
+
+  @@index([organizationId, isActive])
+  @@map("bank_accounts")
+}
+
+model BankMovement {
+  id                String           @id @default(cuid())
+  organizationId    String
+  bankAccountId     String
+  type              BankMovementType
+  amount            Decimal          @db.Decimal(14, 2)
+  balanceAfter      Decimal?         @db.Decimal(14, 2)
+  description       String
+  occurredAt        DateTime         @default(now())
+  receiptId         String?
+  paymentOrderId    String?
+  checkInstrumentId String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccount     BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  checkInstrument CheckInstrument? @relation(fields: [checkInstrumentId], references: [id], onDelete: SetNull)
+  createdBy       User?            @relation("BankMovementCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, occurredAt])
+  @@index([bankAccountId, occurredAt])
+  @@map("bank_movements")
 }

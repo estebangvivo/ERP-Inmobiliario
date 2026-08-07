@@ -19,6 +19,10 @@ import {
   leadScopeWhere,
 } from "@/lib/tenant-scope";
 import { hasModule } from "@/features/auth/lib/modules";
+import { syncOverdueBills } from "@/server/services/billing";
+import { listOwnersPendingSettlement } from "@/server/services/monthly-job";
+
+const DUE_SOON_DAYS = 7;
 
 export default async function DashboardPage() {
   const session = await requireSession();
@@ -28,6 +32,10 @@ export default async function DashboardPage() {
   const canSeeProperties = hasModule(session.allowedModules, "propiedades");
   const canSeeBills = hasModule(session.allowedModules, "cobros");
   const canSeeWorkOrders = hasModule(session.allowedModules, "mantenimiento");
+  const canSeeSettlements =
+    staff || hasModule(session.allowedModules, "rendiciones");
+
+  await syncOverdueBills(session.organizationId);
 
   const propertyWhere = propertyScopeWhere(session);
   const contractWhere = contractScopeWhere(session);
@@ -42,12 +50,18 @@ export default async function DashboardPage() {
   const month = now.getMonth() + 1;
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 1));
+  const todayUtc = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const dueSoonEnd = new Date(todayUtc);
+  dueSoonEnd.setUTCDate(dueSoonEnd.getUTCDate() + DUE_SOON_DAYS);
 
   const [
     properties,
     contracts,
     pendingBills,
     overdueBills,
+    dueSoonBills,
     openLeads,
     openWorkOrders,
     paymentsThisMonth,
@@ -68,6 +82,17 @@ export default async function DashboardPage() {
         AND: [billWhere, { status: "OVERDUE" }],
       },
     }),
+    canSeeBills
+      ? prisma.tenantBill.count({
+          where: {
+            AND: [
+              billWhere,
+              { status: { in: ["PENDING", "PARTIAL"] } },
+              { dueDate: { gte: todayUtc, lt: dueSoonEnd } },
+            ],
+          },
+        })
+      : Promise.resolve(0),
     canSeeLeads
       ? prisma.lead.count({ where: { ...leadWhere, status: "NEW" } })
       : Promise.resolve(0),
@@ -103,6 +128,15 @@ export default async function DashboardPage() {
         })
       : Promise.resolve([]),
   ]);
+
+  const pendingSettlements =
+    staff && canSeeSettlements
+      ? await listOwnersPendingSettlement({
+          organizationId: session.organizationId,
+          periodYear: year,
+          periodMonth: month,
+        })
+      : [];
 
   const collectedByCurrency = paymentsThisMonth.reduce<Record<string, number>>(
     (acc, p) => {
@@ -219,6 +253,24 @@ export default async function DashboardPage() {
             title={role === "TENANT" ? "Mis cuotas vencidas" : "Cuotas vencidas"}
             value={String(overdueBills)}
             href="/cobros?status=OVERDUE"
+          />
+        ) : null}
+        {canSeeBills ? (
+          <StatCard
+            title={
+              role === "TENANT"
+                ? `Mis cuotas por vencer (${DUE_SOON_DAYS}d)`
+                : `Por vencer (${DUE_SOON_DAYS}d)`
+            }
+            value={String(dueSoonBills)}
+            href="/cobros?status=PENDING"
+          />
+        ) : null}
+        {staff && canSeeSettlements ? (
+          <StatCard
+            title="Pendientes de rendir"
+            value={String(pendingSettlements.length)}
+            href="/rendiciones"
           />
         ) : null}
         {canSeeLeads && canSeeWorkOrders ? (

@@ -213,6 +213,24 @@ export function OrganizationSettingsForm({
           </fieldset>
           <label className="block text-sm sm:col-span-2">
             <span className="mb-1 block text-[var(--muted-foreground)]">
+              Día de vencimiento de cuotas de alquiler
+            </span>
+            <input
+              name="billDueDay"
+              type="number"
+              min={1}
+              max={28}
+              step={1}
+              required
+              defaultValue={organization.billDueDay ?? 10}
+              className={cn(fieldClass, "max-w-[8rem]")}
+            />
+            <span className="mt-1 block text-xs text-[var(--muted-foreground)]">
+              Día del mes (1–28) usado al generar cuotas. Por defecto 10.
+            </span>
+          </label>
+          <label className="block text-sm sm:col-span-2">
+            <span className="mb-1 block text-[var(--muted-foreground)]">
               Aviso de cheques por vencer (días)
             </span>
             <input

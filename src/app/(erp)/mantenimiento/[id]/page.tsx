@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/erp/page-chrome";
 import {
+  PaySupplierInvoiceForm,
   SupplierInvoiceForm,
   WorkOrderStatusButtons,
 } from "@/components/erp/work-order-forms";
@@ -19,7 +20,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
   const session = await requireStaff();
   const { id } = await params;
 
-  const [workOrder, supplierMembers] = await Promise.all([
+  const [workOrder, supplierMembers, bankAccounts] = await Promise.all([
     prisma.workOrder.findUnique({
       where: { id },
       include: {
@@ -40,9 +41,23 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
       include: { user: { select: { id: true, name: true } } },
       orderBy: { user: { name: "asc" } },
     }),
+    prisma.bankAccount.findMany({
+      where: {
+        organizationId: session.organizationId!,
+        isActive: true,
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, bankName: true, currency: true },
+    }),
   ]);
 
   if (!workOrder) notFound();
+
+  const bankOpts = bankAccounts.map((b) => ({
+    id: b.id,
+    currency: b.currency,
+    label: `${b.name} · ${b.bankName} (${b.currency})`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -76,16 +91,34 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
             <p className="text-sm text-[var(--muted-foreground)]">Sin facturas.</p>
           ) : (
             workOrder.invoices.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between border-b border-[var(--border)] py-2 text-sm last:border-0">
-                <div>
-                  <p className="font-medium">
-                    {formatMoney(inv.amount.toString(), inv.currency)} · {inv.supplier.name}
-                  </p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {formatDateOnly(inv.invoiceDate)} · {COST_BEARER_LABELS[inv.costBearer]}
-                    {inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""}
-                  </p>
+              <div
+                key={inv.id}
+                className="border-b border-[var(--border)] py-2 text-sm last:border-0"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">
+                      {formatMoney(inv.amount.toString(), inv.currency)} ·{" "}
+                      {inv.supplier.name}
+                      {inv.paidAt ? (
+                        <span className="ml-2 text-xs text-emerald-700">Pagada</span>
+                      ) : null}
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {formatDateOnly(inv.invoiceDate)} ·{" "}
+                      {COST_BEARER_LABELS[inv.costBearer]}
+                      {inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""}
+                    </p>
+                  </div>
                 </div>
+                {!inv.paidAt ? (
+                  <PaySupplierInvoiceForm
+                    invoiceId={inv.id}
+                    amountLabel={formatMoney(inv.amount.toString(), inv.currency)}
+                    currency={inv.currency}
+                    bankAccounts={bankOpts}
+                  />
+                ) : null}
               </div>
             ))
           )}

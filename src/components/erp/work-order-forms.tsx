@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkOrderStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,14 @@ import { WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import {
   createSupplierInvoiceAction,
   createWorkOrderAction,
+  paySupplierInvoiceAction,
   updateWorkOrderStatusAction,
 } from "@/server/actions/work-orders";
+import type { DocActionResult } from "@/server/actions/billing";
 import type { ActionResult } from "@/server/actions/users";
 
 const initial: ActionResult | null = null;
+const payInitial: DocActionResult | null = null;
 
 export function WorkOrderForm({
   properties,
@@ -169,6 +172,92 @@ export function SupplierInvoiceForm({
       </div>
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)] sm:col-span-2">{state.error}</p>
+      ) : null}
+    </form>
+  );
+}
+
+export function PaySupplierInvoiceForm({
+  invoiceId,
+  amountLabel,
+  currency,
+  bankAccounts = [],
+}: {
+  invoiceId: string;
+  amountLabel: string;
+  currency: string;
+  bankAccounts?: { id: string; label: string; currency: string }[];
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(
+    paySupplierInvoiceAction,
+    payInitial,
+  );
+  const [method, setMethod] = useState("BANK_TRANSFER");
+
+  useEffect(() => {
+    if (state?.ok) {
+      router.refresh();
+      if (state.printUrl) {
+        window.open(state.printUrl, "_blank", "noopener,noreferrer");
+      }
+    }
+  }, [state, router]);
+
+  const banksForCurrency = bankAccounts.filter(
+    (b) => b.currency.toUpperCase() === currency.toUpperCase(),
+  );
+
+  return (
+    <form
+      action={formAction}
+      className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--border)] bg-[var(--background)] p-2"
+    >
+      <input type="hidden" name="invoiceId" value={invoiceId} />
+      <div className="space-y-1">
+        <Label className="text-xs">Medio</Label>
+        <Select
+          name="method"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+        >
+          <option value="BANK_TRANSFER">Transferencia</option>
+          <option value="CASH">Efectivo</option>
+          <option value="OTHER">Otro</option>
+        </Select>
+      </div>
+      {method === "BANK_TRANSFER" ? (
+        <div className="min-w-[180px] space-y-1">
+          <Label className="text-xs">Cuenta</Label>
+          <Select name="bankAccountId" required>
+            <option value="">Elegí…</option>
+            {banksForCurrency.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
+      <div className="space-y-1">
+        <Label className="text-xs">Ref.</Label>
+        <Input name="reference" />
+      </div>
+      <Button type="submit" size="sm" disabled={pending}>
+        {pending ? "…" : `Pagar ${amountLabel}`}
+      </Button>
+      {state && !state.ok ? (
+        <p className="w-full text-xs text-[var(--destructive)]">{state.error}</p>
+      ) : null}
+      {state?.ok && state.printUrl ? (
+        <a
+          href={state.printUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="w-full text-xs text-emerald-700 underline"
+        >
+          Abrir OP para imprimir / WhatsApp
+        </a>
       ) : null}
     </form>
   );

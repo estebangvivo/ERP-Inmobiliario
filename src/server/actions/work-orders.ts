@@ -3,8 +3,10 @@
 import { CostBearer, WorkOrderStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
+import { issuePaymentOrderForSupplierInvoice } from "@/features/treasury/lib/issue-docs-from-billing";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
+import type { DocActionResult } from "@/server/actions/billing";
 import type { ActionResult } from "@/server/actions/users";
 
 async function nextWorkOrderCode(organizationId: string) {
@@ -124,5 +126,104 @@ export async function createSupplierInvoiceAction(
 
   revalidatePath("/mantenimiento");
   revalidatePath(`/mantenimiento/${workOrderId}`);
+  revalidatePath("/tesoreria/cuentas");
   return { ok: true };
+}
+
+export async function paySupplierInvoiceAction(
+  _prev: DocActionResult | null,
+  formData: FormData,
+): Promise<DocActionResult> {
+  const session = await requireStaff();
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const method = String(formData.get("method") ?? "BANK_TRANSFER");
+  const bankAccountId = String(formData.get("bankAccountId") ?? "").trim();
+  const reference = String(formData.get("reference") ?? "").trim();
+
+  if (!invoiceId) return { ok: false, error: "Factura requerida." };
+  if (method === "BANK_TRANSFER" && !bankAccountId) {
+    return { ok: false, error: "Elegí la cuenta bancaria para la transferencia." };
+  }
+
+  const invoice = await prisma.supplierInvoice.findFirst({
+    where: {
+      id: invoiceId,
+      paidAt: null,
+      workOrder: { organizationId: session.organizationId },
+    },
+    include: {
+      supplier: { select: { id: true, name: true } },
+      workOrder: {
+        select: {
+          id: true,
+          code: true,
+          contractId: true,
+          propertyId: true,
+        },
+      },
+    },
+  });
+  if (!invoice) return { ok: false, error: "Factura no encontrada o ya pagada." };
+
+  let contractId = invoice.workOrder.contractId;
+  if (!contractId) {
+    const contract = await prisma.contract.findFirst({
+      where: {
+        organizationId: session.organizationId,
+        propertyId: invoice.workOrder.propertyId,
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+    contractId = contract?.id ?? null;
+  }
+  if (!contractId) {
+    return {
+      ok: false,
+      error:
+        "La OT no tiene contrato vinculado. Asocialo o creá la OP desde Tesorería.",
+    };
+  }
+
+  const amount = Math.round(Number(invoice.amount) * 100) / 100;
+  const result = await issuePaymentOrderForSupplierInvoice({
+    invoiceId: invoice.id,
+    supplierId: invoice.supplierId,
+    supplierName: invoice.supplier.name,
+    contractId,
+    amount,
+    currency: invoice.currency,
+    method,
+    bankAccountId: bankAccountId || undefined,
+    reference: reference || undefined,
+    description: `Factura ${invoice.invoiceNumber ?? invoice.id.slice(-6)} · OT ${invoice.workOrder.code}`,
+  });
+
+  if (!result.ok) return { ok: false, error: result.error };
+
+  if (result.postError) {
+    return {
+      ok: false,
+      error: `${result.postError} La OP ${result.number} quedó en borrador en Tesorería.`,
+      printUrl: `/tesoreria/ordenes-pago/${result.id}/print`,
+    };
+  }
+
+  revalidatePath("/mantenimiento");
+  revalidatePath(`/mantenimiento/${invoice.workOrder.id}`);
+  revalidatePath("/tesoreria");
+  revalidatePath("/tesoreria/ordenes-pago");
+  revalidatePath(`/tesoreria/ordenes-pago/${result.id}`);
+  revalidatePath("/tesoreria/caja");
+  revalidatePath("/tesoreria/bancos");
+  revalidatePath("/tesoreria/cuentas");
+  revalidatePath(`/tesoreria/cuentas/proveedores/${invoice.supplierId}`);
+
+  const printUrl = `/tesoreria/ordenes-pago/${result.id}/print?autoPrint=1`;
+  return {
+    ok: true,
+    message: `Orden de pago ${result.number} generada.`,
+    printUrl,
+    documentNumber: result.number,
+  };
 }

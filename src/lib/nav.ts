@@ -11,10 +11,12 @@ import {
   Receipt,
   Settings,
   Shield,
+  Tag,
   Ticket,
   Users,
   Wrench,
   Wallet,
+  BookUser,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -48,7 +50,7 @@ export const erpNavItems: NavItem[] = [
     roles: ["ADMIN", "AGENT", "OWNER"],
   },
   {
-    title: "Complejos",
+    title: "Edificios",
     href: "/complejos",
     icon: Building2,
     module: "complejos",
@@ -66,7 +68,21 @@ export const erpNavItems: NavItem[] = [
     href: "/cobros",
     icon: Wallet,
     module: "cobros",
-    roles: ["ADMIN", "AGENT", "TENANT"],
+    roles: ["ADMIN", "AGENT", "OWNER", "TENANT"],
+  },
+  {
+    title: "Cuenta corriente",
+    href: "/cobros/cuenta-corriente",
+    icon: BookUser,
+    module: "cobros",
+    roles: ["ADMIN", "AGENT"],
+  },
+  {
+    title: "Tesorería",
+    href: "/tesoreria",
+    icon: Landmark,
+    module: "tesoreria",
+    roles: ["ADMIN", "AGENT"],
   },
   {
     title: "Expensas",
@@ -85,7 +101,7 @@ export const erpNavItems: NavItem[] = [
   {
     title: "Rendiciones",
     href: "/rendiciones",
-    icon: Landmark,
+    icon: Wallet,
     module: "rendiciones",
     roles: ["ADMIN", "AGENT", "OWNER"],
   },
@@ -101,6 +117,20 @@ export const erpNavItems: NavItem[] = [
     href: "/visitas",
     icon: CalendarDays,
     module: "consultas",
+    roles: ["ADMIN", "AGENT"],
+  },
+  {
+    title: "Agenda",
+    href: "/agenda",
+    icon: CalendarDays,
+    module: "consultas",
+    roles: ["ADMIN", "AGENT"],
+  },
+  {
+    title: "Ventas",
+    href: "/ventas",
+    icon: Tag,
+    module: "ventas",
     roles: ["ADMIN", "AGENT"],
   },
   {

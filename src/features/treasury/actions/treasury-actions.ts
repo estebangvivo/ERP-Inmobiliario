@@ -60,8 +60,6 @@ export type CheckDetailsInput = {
   checkAccount?: string;
 };
 
-export type { TreasuryPaymentInput };
-
 export type CreateReceiptInput = {
   issueDate: string;
   tenantId?: string;

@@ -9,16 +9,15 @@ import {
   postPaymentOrder,
   postReceipt,
   type TreasuryLineInput,
-  type TreasuryPaymentInput,
 } from "@/features/treasury/actions/treasury-actions";
 import type { TreasuryPaymentMethod } from "@prisma/client";
 import type { TreasuryContractOption } from "@/features/treasury/queries/list-contracts-for-treasury";
+import type { TreasuryPaymentInput } from "@/features/treasury/lib/payments";
 import { DateInput } from "@/components/ui/date-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatMoney, PAYMENT_METHOD_LABEL } from "@/features/treasury/lib/labels";
 import {
   checkFormatLabel,
-  normalizeCheckNumber,
 } from "@/features/treasury/lib/check-number";
 import { withOpenCashRetry } from "@/features/treasury/lib/with-open-cash-retry";
 import { Button } from "@/components/ui/button";

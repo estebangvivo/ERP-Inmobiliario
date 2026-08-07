@@ -69,7 +69,7 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
   }
 
   const balance = round2(bill.balance);
-  let sum = round2(CONCEPT_ORDER.reduce((s, k) => s + raw[k], 0));
+  const sum = round2(CONCEPT_ORDER.reduce((s, k) => s + raw[k], 0));
 
   if (balance <= 0.001) {
     return {

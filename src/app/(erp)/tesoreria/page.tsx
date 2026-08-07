@@ -13,7 +13,6 @@ import {
   getTreasuryFlowTotals,
   listPaymentOrders,
   listReceipts,
-  listRecentBillingPayments,
 } from "@/features/treasury/queries/list-treasury";
 import {
   formatMoney,
@@ -25,23 +24,19 @@ import { getCashOverview } from "@/features/treasury/queries/cash-queries";
 import { listBankAccounts } from "@/features/treasury/queries/bank-queries";
 import { formatCashMoney } from "@/features/treasury/lib/cash-labels";
 import { PageHeader } from "@/components/erp/page-chrome";
-import { PAYMENT_METHOD_LABELS } from "@/lib/labels";
-import { formatDateOnly } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function TesoreriaPage() {
   await requireModule("tesoreria");
 
-  const [receipts, orders, cash, bankAccounts, flows, billingPayments] =
-    await Promise.all([
-      listReceipts(),
-      listPaymentOrders(),
-      getCashOverview("ARS"),
-      listBankAccounts({ activeOnly: true }),
-      getTreasuryFlowTotals(),
-      listRecentBillingPayments(8),
-    ]);
+  const [receipts, orders, cash, bankAccounts, flows] = await Promise.all([
+    listReceipts(),
+    listPaymentOrders(),
+    getCashOverview("ARS"),
+    listBankAccounts({ activeOnly: true }),
+    getTreasuryFlowTotals(),
+  ]);
 
   const bankTotals = sumByCurrency(
     bankAccounts.map((a) => ({ currency: a.currency, amount: a.balance })),
@@ -54,7 +49,7 @@ export default async function TesoreriaPage() {
     <div className="space-y-6">
       <PageHeader
         title="Tesorería"
-        description="Recibos, órdenes de pago, caja, bancos y cheques. Los cobros de cuotas también suman a ingresos."
+        description="Recibos (cobros), órdenes de pago, caja, bancos y cheques."
       />
 
       <dl className="grid gap-4 sm:grid-cols-3">
@@ -66,7 +61,7 @@ export default async function TesoreriaPage() {
             {formatMoneyByCurrency(incomeTotal)}
           </dd>
           <dd className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Caja + bancos (cobros y recibos)
+            Caja + bancos (recibos)
           </dd>
         </div>
         <div className="border-l-2 border-red-600 pl-3">
@@ -77,7 +72,7 @@ export default async function TesoreriaPage() {
             {formatMoneyByCurrency(expenseTotal)}
           </dd>
           <dd className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Caja + bancos (OP y egresos)
+            Caja + bancos (órdenes de pago)
           </dd>
         </div>
         <div className="border-l-2 border-[var(--primary)] pl-3">
@@ -122,13 +117,13 @@ export default async function TesoreriaPage() {
             href: "/tesoreria/recibos/new",
             icon: FileInput,
             title: "Nuevo recibo",
-            desc: "Cobros",
+            desc: "Cobros de cuotas y otros ingresos",
           },
           {
             href: "/tesoreria/ordenes-pago/new",
             icon: FileOutput,
             title: "Nueva orden de pago",
-            desc: "Pagos",
+            desc: "Pagos a proveedores y rendiciones",
           },
         ].map((item) => (
           <Link
@@ -147,19 +142,7 @@ export default async function TesoreriaPage() {
         ))}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Cobros de cuotas</h2>
-            <Link
-              href="/tesoreria/cuentas"
-              className="text-sm text-[var(--primary)]"
-            >
-              Cuentas
-            </Link>
-          </div>
-          <BillingPaymentList items={billingPayments} />
-        </section>
+      <div className="grid gap-8 lg:grid-cols-2">
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Recibos</h2>
@@ -171,8 +154,9 @@ export default async function TesoreriaPage() {
             </Link>
           </div>
           <DocList
-            items={receipts.slice(0, 5)}
+            items={receipts.slice(0, 8)}
             href={(id) => `/tesoreria/recibos/${id}`}
+            empty="Todavía no hay recibos. Los cobros de cuotas generan recibos automáticamente."
           />
         </section>
         <section>
@@ -186,8 +170,9 @@ export default async function TesoreriaPage() {
             </Link>
           </div>
           <DocList
-            items={orders.slice(0, 5)}
+            items={orders.slice(0, 8)}
             href={(id) => `/tesoreria/ordenes-pago/${id}`}
+            empty="Todavía no hay órdenes de pago."
           />
         </section>
       </div>
@@ -200,58 +185,19 @@ export default async function TesoreriaPage() {
   );
 }
 
-function BillingPaymentList({
-  items,
-}: {
-  items: Awaited<ReturnType<typeof listRecentBillingPayments>>;
-}) {
-  if (items.length === 0) {
-    return (
-      <p className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
-        Todavía no hay cobros de cuotas en caja/banco.
-      </p>
-    );
-  }
-
-  return (
-    <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
-      {items.map((item) => (
-        <li key={item.id}>
-          <Link
-            href={`/cobros/${item.billId}`}
-            className="flex flex-col gap-1 py-3 hover:bg-[var(--muted)]/40 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div>
-              <p className="font-medium">{item.label}</p>
-              <p className="text-sm text-[var(--muted-foreground)]">
-                {item.partyName} ·{" "}
-                {PAYMENT_METHOD_LABELS[
-                  item.method as keyof typeof PAYMENT_METHOD_LABELS
-                ] ?? item.method}{" "}
-                · {formatDateOnly(item.paidAt)}
-              </p>
-            </div>
-            <p className="text-sm font-medium tabular-nums text-emerald-700">
-              {formatMoney(item.amount, item.currency)}
-            </p>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function DocList({
   items,
   href,
+  empty = "Sin documentos aún.",
 }: {
   items: Awaited<ReturnType<typeof listReceipts>>;
   href: (id: string) => string;
+  empty?: string;
 }) {
   if (items.length === 0) {
     return (
       <p className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
-        Sin documentos aún.
+        {empty}
       </p>
     );
   }

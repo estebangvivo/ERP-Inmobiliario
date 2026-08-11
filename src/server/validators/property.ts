@@ -17,7 +17,12 @@ export const propertyCreateSchema = z.object({
     .union([z.literal(""), z.coerce.number().positive()])
     .optional(),
   currency: z.nativeEnum(Currency).default(Currency.ARS),
-  rentCurrency: z.union([z.nativeEnum(Currency), z.literal("")]).optional(),
+  rentCurrency: z
+    .union([z.nativeEnum(Currency), z.literal("")])
+    .optional()
+    .transform((v): Currency | undefined =>
+      v === "ARS" || v === "USD" || v === "EUR" ? v : undefined,
+    ),
   address: z.string().min(3),
   city: z.string().min(2),
   province: z.string().optional(),

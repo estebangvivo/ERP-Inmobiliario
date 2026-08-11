@@ -83,12 +83,7 @@ export async function createPropertyAction(
           ? d.rentPrice
           : null,
       currency: d.currency,
-      rentCurrency:
-        d.operationType === "BOTH"
-          ? d.rentCurrency && d.rentCurrency !== ""
-            ? d.rentCurrency
-            : "ARS"
-          : null,
+      rentCurrency: d.operationType === "BOTH" ? (d.rentCurrency ?? "ARS") : null,
       address: d.address,
       city: d.city,
       province: emptyToUndef(d.province) ?? null,
@@ -161,12 +156,7 @@ export async function updatePropertyAction(
           ? d.rentPrice
           : null,
       currency: d.currency,
-      rentCurrency:
-        d.operationType === "BOTH"
-          ? d.rentCurrency && d.rentCurrency !== ""
-            ? d.rentCurrency
-            : "ARS"
-          : null,
+      rentCurrency: d.operationType === "BOTH" ? (d.rentCurrency ?? "ARS") : null,
       address: d.address,
       city: d.city,
       province: emptyToUndef(d.province) ?? null,

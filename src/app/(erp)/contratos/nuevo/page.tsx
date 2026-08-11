@@ -7,7 +7,7 @@ import { propertyScopeWhere } from "@/lib/tenant-scope";
 
 async function membersAsUsers(
   organizationId: string,
-  roles: ("OWNER" | "TENANT" | "VIEWER" | "AGENT")[],
+  roles: ("OWNER" | "TENANT" | "GUARANTOR" | "VIEWER" | "AGENT")[],
 ) {
   const rows = await prisma.organizationMember.findMany({
     where: {
@@ -18,7 +18,9 @@ async function membersAsUsers(
         ...excludePlatformSuperadminFromUser(),
       },
     },
-    include: { user: { select: { id: true, name: true } } },
+    include: {
+      user: { select: { id: true, name: true, documentNumber: true } },
+    },
     orderBy: { user: { name: "asc" } },
   });
   return rows.map((r) => r.user);
@@ -33,15 +35,26 @@ export default async function NuevoContratoPage() {
       where: {
         AND: [
           propertyScopeWhere(session),
-          { status: { in: ["AVAILABLE", "RESERVED", "RENTED"] } },
+          { operationType: "RENT" },
+          { status: { in: ["AVAILABLE", "RESERVED"] } },
         ],
       },
       orderBy: { title: "asc" },
-      select: { id: true, title: true },
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        currency: true,
+        ownerships: {
+          orderBy: [{ isPrimary: "desc" }, { sharePct: "desc" }],
+          take: 1,
+          include: { owner: { select: { id: true, name: true } } },
+        },
+      },
     }),
     membersAsUsers(orgId, ["OWNER"]),
     membersAsUsers(orgId, ["TENANT"]),
-    membersAsUsers(orgId, ["OWNER", "TENANT", "VIEWER", "AGENT"]),
+    membersAsUsers(orgId, ["GUARANTOR", "OWNER", "TENANT", "VIEWER", "AGENT"]),
   ]);
 
   return (
@@ -51,7 +64,17 @@ export default async function NuevoContratoPage() {
         description="Asocia propiedad, propietario, inquilino y condiciones."
       />
       <ContractCreateForm
-        properties={properties}
+        properties={properties.map((p) => {
+          const primary = p.ownerships[0];
+          return {
+            id: p.id,
+            title: p.title,
+            price: p.price?.toString() ?? null,
+            currency: p.currency,
+            ownerId: primary?.owner.id ?? null,
+            ownerName: primary?.owner.name ?? null,
+          };
+        })}
         owners={owners}
         tenants={tenants}
         guarantors={guarantors}

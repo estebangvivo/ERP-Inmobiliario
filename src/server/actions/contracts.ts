@@ -7,11 +7,25 @@ import {
   contractCreateSchema,
   contractUpdateSchema,
 } from "@/server/validators/contract";
-import { applyContractAdjustment, recordPayment } from "@/server/services/billing";
+import {
+  applyContractAdjustment,
+  generateContractTotalCommissionInstallments,
+  generateTenantBillsForContract,
+  recordPayment,
+} from "@/server/services/billing";
 import type { ActionResult } from "@/server/actions/users";
+import { saveContractAttachments } from "@/server/actions/contract-attachments";
 
 function formDataToObject(formData: FormData) {
   return Object.fromEntries(formData.entries());
+}
+
+function parseGuarantorIds(formData: FormData): string[] {
+  const ids = formData
+    .getAll("guarantorId")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  return [...new Set(ids)];
 }
 
 async function nextContractCode(organizationId: string) {
@@ -100,8 +114,10 @@ export async function createContractAction(
 ): Promise<ActionResult> {
   const session = await requireStaff();
   const raw = formDataToObject(formData);
+  const guarantorIds = parseGuarantorIds(formData);
   const parsed = contractCreateSchema.safeParse({
     ...raw,
+    guarantorIds,
     includesOrdinaryExp:
       formData.get("includesOrdinaryExp") === "on" ||
       formData.get("includesOrdinaryExp") === "true",
@@ -116,6 +132,12 @@ export async function createContractAction(
   const d = parsed.data;
   if (new Date(d.endDate) <= new Date(d.startDate)) {
     return { ok: false, error: "La fecha de fin debe ser posterior al inicio" };
+  }
+  if (d.guarantorIds.includes(d.tenantId)) {
+    return {
+      ok: false,
+      error: "El inquilino no puede figurar también como garante.",
+    };
   }
 
   const code = await nextContractCode(session.organizationId);
@@ -144,6 +166,10 @@ export async function createContractAction(
       commissionValue: d.commissionValue,
       commissionTenantPct: d.commissionTenantPct,
       commissionOwnerPct: d.commissionOwnerPct,
+      commissionInstallments:
+        d.commissionMode === "CONTRACT_TOTAL"
+          ? (d.commissionInstallments ?? null)
+          : null,
       lateFeeDailyRatePct: d.lateFeeDailyRatePct,
       includesOrdinaryExp: d.includesOrdinaryExp ?? true,
       includesExtraordExp: d.includesExtraordExp ?? false,
@@ -152,9 +178,10 @@ export async function createContractAction(
         create: [
           { userId: d.ownerId, role: "OWNER", sharePct: 100 },
           { userId: d.tenantId, role: "TENANT", sharePct: 100 },
-          ...(d.guarantorId
-            ? [{ userId: d.guarantorId, role: "GUARANTOR" as const }]
-            : []),
+          ...d.guarantorIds.map((userId) => ({
+            userId,
+            role: "GUARANTOR" as const,
+          })),
         ],
       },
       adjustments: {
@@ -177,11 +204,45 @@ export async function createContractAction(
     data: { status: "RENTED" },
   });
 
+  const attachmentFiles = formData
+    .getAll("attachments")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const attachmentKinds = formData.getAll("attachmentKinds").map(String);
+  const attachmentsResult = await saveContractAttachments(
+    contract.id,
+    attachmentFiles,
+    attachmentKinds,
+  );
+
+  const bills = await generateTenantBillsForContract(contract.id, {
+    dueDay: 10,
+  });
+  const commissionBills =
+    await generateContractTotalCommissionInstallments(contract.id, {
+      dueDay: 10,
+    });
+
   revalidatePath("/contratos");
   revalidatePath(`/contratos/${contract.id}`);
   revalidatePath("/gestion/propiedades");
   revalidatePath("/rendiciones");
-  return { ok: true };
+  revalidatePath("/cobros");
+  revalidatePath("/cobros/cuenta-corriente");
+  const commissionNote =
+    commissionBills.length > 0
+      ? ` Honorarios en ${commissionBills.length} cuota${commissionBills.length === 1 ? "" : "s"}.`
+      : "";
+  const attachmentsNote =
+    attachmentsResult.saved > 0
+      ? ` ${attachmentsResult.saved} archivo(s) adjunto(s).`
+      : "";
+  const attachmentsWarn = attachmentsResult.error
+    ? ` ${attachmentsResult.error}`
+    : "";
+  return {
+    ok: true,
+    message: `Contrato creado con ${bills.length} cuota${bills.length === 1 ? "" : "s"} de alquiler (vencimiento día 10).${commissionNote}${attachmentsNote}${attachmentsWarn}`,
+  };
 }
 
 export async function updateContractAction(
@@ -335,27 +396,98 @@ export async function applyContractAdjustmentAction(
 ): Promise<ActionResult> {
   const session = await requireStaff();
   const contractId = String(formData.get("contractId") ?? "");
-  const percent = Number(formData.get("percent"));
+  let percent = Number(formData.get("percent"));
   const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
-  if (!contractId || !(percent > 0) || !effectiveFromRaw) {
-    return { ok: false, error: "Completá contrato, porcentaje y fecha." };
+  if (!contractId || !effectiveFromRaw) {
+    return { ok: false, error: "Completá contrato y fecha de vigencia." };
   }
 
   const contract = await prisma.contract.findFirst({
     where: { id: contractId, organizationId: session.organizationId },
-    select: { id: true, currency: true },
+    include: {
+      adjustments: { orderBy: { createdAt: "asc" }, take: 1 },
+    },
   });
   if (!contract) {
     return { ok: false, error: "Contrato no encontrado." };
+  }
+
+  const policy = contract.adjustments[0];
+  const effectiveFrom = new Date(effectiveFromRaw);
+  const periodYear = effectiveFrom.getUTCFullYear();
+  const periodMonth = effectiveFrom.getUTCMonth() + 1;
+  // Las tasas se cargan el mes anterior a la vigencia (ej. junio → julio).
+  const loadIdx = periodYear * 12 + (periodMonth - 1) - 1;
+  const loadYear = Math.floor(loadIdx / 12);
+  const loadMonth = (loadIdx % 12) + 1;
+
+  if (!(percent > 0) && policy) {
+    const { getMaxIndexPercent, getIndexPercent } = await import(
+      "@/server/actions/index-rates"
+    );
+    const periodMonths = policy.periodMonths;
+
+    async function resolveFromRates(
+      year: number,
+      month: number,
+    ): Promise<number | null> {
+      if (policy!.indexType === "MAX_ICL_IPC_CP") {
+        const rates = await getMaxIndexPercent(
+          session.organizationId,
+          year,
+          month,
+          periodMonths,
+        );
+        return rates.max;
+      }
+      if (
+        policy!.indexType === "IPC" ||
+        policy!.indexType === "ICL" ||
+        policy!.indexType === "CP"
+      ) {
+        return getIndexPercent(
+          session.organizationId,
+          policy!.indexType,
+          year,
+          month,
+          periodMonths,
+        );
+      }
+      return null;
+    }
+
+    percent =
+      (await resolveFromRates(loadYear, loadMonth)) ??
+      (await resolveFromRates(periodYear, periodMonth)) ??
+      0;
+
+    if (!(percent > 0) &&
+      (policy.indexType === "MAX_ICL_IPC_CP" ||
+        policy.indexType === "IPC" ||
+        policy.indexType === "ICL" ||
+        policy.indexType === "CP")
+    ) {
+      return {
+        ok: false,
+        error: `No hay índices para ${loadMonth}/${loadYear} (ni ${periodMonth}/${periodYear}) · ${periodMonths} meses. Cargalos en Contratos.`,
+      };
+    }
+  }
+
+  if (!(percent > 0)) {
+    return {
+      ok: false,
+      error: "Indicá el porcentaje o cargá los índices del período.",
+    };
   }
 
   try {
     const adj = await applyContractAdjustment({
       contractId,
       percent,
-      effectiveFrom: new Date(effectiveFromRaw),
+      effectiveFrom,
       notes: notes || undefined,
     });
     revalidatePath("/contratos");

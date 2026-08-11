@@ -54,7 +54,11 @@ export default async function NuevoReciboPage({ searchParams }: PageProps) {
       <TreasuryDocumentForm
         kind="receipt"
         contracts={contracts}
-        parties={tenants.map((t) => ({ id: t.id, name: t.name }))}
+        parties={tenants.map((t) => ({
+          id: t.id,
+          name: t.name,
+          documentNumber: t.documentNumber,
+        }))}
         defaultCurrency={currency}
         enabledCurrencies={enabledCurrencies}
         defaultContractId={defaultContractId}

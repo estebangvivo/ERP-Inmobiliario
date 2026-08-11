@@ -114,7 +114,10 @@ export function SearchableSelect({
   const displayLabel = selected?.label ?? (value ? value : emptyLabel || placeholder);
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div
+      ref={rootRef}
+      className={`relative ${open ? "z-50" : "z-0"} ${className}`}
+    >
       {name ? <input type="hidden" name={name} value={value} /> : null}
       <button
         type="button"
@@ -128,32 +131,44 @@ export function SearchableSelect({
           setOpen((v) => !v);
           setQuery("");
         }}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm text-foreground outline-none ring-accent focus:ring-2 disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-left text-sm text-[var(--foreground)] outline-none ring-[var(--ring)] focus:ring-2 disabled:opacity-50"
       >
-        <span className={selected || (!value && emptyLabel) ? "truncate" : "truncate text-muted-foreground"}>
+        <span
+          className={
+            selected || (!value && emptyLabel)
+              ? "truncate"
+              : "truncate text-[var(--muted-foreground)]"
+          }
+        >
           {displayLabel}
         </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronDown
+          className="size-4 shrink-0 text-[var(--muted-foreground)]"
+          aria-hidden
+        />
       </button>
 
       {open && (
-        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-surface-elevated shadow-md">
-          <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
-            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="absolute left-0 right-0 z-50 mt-1 w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)] shadow-lg">
+          <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--card)] px-2.5 py-2">
+            <Search
+              className="size-4 shrink-0 text-[var(--muted-foreground)]"
+              aria-hidden
+            />
             <input
               ref={searchRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]"
               aria-label={searchPlaceholder}
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="rounded p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 aria-label="Limpiar búsqueda"
               >
                 <X className="size-3.5" aria-hidden />
@@ -163,15 +178,17 @@ export function SearchableSelect({
           <ul
             id={listId}
             role="listbox"
-            className="max-h-56 overflow-y-auto py-1"
+            className="max-h-56 overflow-y-auto bg-[var(--card)] py-1"
           >
             {emptyLabel != null && (
               <li role="option" aria-selected={!value}>
                 <button
                   type="button"
                   onClick={() => pick("")}
-                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-muted ${
-                    !value ? "bg-muted font-medium" : "text-muted-foreground"
+                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-[var(--muted)] ${
+                    !value
+                      ? "bg-[var(--muted)] font-medium"
+                      : "text-[var(--muted-foreground)]"
                   }`}
                 >
                   {emptyLabel}
@@ -179,7 +196,7 @@ export function SearchableSelect({
               </li>
             )}
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-muted-foreground">
+              <li className="px-3 py-2 text-sm text-[var(--muted-foreground)]">
                 Sin resultados
               </li>
             ) : (
@@ -190,8 +207,10 @@ export function SearchableSelect({
                     <button
                       type="button"
                       onClick={() => pick(opt.value)}
-                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-muted ${
-                        active ? "bg-muted font-medium" : "text-foreground"
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-[var(--muted)] ${
+                        active
+                          ? "bg-[var(--muted)] font-medium"
+                          : "text-[var(--foreground)]"
                       }`}
                     >
                       {opt.label}
@@ -201,7 +220,7 @@ export function SearchableSelect({
               })
             )}
             {onCreateNew ? (
-              <li className="border-t border-border">
+              <li className="border-t border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => {
@@ -209,7 +228,7 @@ export function SearchableSelect({
                     setQuery("");
                     onCreateNew(query.trim());
                   }}
-                  className="block w-full px-3 py-2.5 text-left text-sm font-medium text-accent hover:bg-muted"
+                  className="block w-full px-3 py-2.5 text-left text-sm font-medium text-[var(--primary)] hover:bg-[var(--muted)]"
                 >
                   {createNewLabel ??
                     (query.trim()

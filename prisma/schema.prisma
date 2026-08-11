@@ -53,10 +53,13 @@ model Contract {
   commissionOwnerPct  Decimal              @default(100) @db.Decimal(5, 2)
   commissionTenantPct Decimal              @default(0) @db.Decimal(5, 2)
   commissionValue     Decimal              @default(0) @db.Decimal(14, 2)
+  /// Cuotas para honorarios modo CONTRACT_TOTAL (null = no aplica).
+  commissionInstallments Int?
   organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   property            Property             @relation(fields: [propertyId], references: [id])
   adjustments         ContractAdjustment[]
   parties             ContractParty[]
+  attachments         ContractAttachment[]
   tenantBills         TenantBill[]
   workOrders          WorkOrder[]
   receiptLines        ReceiptLine[]
@@ -66,6 +69,21 @@ model Contract {
   @@index([organizationId, status])
   @@index([propertyId, status])
   @@index([startDate, endDate])
+}
+
+model ContractAttachment {
+  id         String   @id @default(cuid())
+  contractId String
+  /// CONTRACT_DOC | ID_DOCS | PAY_STUB | OTHER
+  kind       String
+  fileName   String
+  url        String
+  mimeType   String?
+  sizeBytes  Int?
+  createdAt  DateTime @default(now())
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId, createdAt])
 }
 
 model ContractAdjustment {
@@ -107,6 +125,7 @@ model Expense {
   currency         Currency            @default(ARS)
   allocationMethod AllocationMethod    @default(OWNERSHIP_COEFFICIENT)
   billToTenant     Boolean             @default(true)
+  ledger           CostLedger          @default(EXPENSES)
   notes            String?
   createdAt        DateTime            @default(now())
   organizationId   String?
@@ -114,8 +133,8 @@ model Expense {
   organization     Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   allocations      ExpenseAllocation[]
 
-  @@unique([complexId, type, concept, periodYear, periodMonth])
-  @@index([organizationId, periodYear, periodMonth])
+  @@unique([complexId, type, concept, periodYear, periodMonth, ledger])
+  @@index([organizationId, ledger, periodYear, periodMonth])
 }
 
 model ExpenseAllocation {
@@ -138,15 +157,18 @@ enum ServiceCostCategory {
   MUNICIPAL
   WORKS
   OTHER
+  /// Solo módulo Servicios
+  COMMON
 }
 
-/// Gasto de servicio u obra que alimenta el cálculo de expensas.
+/// Gasto de servicio u obra que alimenta el cálculo de expensas/servicios.
 /// Exactamente uno de complexId (edificio) o propertyId (propiedad).
 model ServiceCost {
   id             String              @id @default(cuid())
   organizationId String
   complexId      String?
   propertyId     String?
+  ledger         CostLedger          @default(EXPENSES)
   category       ServiceCostCategory
   concept        String
   periodYear     Int
@@ -159,9 +181,30 @@ model ServiceCost {
   complex        Complex?            @relation(fields: [complexId], references: [id], onDelete: Cascade)
   property       Property?           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, periodYear, periodMonth])
+  @@index([organizationId, ledger, periodYear, periodMonth])
   @@index([complexId, periodYear, periodMonth])
   @@index([propertyId, periodYear, periodMonth])
+}
+
+/// Porcentajes acumulados de índices (IPC, ICL, CP) por año/mes de referencia
+/// y duración del período (2, 3, 4, 6, 9 o 12 meses).
+model IndexRate {
+  id             String          @id @default(cuid())
+  organizationId String
+  indexType      AdjustmentIndex
+  periodYear     Int
+  periodMonth    Int
+  /// Duración del período en meses (2, 3, 4, 6, 9, 12).
+  periodMonths   Int
+  percent        Decimal         @db.Decimal(8, 4)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, indexType, periodYear, periodMonth, periodMonths])
+  @@index([organizationId, periodYear, periodMonth])
+  @@index([organizationId, periodMonths])
 }
 
 model Lead {
@@ -573,6 +616,7 @@ model Organization {
   visitBookings            PropertyVisitBooking[]
   saleDeals                SaleDeal[]
   serviceCosts             ServiceCost[]
+  indexRates               IndexRate[]
   billingPayments          BillingPayment[]
   members                  OrganizationMember[]
   featureRequests          FeatureRequest[]
@@ -804,8 +848,16 @@ enum VisitBookingStatus {
 enum AdjustmentIndex {
   IPC
   ICL
+  CP
+  /// Mayor porcentaje entre ICL, IPC y CP del período
+  MAX_ICL_IPC_CP
   CUSTOM_PERCENT
   FIXED
+}
+
+enum CostLedger {
+  EXPENSES
+  SERVICES
 }
 
 enum AllocationMethod {
@@ -900,6 +952,7 @@ enum OrganizationRole {
   AGENT
   OWNER
   TENANT
+  GUARANTOR
   SUPPLIER
   VIEWER
 }

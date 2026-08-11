@@ -39,8 +39,10 @@ export function ApplyAdjustmentForm({
       <div>
         <h3 className="text-base font-semibold">Aplicar ajuste de índice</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Alquiler vigente: {currentRentLabel}. Ingresá el % publicado (ICL/IPC/custom)
-          y se calculará el nuevo monto.
+          Alquiler vigente: {currentRentLabel}. Si el contrato usa ICL/IPC/CP o
+          “Mayor entre…”, podés dejar el % vacío y se toma de los índices
+          cargados en Contratos para el mes de la fecha de vigencia y el
+          período del contrato (2, 3, 4, 6, 9 o 12 meses).
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -51,9 +53,8 @@ export function ApplyAdjustmentForm({
             name="percent"
             type="number"
             step="0.001"
-            min="0.001"
-            required
-            placeholder="ej. 12.5"
+            min="0"
+            placeholder="Auto desde índices o ej. 12.5"
           />
         </div>
         <div className="space-y-2">

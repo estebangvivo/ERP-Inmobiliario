@@ -8,6 +8,7 @@ export const APP_MODULE_KEYS = [
   "cobros",
   "tesoreria",
   "expensas",
+  "servicios",
   "mantenimiento",
   "rendiciones",
   "consultas",
@@ -39,9 +40,10 @@ export const APP_MODULES: AppModuleDef[] = [
   { key: "cobros", label: "Cobros", pathPrefixes: ["/cobros"] },
   { key: "tesoreria", label: "Tesorería", pathPrefixes: ["/tesoreria"] },
   { key: "expensas", label: "Expensas", pathPrefixes: ["/expensas"] },
+  { key: "servicios", label: "Servicios", pathPrefixes: ["/servicios"] },
   {
     key: "mantenimiento",
-    label: "Mantenimiento",
+    label: "Obras y Mantenimiento",
     pathPrefixes: ["/mantenimiento"],
   },
   { key: "rendiciones", label: "Rendiciones", pathPrefixes: ["/rendiciones"] },
@@ -68,6 +70,7 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "cobros",
     "tesoreria",
     "expensas",
+    "servicios",
     "mantenimiento",
     "rendiciones",
     "consultas",
@@ -81,11 +84,13 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "contratos",
     "cobros",
     "expensas",
+    "servicios",
     "mantenimiento",
     "rendiciones",
     "manual",
   ],
   TENANT: ["home", "contratos", "cobros", "mantenimiento", "manual"],
+  GUARANTOR: ["home", "manual"],
   SUPPLIER: ["home", "mantenimiento", "manual"],
   VIEWER: ["home", "contratos", "manual"],
 };
@@ -124,6 +129,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/cobros": "cobros",
   "/tesoreria": "tesoreria",
   "/expensas": "expensas",
+  "/servicios": "servicios",
   "/mantenimiento": "mantenimiento",
   "/rendiciones": "rendiciones",
   "/leads": "consultas",
@@ -146,6 +152,7 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/cobros")) return "cobros";
   if (pathname.startsWith("/tesoreria")) return "tesoreria";
   if (pathname.startsWith("/expensas")) return "expensas";
+  if (pathname.startsWith("/servicios")) return "servicios";
   if (pathname.startsWith("/mantenimiento")) return "mantenimiento";
   if (pathname.startsWith("/rendiciones")) return "rendiciones";
   if (pathname.startsWith("/leads")) return "consultas";

@@ -70,7 +70,7 @@ export default async function RendicionDetailPage({ params }: { params: Params }
           value={formatMoney(settlement.grossRent.toString(), settlement.currency)}
         />
         <Stat
-          label="Comisión"
+          label="Honorarios"
           value={formatMoney(
             settlement.commissionAmount.toString(),
             settlement.currency,

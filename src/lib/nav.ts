@@ -40,7 +40,7 @@ export const erpNavItems: NavItem[] = [
     href: "/dashboard",
     icon: LayoutDashboard,
     module: "home",
-    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "SUPPLIER", "VIEWER"],
+    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "GUARANTOR", "SUPPLIER", "VIEWER"],
   },
   {
     title: "Propiedades",
@@ -61,7 +61,7 @@ export const erpNavItems: NavItem[] = [
     href: "/contratos",
     icon: FileText,
     module: "contratos",
-    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "VIEWER"],
+    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "GUARANTOR", "VIEWER"],
   },
   {
     title: "Cobros",
@@ -92,7 +92,14 @@ export const erpNavItems: NavItem[] = [
     roles: ["ADMIN", "AGENT", "OWNER"],
   },
   {
-    title: "Mantenimiento",
+    title: "Servicios",
+    href: "/servicios",
+    icon: Building2,
+    module: "servicios",
+    roles: ["ADMIN", "AGENT", "OWNER"],
+  },
+  {
+    title: "Obras y Mantenimiento",
     href: "/mantenimiento",
     icon: Wrench,
     module: "mantenimiento",
@@ -159,7 +166,7 @@ export const erpNavItems: NavItem[] = [
     href: "/manual",
     icon: BookOpen,
     module: "manual",
-    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "SUPPLIER", "VIEWER"],
+    roles: ["ADMIN", "AGENT", "OWNER", "TENANT", "GUARANTOR", "SUPPLIER", "VIEWER"],
   },
 ];
 

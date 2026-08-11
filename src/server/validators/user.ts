@@ -7,6 +7,7 @@ export const organizationRoleEnum = z.enum([
   "AGENT",
   "OWNER",
   "TENANT",
+  "GUARANTOR",
   "SUPPLIER",
   "VIEWER",
 ]);

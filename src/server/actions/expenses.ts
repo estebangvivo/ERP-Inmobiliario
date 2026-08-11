@@ -1,14 +1,20 @@
 "use server";
 
-import { ServiceCostCategory } from "@prisma/client";
+import { CostLedger, ServiceCostCategory } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/session";
 import {
   createServiceCost,
   deleteServiceCost,
+  generateAllPendingFromServiceCosts,
+  generateExpensesForProperty,
   generateExpensesFromServiceCosts,
 } from "@/server/services/expenses";
 import type { ActionResult } from "@/server/actions/users";
+
+function pathForLedger(ledger: CostLedger) {
+  return ledger === "SERVICES" ? "/servicios" : "/expensas";
+}
 
 export async function createServiceCostAction(
   _prev: ActionResult | null,
@@ -26,6 +32,9 @@ export async function createServiceCostAction(
   const periodMonth = Number(formData.get("periodMonth"));
   const amount = Number(formData.get("amount"));
   const notes = String(formData.get("notes") ?? "").trim();
+  const ledger = (String(formData.get("ledger") ?? "EXPENSES") === "SERVICES"
+    ? "SERVICES"
+    : "EXPENSES") as CostLedger;
 
   if (!concept || !periodYear || !periodMonth || !(amount > 0)) {
     return { ok: false, error: "Completá concepto, período y monto." };
@@ -42,8 +51,9 @@ export async function createServiceCostAction(
       periodMonth,
       amount,
       notes: notes || undefined,
+      ledger,
     });
-    revalidatePath("/expensas");
+    revalidatePath(pathForLedger(ledger));
     return { ok: true, message: "Gasto cargado." };
   } catch (e) {
     return {
@@ -60,6 +70,7 @@ export async function deleteServiceCostAction(
   try {
     await deleteServiceCost(session.organizationId, serviceCostId);
     revalidatePath("/expensas");
+    revalidatePath("/servicios");
     return { ok: true };
   } catch (e) {
     return {
@@ -74,35 +85,97 @@ export async function generateFromServiceCostsAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const session = await requireStaff();
-  const complexId = String(formData.get("complexId") ?? "");
+  const generateScope = String(formData.get("generateScope") ?? "complex") as
+    | "complex"
+    | "property"
+    | "all_pending";
+  const complexId = String(formData.get("complexId") ?? "").trim();
+  const propertyId = String(formData.get("propertyId") ?? "").trim();
   const periodYear = Number(formData.get("periodYear"));
   const periodMonth = Number(formData.get("periodMonth"));
   const billToTenant =
     formData.get("billToTenant") === "on" ||
     formData.get("billToTenant") === "true";
+  const ledger = (String(formData.get("ledger") ?? "EXPENSES") === "SERVICES"
+    ? "SERVICES"
+    : "EXPENSES") as CostLedger;
+  const force =
+    formData.get("force") === "on" || formData.get("force") === "true";
 
-  if (!complexId || !periodYear || !periodMonth) {
-    return { ok: false, error: "Completá edificio y período." };
+  if (!periodYear || !periodMonth) {
+    return { ok: false, error: "Completá el período." };
+  }
+  if (generateScope === "complex" && !complexId) {
+    return { ok: false, error: "Seleccioná un edificio." };
+  }
+  if (generateScope === "property" && !propertyId) {
+    return { ok: false, error: "Seleccioná una propiedad." };
   }
 
+  const noun = ledger === "SERVICES" ? "Servicios" : "Expensas";
+  const nounLower = ledger === "SERVICES" ? "servicios" : "expensas";
+
   try {
+    if (generateScope === "all_pending") {
+      const { created, errors } = await generateAllPendingFromServiceCosts({
+        organizationId: session.organizationId,
+        periodYear,
+        periodMonth,
+        billToTenant,
+        ledger,
+      });
+      revalidatePath(pathForLedger(ledger));
+      revalidatePath("/cobros");
+      const extra =
+        errors.length > 0
+          ? ` Avisos: ${errors.slice(0, 3).join(" · ")}${errors.length > 3 ? "…" : ""}`
+          : "";
+      return {
+        ok: true,
+        message: `${noun} pendientes generados (${created.length} documento${created.length === 1 ? "" : "s"}).${extra}`,
+      };
+    }
+
+    if (generateScope === "property") {
+      const expenses = await generateExpensesForProperty({
+        organizationId: session.organizationId,
+        propertyId,
+        periodYear,
+        periodMonth,
+        billToTenant,
+        ledger,
+        force,
+      });
+      revalidatePath(pathForLedger(ledger));
+      revalidatePath("/cobros");
+      return {
+        ok: true,
+        message: `${noun} de la propiedad generados (${expenses.length}).`,
+      };
+    }
+
     const expenses = await generateExpensesFromServiceCosts({
       organizationId: session.organizationId,
       complexId,
       periodYear,
       periodMonth,
       billToTenant,
+      ledger,
+      force,
     });
-    revalidatePath("/expensas");
+    revalidatePath(pathForLedger(ledger));
     revalidatePath("/cobros");
     return {
       ok: true,
-      message: `Expensas generadas (${expenses.length}). Prorrateo por m² sobre el total del edificio.`,
+      message: `${noun} del edificio generados (${expenses.length}). Prorrateo por m²; se omiten propiedades ya generadas individualmente.`,
     };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "No se pudo generar",
+      error:
+        e instanceof Error
+          ? e.message
+          : `No se pudieron generar los ${nounLower}`,
     };
   }
 }

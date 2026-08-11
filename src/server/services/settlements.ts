@@ -40,7 +40,9 @@ export async function generateOwnerSettlement(input: {
     },
   });
   if (existing && existing.status !== "DRAFT") {
-    throw new Error("Ya existe una rendición emitida para este período");
+    throw new Error(
+      `Ya existe una rendición emitida/pagada para este período (${existing.code}).`,
+    );
   }
 
   const ownerships = await prisma.propertyOwnership.findMany({

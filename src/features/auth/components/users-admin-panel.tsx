@@ -27,6 +27,7 @@ const ASSIGNABLE_ROLES: OrganizationRole[] = [
   "AGENT",
   "OWNER",
   "TENANT",
+  "GUARANTOR",
   "SUPPLIER",
   "VIEWER",
 ];

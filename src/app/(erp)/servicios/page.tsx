@@ -15,8 +15,8 @@ import {
   ServiceCostForm,
 } from "@/components/erp/service-cost-forms";
 
-export default async function ExpensasPage() {
-  const session = await requireModule("expensas");
+export default async function ServiciosPage() {
+  const session = await requireModule("servicios");
   const staff = isStaffRole(session.organizationRole);
 
   const [complexes, properties, expenses, serviceCosts] = await Promise.all([
@@ -31,7 +31,7 @@ export default async function ExpensasPage() {
       select: { id: true, title: true },
     }),
     prisma.expense.findMany({
-      where: { AND: [expenseScopeWhere(session), { ledger: "EXPENSES" }] },
+      where: { AND: [expenseScopeWhere(session), { ledger: "SERVICES" }] },
       include: {
         complex: true,
         allocations: { include: { unit: true } },
@@ -39,7 +39,7 @@ export default async function ExpensasPage() {
       orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
     }),
     prisma.serviceCost.findMany({
-      where: { organizationId: session.organizationId, ledger: "EXPENSES" },
+      where: { organizationId: session.organizationId, ledger: "SERVICES" },
       include: {
         complex: { select: { name: true } },
         property: { select: { title: true } },
@@ -56,8 +56,8 @@ export default async function ExpensasPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Expensas"
-        description="Cargá todos los gastos del período (servicios, obras u otros) y generá las expensas una sola vez: se prorratean por m² de cada unidad sobre el total del edificio."
+        title="Servicios"
+        description="Misma lógica que Expensas, con la categoría extra Gasto común. Se prorratean por m² sobre el total del edificio."
       />
 
       {staff ? (
@@ -65,14 +65,14 @@ export default async function ExpensasPage() {
           <div>
             <h3 className="text-base font-semibold">Gastos del período</h3>
             <p className="text-sm text-[var(--muted-foreground)]">
-              Agua, gas, luz, tasa, obras o cualquier otro concepto. Aplicá a un
+              Agua, gas, luz, tasa, obras, gasto común u otros. Aplicá a un
               edificio (se prorratea por m²) o a una propiedad (solo esa unidad).
             </p>
           </div>
           <ServiceCostForm
             complexes={complexes}
             properties={properties}
-            ledger="EXPENSES"
+            ledger="SERVICES"
           />
           <DataTable
             headers={[
@@ -99,7 +99,13 @@ export default async function ExpensasPage() {
                 </td>
                 <td className="px-4 py-3">
                   <Badge
-                    variant={c.category === "WORKS" ? "warning" : "secondary"}
+                    variant={
+                      c.category === "WORKS"
+                        ? "warning"
+                        : c.category === "COMMON"
+                          ? "success"
+                          : "secondary"
+                    }
                   >
                     {SERVICE_COST_CATEGORY_LABELS[c.category]}
                   </Badge>
@@ -116,18 +122,18 @@ export default async function ExpensasPage() {
           </DataTable>
 
           <div className="pt-2">
-            <h3 className="mb-2 text-base font-semibold">Generar expensas</h3>
+            <h3 className="mb-2 text-base font-semibold">Generar servicios</h3>
             <GenerateFromCostsForm
               complexes={complexes}
               properties={properties}
-              ledger="EXPENSES"
+              ledger="SERVICES"
             />
           </div>
         </section>
       ) : null}
 
       <section className="space-y-3">
-        <h3 className="text-base font-semibold">Expensas del período</h3>
+        <h3 className="text-base font-semibold">Servicios del período</h3>
         <DataTable
           headers={[
             "Período",
@@ -148,7 +154,7 @@ export default async function ExpensasPage() {
               <td className="px-4 py-3">{e.complex.name}</td>
               <td className="px-4 py-3">
                 <Badge variant={e.type === "ORDINARY" ? "secondary" : "warning"}>
-                  {e.type === "ORDINARY" ? "Ordinaria" : "Extraordinaria"}
+                  {e.type === "ORDINARY" ? "Ordinario" : "Extraordinario"}
                 </Badge>
               </td>
               <td className="px-4 py-3">

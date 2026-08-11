@@ -140,7 +140,7 @@ export function RentReceiptPdfDocument({ data }: { data: RentReceiptPdfData }) {
         </View>
         {Number(data.commissionAmount) > 0 ? (
           <View style={styles.row}>
-            <Text>Comisión inmobiliaria</Text>
+            <Text>Honorarios inmobiliarios</Text>
             <Text>{money(data.commissionAmount, data.currency)}</Text>
           </View>
         ) : null}

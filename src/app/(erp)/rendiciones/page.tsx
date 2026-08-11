@@ -41,7 +41,7 @@ export default async function RendicionesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Rendiciones"
-        description="Liquidaciones automáticas a propietarios (alquiler − comisión − reparaciones − extraordinarias)."
+        description="Liquidaciones automáticas a propietarios (alquiler − honorarios − reparaciones − extraordinarias)."
       />
 
       {staff ? (

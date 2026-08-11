@@ -18,6 +18,8 @@ type ConceptKey =
   | "rent"
   | "ordinary"
   | "extraordinary"
+  | "services"
+  | "servicesExtraordinary"
   | "commission"
   | "lateFee"
   | "other";
@@ -26,7 +28,9 @@ const CONCEPT_LABEL: Record<ConceptKey, string> = {
   rent: "Alquiler",
   ordinary: "Expensas ordinarias",
   extraordinary: "Expensas extraordinarias",
-  commission: "Comisión",
+  services: "Servicios",
+  servicesExtraordinary: "Servicios extraordinarios",
+  commission: "Honorarios",
   lateFee: "Mora",
   other: "Otros",
 };
@@ -35,6 +39,8 @@ const CONCEPT_ORDER: ConceptKey[] = [
   "rent",
   "ordinary",
   "extraordinary",
+  "services",
+  "servicesExtraordinary",
   "commission",
   "lateFee",
   "other",
@@ -54,17 +60,21 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
     rent: Math.max(0, bill.rentAmount),
     ordinary: Math.max(0, bill.ordinaryExpenses),
     extraordinary: Math.max(0, bill.extraordinaryExpenses),
+    services: Math.max(0, bill.servicesAmount),
+    servicesExtraordinary: Math.max(0, bill.servicesExtraordinaryAmount),
     commission: Math.max(0, bill.commissionAmount),
     lateFee: Math.max(0, bill.lateFeeAmount),
     other: Math.max(0, bill.otherAmount),
   };
 
-  // Preferir snapshot de expensas de la cuota si el desglose vino vacío/distinto
+  // Preferir snapshot de expensas de la cuota si el desglose vino vacío
   const expensesSnap = Math.max(0, bill.expensesAmount);
-  if (
-    expensesSnap > 0.001 &&
-    raw.ordinary + raw.extraordinary <= 0.001
-  ) {
+  const expensesParts =
+    raw.ordinary +
+    raw.extraordinary +
+    raw.services +
+    raw.servicesExtraordinary;
+  if (expensesSnap > 0.001 && expensesParts <= 0.001) {
     raw.ordinary = expensesSnap;
   }
 
@@ -76,6 +86,8 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
       rent: 0,
       ordinary: 0,
       extraordinary: 0,
+      services: 0,
+      servicesExtraordinary: 0,
       commission: 0,
       lateFee: 0,
       other: 0,
@@ -87,6 +99,8 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
       rent: 0,
       ordinary: 0,
       extraordinary: 0,
+      services: 0,
+      servicesExtraordinary: 0,
       commission: 0,
       lateFee: 0,
       other: balance,
@@ -117,6 +131,8 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
       rent: 0,
       ordinary: 0,
       extraordinary: 0,
+      services: 0,
+      servicesExtraordinary: 0,
       commission: 0,
       lateFee: 0,
       other: 0,

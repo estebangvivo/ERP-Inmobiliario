@@ -15,6 +15,7 @@ import type { TreasuryContractOption } from "@/features/treasury/queries/list-co
 import type { TreasuryPaymentInput } from "@/features/treasury/lib/payments";
 import { DateInput } from "@/components/ui/date-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import { formatMoney, PAYMENT_METHOD_LABEL } from "@/features/treasury/lib/labels";
 import {
   checkFormatLabel,
@@ -25,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; documentNumber?: string | null };
 type LineState = TreasuryLineInput & { key: string };
 type PaymentState = TreasuryPaymentInput & { key: string };
 
@@ -419,13 +420,27 @@ export function TreasuryDocumentForm({
         </div>
         <div className="block text-sm">
           <Label className="mb-1">{partyLabel}</Label>
-          <SearchableSelect
-            value={partyId}
-            onChange={onPartyChange}
-            emptyLabel="Sin catálogo / otro"
-            placeholder={`Elegir ${partyLabel.toLowerCase()}…`}
-            options={parties.map((p) => ({ value: p.id, label: p.name }))}
-          />
+          {kind === "receipt" ? (
+            <PartyPersonSearchSelect
+              kind="TENANT"
+              name="partyId"
+              value={partyId}
+              onChange={(id, person) => {
+                onPartyChange(id);
+                if (person?.name) setPartyName(person.name);
+              }}
+              options={parties}
+              emptyLabel="Sin catálogo / otro"
+            />
+          ) : (
+            <SearchableSelect
+              value={partyId}
+              onChange={onPartyChange}
+              emptyLabel="Sin catálogo / otro"
+              placeholder={`Elegir ${partyLabel.toLowerCase()}…`}
+              options={parties.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          )}
         </div>
         <div className="block text-sm">
           <Label className="mb-1">Nombre libre</Label>

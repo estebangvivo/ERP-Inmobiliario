@@ -226,7 +226,9 @@ const CONCEPT_LABELS: Record<string, string> = {
   rent: "Alquiler",
   ordinary: "Expensas ordinarias",
   extraordinary: "Expensas extraordinarias",
-  commission: "Comisión",
+  services: "Servicios",
+  servicesExtraordinary: "Servicios extraordinarios",
+  commission: "Honorarios",
   lateFee: "Mora",
   other: "Otros",
 };

@@ -11,6 +11,8 @@ export type CommissionContractInput = {
   commissionValue: number | { toString(): string };
   commissionTenantPct: number | { toString(): string };
   commissionOwnerPct: number | { toString(): string };
+  /** Cuotas del honorario sobre total del contrato. */
+  commissionInstallments?: number | null;
   /** fallback legacy */
   agencyCommissionPct?: number | { toString(): string };
   initialRent: number | { toString(): string };
@@ -27,13 +29,14 @@ function round2(x: number) {
   return Math.round(x * 100) / 100;
 }
 
-/** Meses calendario del contrato (mínimo 1). */
+/** Meses calendario del contrato inclusive (mínimo 1). */
 export function contractPeriodMonths(start: Date, end: Date): number {
   const s = new Date(start);
   const e = new Date(end);
   const months =
     (e.getUTCFullYear() - s.getUTCFullYear()) * 12 +
-    (e.getUTCMonth() - s.getUTCMonth());
+    (e.getUTCMonth() - s.getUTCMonth()) +
+    1;
   return Math.max(1, months);
 }
 
@@ -77,7 +80,7 @@ export function resolvePayerSplit(contract: CommissionContractInput): {
 }
 
 /**
- * Comisión total del período (antes de repartir inquilino/propietario).
+ * Honorarios totales del período (antes de repartir inquilino/propietario).
  * `periodRent` = alquiler del período (cuota).
  */
 export function computePeriodCommissionTotal(
@@ -88,29 +91,71 @@ export function computePeriodCommissionTotal(
   const value = resolveCommissionValue(contract);
 
   if (value <= 0 || periodRent < 0) {
-    return { total: 0, label: "Comisión inmobiliaria" };
+    return { total: 0, label: "Honorarios inmobiliarios" };
   }
 
   if (mode === "PERCENT_RENT") {
     return {
       total: round2(periodRent * (value / 100)),
-      label: `Comisión inmobiliaria ${value}%`,
+      label: `Honorarios inmobiliarios ${value}%`,
     };
   }
 
   if (mode === "FIXED_AMOUNT") {
     return {
       total: round2(value),
-      label: `Comisión inmobiliaria (monto fijo)`,
+      label: `Honorarios inmobiliarios (monto fijo)`,
     };
   }
 
-  // CONTRACT_TOTAL: prorrateo mensual del monto total del contrato
-  const months = contractPeriodMonths(contract.startDate, contract.endDate);
+  // CONTRACT_TOTAL: se factura en cuotas aparte (no en cada período de alquiler).
   return {
-    total: round2(value / months),
-    label: `Comisión inmobiliaria (total contrato / ${months} meses)`,
+    total: 0,
+    label: "Honorarios inmobiliarios (total contrato en cuotas)",
   };
+}
+
+/** Valor total del contrato (alquiler inicial × meses de vigencia). */
+export function computeContractGrossTotal(
+  contract: Pick<CommissionContractInput, "initialRent" | "startDate" | "endDate">,
+): number {
+  const months = contractPeriodMonths(contract.startDate, contract.endDate);
+  return round2(n(contract.initialRent) * months);
+}
+
+/**
+ * Honorarios totales modo CONTRACT_TOTAL: % sobre el valor total del contrato.
+ */
+export function computeContractTotalCommission(
+  contract: CommissionContractInput,
+): { total: number; gross: number; percent: number; installments: number } {
+  const percent = resolveCommissionValue(contract);
+  const gross = computeContractGrossTotal(contract);
+  const installments = Math.max(
+    1,
+    Math.floor(n(contract.commissionInstallments ?? 1)),
+  );
+  return {
+    percent,
+    gross,
+    installments,
+    total: percent > 0 ? round2(gross * (percent / 100)) : 0,
+  };
+}
+
+/** Reparte un monto en N cuotas (ajusta centavos en la última). */
+export function splitAmountIntoInstallments(
+  total: number,
+  installments: number,
+): number[] {
+  const nInst = Math.max(1, Math.floor(installments));
+  if (!(total > 0)) return Array.from({ length: nInst }, () => 0);
+  const base = round2(total / nInst);
+  const amounts = Array.from({ length: nInst }, () => base);
+  const assigned = round2(base * nInst);
+  const diff = round2(total - assigned);
+  amounts[nInst - 1] = round2(amounts[nInst - 1]! + diff);
+  return amounts;
 }
 
 export function splitCommissionAmount(
@@ -128,5 +173,5 @@ export function splitCommissionAmount(
 export const COMMISSION_MODE_LABELS: Record<CommissionModeValue, string> = {
   PERCENT_RENT: "Porcentaje del alquiler",
   FIXED_AMOUNT: "Monto fijo por período",
-  CONTRACT_TOTAL: "Monto sobre el total del contrato",
+  CONTRACT_TOTAL: "Porcentaje sobre el total del contrato",
 };

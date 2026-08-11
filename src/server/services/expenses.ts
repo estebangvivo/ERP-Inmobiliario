@@ -1,5 +1,6 @@
 import {
   AllocationMethod,
+  CostLedger,
   ExpenseType,
   Prisma,
   ServiceCostCategory,
@@ -11,13 +12,52 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-const ORDINARY_CATEGORIES: ServiceCostCategory[] = [
+const EXPENSE_ORDINARY_CATEGORIES: ServiceCostCategory[] = [
   "WATER",
   "GAS",
   "ELECTRICITY",
   "MUNICIPAL",
   "OTHER",
 ];
+
+const SERVICE_ORDINARY_CATEGORIES: ServiceCostCategory[] = [
+  "WATER",
+  "GAS",
+  "ELECTRICITY",
+  "MUNICIPAL",
+  "OTHER",
+  "COMMON",
+];
+
+function ordinaryCategories(ledger: CostLedger): ServiceCostCategory[] {
+  return ledger === "SERVICES"
+    ? SERVICE_ORDINARY_CATEGORIES
+    : EXPENSE_ORDINARY_CATEGORIES;
+}
+
+function ledgerNoun(ledger: CostLedger) {
+  return ledger === "SERVICES" ? "servicios" : "expensas";
+}
+
+function ordinaryLabel(ledger: CostLedger) {
+  return ledger === "SERVICES" ? "Servicios ordinarios" : "Expensas ordinarias";
+}
+
+function extraLabel(ledger: CostLedger) {
+  return ledger === "SERVICES"
+    ? "Servicios extraordinarios (obras)"
+    : "Expensas extraordinarias (obras)";
+}
+
+/** Concepto de documento por propiedad (para no chocar con el del edificio). */
+export function propertyExpenseConcept(
+  label: string,
+  propertyId: string,
+  periodMonth: number,
+  periodYear: number,
+) {
+  return `${label} · prop ${propertyId} ${periodMonth}/${periodYear}`;
+}
 
 /** m² de la unidad: prioriza Unit.areaM2 y luego Property.areaM2. */
 function resolveUnitAreaM2(unit: {
@@ -88,9 +128,11 @@ export async function createExpenseWithAllocations(input: {
   allocationMethod?: AllocationMethod;
   billToTenant?: boolean;
   notes?: string;
+  ledger?: CostLedger;
   /** Si se pasa, usa montos por unidad en lugar de prorrateo genérico. */
   unitAmounts?: { unitId: string; amount: number }[];
 }) {
+  const ledger = input.ledger ?? "EXPENSES";
   const units = await prisma.unit.findMany({
     where: { complexId: input.complexId },
     include: {
@@ -143,6 +185,7 @@ export async function createExpenseWithAllocations(input: {
       periodMonth: input.periodMonth,
       totalAmount,
       currency: input.currency ?? "ARS",
+      ledger,
       allocationMethod:
         input.unitAmounts && input.unitAmounts.length > 0
           ? "FIXED_EQUAL"
@@ -176,7 +219,9 @@ export async function createServiceCost(input: {
   amount: number;
   currency?: "ARS" | "USD" | "EUR";
   notes?: string;
+  ledger?: CostLedger;
 }) {
+  const ledger = input.ledger ?? "EXPENSES";
   const hasComplex = Boolean(input.complexId);
   const hasProperty = Boolean(input.propertyId);
   if (hasComplex === hasProperty) {
@@ -184,6 +229,9 @@ export async function createServiceCost(input: {
   }
   if (!(input.amount > 0)) {
     throw new Error("El monto debe ser positivo.");
+  }
+  if (input.category === "COMMON" && ledger !== "SERVICES") {
+    throw new Error("Gasto común solo aplica en el módulo Servicios.");
   }
 
   if (input.complexId) {
@@ -205,6 +253,7 @@ export async function createServiceCost(input: {
       organizationId: input.organizationId,
       complexId: input.complexId || null,
       propertyId: input.propertyId || null,
+      ledger,
       category: input.category,
       concept: input.concept,
       periodYear: input.periodYear,
@@ -228,10 +277,9 @@ export async function deleteServiceCost(
 }
 
 /**
- * Genera expensas del período a partir de gastos de servicios/obras.
- * Base ordinaria = suma gastos de edificio × (m² unidad / m² totales del edificio).
- * Gastos por propiedad se suman solo a esa unidad.
- * Obras → expensa extraordinaria (mismo criterio).
+ * Genera expensas/servicios del período a partir de gastos de un edificio.
+ * Base ordinaria = suma gastos de edificio × (m² unidad / m² totales).
+ * Si ya hay documentos de edificio emitidos para el período, falla (salvo force).
  */
 export async function generateExpensesFromServiceCosts(input: {
   organizationId: string;
@@ -240,8 +288,14 @@ export async function generateExpensesFromServiceCosts(input: {
   periodMonth: number;
   billToTenant?: boolean;
   currency?: "ARS" | "USD" | "EUR";
+  ledger?: CostLedger;
+  /** Regenera aunque ya existan documentos del período. */
+  force?: boolean;
 }) {
   const currency = input.currency ?? "ARS";
+  const ledger = input.ledger ?? "EXPENSES";
+  const noun = ledgerNoun(ledger);
+
   const units = await prisma.unit.findMany({
     where: { complexId: input.complexId },
     include: {
@@ -252,13 +306,72 @@ export async function generateExpensesFromServiceCosts(input: {
     throw new Error("El edificio no tiene unidades/propiedades.");
   }
 
+  const already = await prisma.expense.findFirst({
+    where: {
+      complexId: input.complexId,
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      ledger,
+      NOT: { concept: { contains: " · prop " } },
+    },
+    select: { id: true },
+  });
+  if (already && !input.force) {
+    throw new Error(
+      `Ya hay ${noun} de edificio emitidos para ${input.periodMonth}/${input.periodYear}. Eliminalos antes de volver a generar.`,
+    );
+  }
+  if (already && input.force) {
+    const old = await prisma.expense.findMany({
+      where: {
+        complexId: input.complexId,
+        periodYear: input.periodYear,
+        periodMonth: input.periodMonth,
+        ledger,
+        NOT: { concept: { contains: " · prop " } },
+      },
+      select: { id: true },
+    });
+    await prisma.expenseAllocation.deleteMany({
+      where: { expenseId: { in: old.map((e) => e.id) } },
+    });
+    await prisma.expense.deleteMany({
+      where: { id: { in: old.map((e) => e.id) } },
+    });
+  }
+
   const propertyIds = units
     .map((u) => u.property?.id)
     .filter((id): id is string => Boolean(id));
 
+  // Propiedades ya generadas en forma individual: no sumar de nuevo
+  const propertyDocs = propertyIds.length
+    ? await prisma.expense.findMany({
+        where: {
+          complexId: input.complexId,
+          periodYear: input.periodYear,
+          periodMonth: input.periodMonth,
+          ledger,
+          OR: propertyIds.map((id) => ({
+            concept: { contains: ` · prop ${id} ` },
+          })),
+        },
+        select: { concept: true },
+      })
+    : [];
+  const skipPropertyIds = new Set(
+    propertyDocs
+      .map((d) => {
+        const m = d.concept.match(/ · prop ([^\s]+) /);
+        return m?.[1] ?? null;
+      })
+      .filter((id): id is string => Boolean(id)),
+  );
+
   const costs = await prisma.serviceCost.findMany({
     where: {
       organizationId: input.organizationId,
+      ledger,
       periodYear: input.periodYear,
       periodMonth: input.periodMonth,
       currency,
@@ -271,11 +384,16 @@ export async function generateExpensesFromServiceCosts(input: {
     },
   });
 
-  if (costs.length === 0) {
-    throw new Error("No hay gastos de servicios/obras para ese período.");
+  const usableCosts = costs.filter(
+    (c) => !c.propertyId || !skipPropertyIds.has(c.propertyId),
+  );
+
+  if (usableCosts.length === 0) {
+    throw new Error(
+      `No hay gastos de ${noun} cargados para ese período (o ya se generaron por propiedad).`,
+    );
   }
 
-  // Valida m² antes de generar (también se usa el total en las notas)
   const areaProbe = allocateByAreaM2(0, units);
   const totalArea = areaProbe.reduce((s, a) => s + a.areaM2, 0);
   const results = [];
@@ -283,16 +401,16 @@ export async function generateExpensesFromServiceCosts(input: {
   for (const bucket of [
     {
       type: "ORDINARY" as const,
-      categories: ORDINARY_CATEGORIES,
-      label: "Expensas ordinarias",
+      categories: ordinaryCategories(ledger),
+      label: ordinaryLabel(ledger),
     },
     {
       type: "EXTRAORDINARY" as const,
       categories: ["WORKS" as const],
-      label: "Expensas extraordinarias (obras)",
+      label: extraLabel(ledger),
     },
   ]) {
-    const bucketCosts = costs.filter((c) =>
+    const bucketCosts = usableCosts.filter((c) =>
       bucket.categories.includes(c.category as never),
     );
     if (bucketCosts.length === 0) continue;
@@ -316,7 +434,6 @@ export async function generateExpensesFromServiceCosts(input: {
       };
     });
 
-    // Ajuste residual para que la suma iguale edificio + gastos por propiedad
     if (unitAmountsDraft.length > 0) {
       const propTotal = bucketCosts
         .filter((c) => c.propertyId)
@@ -330,24 +447,10 @@ export async function generateExpensesFromServiceCosts(input: {
       last.amount = round2(Math.max(0, last.amount + diff));
     }
 
-    const unitAmounts = unitAmountsDraft;
+    const unitAmounts = unitAmountsDraft.filter((a) => a.amount > 0.009);
+    if (unitAmounts.length === 0) continue;
 
     const concept = `${bucket.label} ${input.periodMonth}/${input.periodYear}`;
-    const existing = await prisma.expense.findFirst({
-      where: {
-        complexId: input.complexId,
-        type: bucket.type,
-        periodYear: input.periodYear,
-        periodMonth: input.periodMonth,
-        concept,
-      },
-    });
-    if (existing) {
-      await prisma.expenseAllocation.deleteMany({
-        where: { expenseId: existing.id },
-      });
-      await prisma.expense.delete({ where: { id: existing.id } });
-    }
 
     const shareNotes = buildingAlloc
       .map((a) => {
@@ -376,6 +479,7 @@ export async function generateExpensesFromServiceCosts(input: {
         periodMonth: input.periodMonth,
         totalAmount: unitAmounts.reduce((s, a) => s + a.amount, 0),
         currency,
+        ledger,
         billToTenant: input.billToTenant ?? true,
         unitAmounts,
         notes,
@@ -383,7 +487,253 @@ export async function generateExpensesFromServiceCosts(input: {
     );
   }
 
+  if (results.length === 0) {
+    throw new Error(`No se generaron ${noun}: sin montos aplicables.`);
+  }
+
   return results;
+}
+
+/**
+ * Genera expensas/servicios solo con los gastos cargados a una propiedad.
+ */
+export async function generateExpensesForProperty(input: {
+  organizationId: string;
+  propertyId: string;
+  periodYear: number;
+  periodMonth: number;
+  billToTenant?: boolean;
+  currency?: "ARS" | "USD" | "EUR";
+  ledger?: CostLedger;
+  force?: boolean;
+}) {
+  const currency = input.currency ?? "ARS";
+  const ledger = input.ledger ?? "EXPENSES";
+  const noun = ledgerNoun(ledger);
+
+  const property = await prisma.property.findFirst({
+    where: { id: input.propertyId, organizationId: input.organizationId },
+    include: {
+      unit: { select: { id: true, complexId: true, code: true, areaM2: true } },
+    },
+  });
+  if (!property) throw new Error("Propiedad no encontrada.");
+  if (!property.unit) {
+    throw new Error(
+      "La propiedad no está vinculada a una unidad de edificio. Asociála en Edificios.",
+    );
+  }
+
+  const unit = property.unit;
+  const costs = await prisma.serviceCost.findMany({
+    where: {
+      organizationId: input.organizationId,
+      ledger,
+      propertyId: input.propertyId,
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      currency,
+    },
+  });
+  if (costs.length === 0) {
+    throw new Error(
+      `No hay gastos de ${noun} cargados a esta propiedad para ese período.`,
+    );
+  }
+
+  // Cubierto por generación de edificio
+  const buildingDoc = await prisma.expense.findFirst({
+    where: {
+      complexId: unit.complexId,
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      ledger,
+      NOT: { concept: { contains: " · prop " } },
+    },
+    select: { id: true },
+  });
+  if (buildingDoc && !input.force) {
+    throw new Error(
+      `Este período ya tiene ${noun} de edificio que incluyen la propiedad. No hace falta generarla aparte.`,
+    );
+  }
+
+  const results = [];
+  for (const bucket of [
+    {
+      type: "ORDINARY" as const,
+      categories: ordinaryCategories(ledger),
+      label: ordinaryLabel(ledger),
+    },
+    {
+      type: "EXTRAORDINARY" as const,
+      categories: ["WORKS" as const],
+      label: extraLabel(ledger),
+    },
+  ]) {
+    const bucketCosts = costs.filter((c) =>
+      bucket.categories.includes(c.category as never),
+    );
+    if (bucketCosts.length === 0) continue;
+    const amount = round2(
+      bucketCosts.reduce((s, c) => s + Number(c.amount), 0),
+    );
+    if (!(amount > 0)) continue;
+
+    const concept = propertyExpenseConcept(
+      bucket.label,
+      input.propertyId,
+      input.periodMonth,
+      input.periodYear,
+    );
+
+    const existing = await prisma.expense.findFirst({
+      where: {
+        complexId: unit.complexId,
+        concept,
+        ledger,
+      },
+      select: { id: true },
+    });
+    if (existing && !input.force) {
+      throw new Error(
+        `Ya hay ${noun} emitidos para esta propiedad en ${input.periodMonth}/${input.periodYear}.`,
+      );
+    }
+    if (existing && input.force) {
+      await prisma.expenseAllocation.deleteMany({
+        where: { expenseId: existing.id },
+      });
+      await prisma.expense.delete({ where: { id: existing.id } });
+    }
+
+    results.push(
+      await createExpenseWithAllocations({
+        complexId: unit.complexId,
+        type: bucket.type,
+        concept,
+        periodYear: input.periodYear,
+        periodMonth: input.periodMonth,
+        totalAmount: amount,
+        currency,
+        ledger,
+        billToTenant: input.billToTenant ?? true,
+        unitAmounts: [{ unitId: unit.id, amount }],
+        notes: [
+          `Propiedad ${property.title} · unidad ${unit.code}`,
+          ...bucketCosts.map(
+            (c) => `${c.category}: ${Number(c.amount).toFixed(2)}`,
+          ),
+        ].join("\n"),
+      }),
+    );
+  }
+
+  if (results.length === 0) {
+    throw new Error(`No se generaron ${noun} para la propiedad.`);
+  }
+  return results;
+}
+
+/**
+ * Genera todos los edificios y propiedades con gastos cargados
+ * que aún no tienen documentos del período.
+ */
+export async function generateAllPendingFromServiceCosts(input: {
+  organizationId: string;
+  periodYear: number;
+  periodMonth: number;
+  billToTenant?: boolean;
+  currency?: "ARS" | "USD" | "EUR";
+  ledger?: CostLedger;
+}) {
+  const currency = input.currency ?? "ARS";
+  const ledger = input.ledger ?? "EXPENSES";
+  const noun = ledgerNoun(ledger);
+
+  const costs = await prisma.serviceCost.findMany({
+    where: {
+      organizationId: input.organizationId,
+      ledger,
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      currency,
+    },
+    select: { complexId: true, propertyId: true },
+  });
+  if (costs.length === 0) {
+    throw new Error(`No hay gastos de ${noun} cargados para ese período.`);
+  }
+
+  const complexIds = new Set(
+    costs.map((c) => c.complexId).filter((id): id is string => Boolean(id)),
+  );
+  const propertyIds = [
+    ...new Set(
+      costs.map((c) => c.propertyId).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  if (propertyIds.length) {
+    const props = await prisma.property.findMany({
+      where: { id: { in: propertyIds } },
+      select: { id: true, unit: { select: { complexId: true } } },
+    });
+    for (const p of props) {
+      if (p.unit?.complexId) complexIds.add(p.unit.complexId);
+    }
+  }
+
+  const created = [];
+  const errors: string[] = [];
+
+  for (const complexId of complexIds) {
+    try {
+      const docs = await generateExpensesFromServiceCosts({
+        ...input,
+        complexId,
+        currency,
+        ledger,
+      });
+      created.push(...docs);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error";
+      // Si ya estaban emitidos o solo quedan props individuales, seguimos
+      if (!/Ya hay/.test(msg) && !/No hay gastos/.test(msg)) {
+        errors.push(`Edificio ${complexId.slice(-6)}: ${msg}`);
+      }
+    }
+  }
+
+  for (const propertyId of propertyIds) {
+    try {
+      const docs = await generateExpensesForProperty({
+        ...input,
+        propertyId,
+        currency,
+        ledger,
+      });
+      created.push(...docs);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error";
+      if (
+        !/Ya hay/.test(msg) &&
+        !/No hay gastos/.test(msg) &&
+        !/ya tiene/.test(msg)
+      ) {
+        errors.push(`Propiedad ${propertyId.slice(-6)}: ${msg}`);
+      }
+    }
+  }
+
+  if (created.length === 0) {
+    throw new Error(
+      errors[0] ??
+        `No quedó nada pendiente: los ${noun} del período ya estaban generados o no hay gastos aplicables.`,
+    );
+  }
+
+  return { created, errors };
 }
 
 export async function listExpenses(filters?: {
@@ -444,7 +794,7 @@ export async function previewServiceCostBase(input: {
     .filter(
       (c) =>
         c.complexId === input.complexId &&
-        ORDINARY_CATEGORIES.includes(c.category),
+        EXPENSE_ORDINARY_CATEGORIES.includes(c.category),
     )
     .reduce((s, c) => s + Number(c.amount), 0);
 

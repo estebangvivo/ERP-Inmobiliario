@@ -1,8 +1,11 @@
-import { BillStatus } from "@prisma/client";
+import { AdjustmentIndex, BillStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   computePeriodCommissionTotal,
+  splitAmountIntoInstallments,
   splitCommissionAmount,
+  computeContractTotalCommission,
+  resolveCommissionMode,
 } from "@/features/contracts/lib/commission";
 
 function round2(n: number) {
@@ -70,7 +73,12 @@ export async function getUnitExpenseBreakdown(
   unitId: string,
   year: number,
   month: number,
-): Promise<{ ordinary: number; extraordinary: number }> {
+): Promise<{
+  ordinary: number;
+  extraordinary: number;
+  services: number;
+  servicesExtraordinary: number;
+}> {
   const allocations = await prisma.expenseAllocation.findMany({
     where: {
       unitId,
@@ -80,21 +88,30 @@ export async function getUnitExpenseBreakdown(
         billToTenant: true,
       },
     },
-    include: { expense: { select: { type: true } } },
+    include: { expense: { select: { type: true, ledger: true } } },
   });
 
   let ordinary = 0;
   let extraordinary = 0;
+  let services = 0;
+  let servicesExtraordinary = 0;
   for (const a of allocations) {
+    const amount = Number(a.amount);
+    const isServices = a.expense.ledger === "SERVICES";
     if (a.expense.type === "EXTRAORDINARY") {
-      extraordinary += Number(a.amount);
+      if (isServices) servicesExtraordinary += amount;
+      else extraordinary += amount;
+    } else if (isServices) {
+      services += amount;
     } else {
-      ordinary += Number(a.amount);
+      ordinary += amount;
     }
   }
   return {
     ordinary: round2(ordinary),
     extraordinary: round2(extraordinary),
+    services: round2(services),
+    servicesExtraordinary: round2(servicesExtraordinary),
   };
 }
 
@@ -284,6 +301,181 @@ export async function generateBillsForPeriod(
   return results;
 }
 
+/**
+ * Genera todas las cuotas de alquiler del contrato (un mes por período
+ * entre inicio y fin inclusive), con vencimiento el día configurado
+ * (por defecto el 10).
+ */
+export async function generateTenantBillsForContract(
+  contractId: string,
+  options?: { dueDay?: number },
+) {
+  const contract = await prisma.contract.findUniqueOrThrow({
+    where: { id: contractId },
+    include: {
+      organization: { select: { billDueDay: true } },
+    },
+  });
+
+  if (contract.status !== "ACTIVE") {
+    throw new Error("Solo se facturan contratos activos");
+  }
+
+  const dueDay = Math.min(
+    28,
+    Math.max(
+      1,
+      options?.dueDay ?? contract.organization?.billDueDay ?? 10,
+    ),
+  );
+
+  const start = contract.startDate;
+  const end = contract.endDate;
+  let year = start.getUTCFullYear();
+  let month = start.getUTCMonth() + 1;
+  const endYear = end.getUTCFullYear();
+  const endMonth = end.getUTCMonth() + 1;
+
+  const results = [];
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    results.push(
+      await generateTenantBill({
+        contractId,
+        periodYear: year,
+        periodMonth: month,
+        dueDay,
+      }),
+    );
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return results;
+}
+
+/**
+ * Honorarios sobre el total del contrato: calcula % del valor total
+ * (alquiler × meses) y carga la parte del inquilino en N cuotas con
+ * vencimiento día 10 (o dueDay), empezando el mes de inicio.
+ */
+export async function generateContractTotalCommissionInstallments(
+  contractId: string,
+  options?: { dueDay?: number },
+) {
+  const contract = await prisma.contract.findUniqueOrThrow({
+    where: { id: contractId },
+    include: { organization: { select: { billDueDay: true } } },
+  });
+
+  if (resolveCommissionMode(contract) !== "CONTRACT_TOTAL") {
+    return [];
+  }
+
+  const dueDay = Math.min(
+    28,
+    Math.max(
+      1,
+      options?.dueDay ?? contract.organization?.billDueDay ?? 10,
+    ),
+  );
+
+  const { total, installments, percent, gross } =
+    computeContractTotalCommission(contract);
+  if (!(total > 0) || installments < 1) return [];
+
+  const { tenant: tenantTotal } = splitCommissionAmount(total, contract);
+  if (!(tenantTotal > 0)) return [];
+
+  const amounts = splitAmountIntoInstallments(tenantTotal, installments);
+  const startY = contract.startDate.getUTCFullYear();
+  const startM = contract.startDate.getUTCMonth() + 1;
+  const results = [];
+
+  for (let i = 0; i < amounts.length; i++) {
+    const amount = amounts[i]!;
+    if (!(amount > 0.009)) continue;
+
+    const idx = startY * 12 + (startM - 1) + i;
+    const year = Math.floor(idx / 12);
+    const month = (idx % 12) + 1;
+    const dueDate = new Date(Date.UTC(year, month - 1, dueDay));
+
+    const existing = await prisma.tenantBill.findUnique({
+      where: {
+        contractId_periodYear_periodMonth: {
+          contractId,
+          periodYear: year,
+          periodMonth: month,
+        },
+      },
+    });
+
+    if (existing) {
+      if (
+        existing.status === "PAID" ||
+        existing.status === "CANCELLED"
+      ) {
+        continue;
+      }
+      const commissionAmount = round2(
+        Number(existing.commissionAmount) + amount,
+      );
+      const totalAmount = round2(
+        Number(existing.rentAmount) +
+          Number(existing.expensesAmount) +
+          commissionAmount +
+          Number(existing.lateFeeAmount) +
+          Number(existing.otherAmount),
+      );
+      const noteLine = `Honorarios ${percent}% s/ total contrato (${gross}) · cuota ${i + 1}/${installments}`;
+      results.push(
+        await prisma.tenantBill.update({
+          where: { id: existing.id },
+          data: {
+            commissionAmount,
+            totalAmount,
+            status: computeBillStatus(
+              totalAmount,
+              Number(existing.paidAmount),
+              existing.dueDate,
+            ),
+            notes: existing.notes
+              ? `${existing.notes}\n${noteLine}`
+              : noteLine,
+          },
+        }),
+      );
+      continue;
+    }
+
+    const totalAmount = amount;
+    results.push(
+      await prisma.tenantBill.create({
+        data: {
+          contractId,
+          periodYear: year,
+          periodMonth: month,
+          dueDate,
+          rentAmount: 0,
+          expensesAmount: 0,
+          lateFeeAmount: 0,
+          otherAmount: 0,
+          commissionAmount: amount,
+          totalAmount,
+          paidAmount: 0,
+          currency: contract.currency,
+          status: computeBillStatus(totalAmount, 0, dueDate),
+          notes: `Honorarios ${percent}% s/ total contrato (${gross}) · cuota ${i + 1}/${installments}`,
+        },
+      }),
+    );
+  }
+
+  return results;
+}
+
 export function computeBillStatus(
   total: number,
   paid: number,
@@ -436,6 +628,7 @@ export async function applyContractAdjustment(input: {
   percent: number;
   effectiveFrom: Date;
   notes?: string;
+  indexType?: AdjustmentIndex;
 }) {
   if (!(input.percent > 0)) {
     throw new Error("El porcentaje de ajuste debe ser mayor a 0");
@@ -444,7 +637,7 @@ export async function applyContractAdjustment(input: {
   const contract = await prisma.contract.findUniqueOrThrow({
     where: { id: input.contractId },
     include: {
-      adjustments: { orderBy: { effectiveFrom: "desc" } },
+      adjustments: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -452,10 +645,10 @@ export async function applyContractAdjustment(input: {
   const currentRent = await getCurrentRent(input.contractId);
   const appliedRent = round2(currentRent * (1 + input.percent / 100));
 
-  return prisma.contractAdjustment.create({
+  const created = await prisma.contractAdjustment.create({
     data: {
       contractId: input.contractId,
-      indexType: policy?.indexType ?? "ICL",
+      indexType: input.indexType ?? policy?.indexType ?? "ICL",
       periodMonths: policy?.periodMonths ?? 6,
       customPercent: input.percent,
       effectiveFrom: input.effectiveFrom,
@@ -465,6 +658,182 @@ export async function applyContractAdjustment(input: {
         `Ajuste ${input.percent}% sobre ${currentRent}`,
     },
   });
+
+  await updateOpenBillsRentFrom(
+    input.contractId,
+    input.effectiveFrom.getUTCFullYear(),
+    input.effectiveFrom.getUTCMonth() + 1,
+  );
+
+  return created;
+}
+
+/** Recalcula alquiler/honorarios en cuotas abiertas desde un período inclusive. */
+export async function updateOpenBillsRentFrom(
+  contractId: string,
+  fromYear: number,
+  fromMonth: number,
+) {
+  const rent = await getCurrentRent(contractId);
+  const contract = await prisma.contract.findUniqueOrThrow({
+    where: { id: contractId },
+  });
+
+  const bills = await prisma.tenantBill.findMany({
+    where: {
+      contractId,
+      status: { in: OPEN_BILL_STATUSES },
+      OR: [
+        { periodYear: { gt: fromYear } },
+        {
+          AND: [
+            { periodYear: fromYear },
+            { periodMonth: { gte: fromMonth } },
+          ],
+        },
+      ],
+    },
+  });
+
+  for (const bill of bills) {
+    const mode = resolveCommissionMode(contract);
+    let commissionAmount = Number(bill.commissionAmount);
+    // CONTRACT_TOTAL ya repartió honorarios en cuotas fijas: no pisarlos.
+    if (mode !== "CONTRACT_TOTAL") {
+      const { total: commissionTotal } = computePeriodCommissionTotal(
+        contract,
+        rent,
+      );
+      const split = splitCommissionAmount(commissionTotal, contract);
+      commissionAmount = split.tenant;
+    }
+    const totalAmount = round2(
+      rent +
+        Number(bill.expensesAmount) +
+        commissionAmount +
+        Number(bill.lateFeeAmount) +
+        Number(bill.otherAmount),
+    );
+    const status = computeBillStatus(
+      totalAmount,
+      Number(bill.paidAmount),
+      bill.dueDate,
+    );
+    await prisma.tenantBill.update({
+      where: { id: bill.id },
+      data: {
+        rentAmount: rent,
+        commissionAmount,
+        totalAmount,
+        status,
+      },
+    });
+  }
+}
+
+function monthsBetween(
+  fromYear: number,
+  fromMonth: number,
+  toYear: number,
+  toMonth: number,
+) {
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
+}
+
+function addMonths(year: number, month: number, delta: number) {
+  const idx = year * 12 + (month - 1) + delta;
+  return {
+    year: Math.floor(idx / 12),
+    month: (idx % 12) + 1,
+  };
+}
+
+/**
+ * Al cargar índices de un mes, aplica el mayor % (IPC/ICL/CP) a contratos
+ * activos cuyo próximo aumento cae el mes siguiente (ej. carga junio →
+ * aumenta julio si el contrato ajusta cada 6 meses desde enero).
+ */
+export async function applyDueAdjustmentsFromIndexRates(input: {
+  organizationId: string;
+  periodYear: number;
+  periodMonth: number;
+  periodMonths: number;
+  percent: number;
+}) {
+  if (!(input.percent > 0)) {
+    return { applied: 0, skipped: 0, percent: input.percent };
+  }
+
+  const effective = addMonths(input.periodYear, input.periodMonth, 1);
+  const effectiveFrom = new Date(
+    Date.UTC(effective.year, effective.month - 1, 1),
+  );
+
+  const contracts = await prisma.contract.findMany({
+    where: {
+      organizationId: input.organizationId,
+      status: "ACTIVE",
+    },
+    include: {
+      adjustments: { orderBy: { createdAt: "asc" } },
+    },
+  });
+
+  let applied = 0;
+  let skipped = 0;
+
+  for (const contract of contracts) {
+    const policy = contract.adjustments[0];
+    if (!policy) {
+      skipped += 1;
+      continue;
+    }
+    if (policy.periodMonths !== input.periodMonths) {
+      continue;
+    }
+    if (
+      policy.indexType === "FIXED" ||
+      policy.indexType === "CUSTOM_PERCENT"
+    ) {
+      continue;
+    }
+
+    const startY = contract.startDate.getUTCFullYear();
+    const startM = contract.startDate.getUTCMonth() + 1;
+    const diff = monthsBetween(
+      startY,
+      startM,
+      effective.year,
+      effective.month,
+    );
+    if (diff <= 0 || diff % input.periodMonths !== 0) {
+      continue;
+    }
+
+    const already = await prisma.contractAdjustment.findFirst({
+      where: {
+        contractId: contract.id,
+        appliedRent: { not: null },
+        effectiveFrom,
+      },
+      select: { id: true },
+    });
+    if (already) {
+      skipped += 1;
+      continue;
+    }
+
+    await applyContractAdjustment({
+      contractId: contract.id,
+      percent: input.percent,
+      effectiveFrom,
+      indexType: "MAX_ICL_IPC_CP",
+      notes: `Ajuste automático ${input.percent}% (máx. IPC/ICL/CP) · período ${input.periodMonths}m · carga ${input.periodMonth}/${input.periodYear} → vigencia ${effective.month}/${effective.year}`,
+    });
+    applied += 1;
+  }
+
+  return { applied, skipped, percent: input.percent, effective };
 }
 
 export async function recordPayment(input: {

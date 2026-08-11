@@ -25,27 +25,53 @@ function withPayerSum<T extends z.ZodTypeAny>(schema: T) {
 }
 
 export const contractCreateSchema = withPayerSum(
-  z.object({
-    propertyId: z.string().min(1),
-    ownerId: z.string().min(1),
-    tenantId: z.string().min(1),
-    guarantorId: z.string().optional().or(z.literal("")),
-    startDate: z.string().min(1),
-    endDate: z.string().min(1),
-    initialRent: z.coerce.number().positive(),
-    currency: z.nativeEnum(Currency).default(Currency.ARS),
-    depositAmount: z.coerce.number().nonnegative().default(0),
-    commissionMode: z.enum(COMMISSION_MODES).default("PERCENT_RENT"),
-    commissionValue: z.coerce.number().nonnegative().default(0),
-    commissionTenantPct: z.coerce.number().min(0).max(100).default(0),
-    commissionOwnerPct: z.coerce.number().min(0).max(100).default(100),
-    lateFeeDailyRatePct: z.coerce.number().nonnegative().default(0),
-    includesOrdinaryExp: z.coerce.boolean().optional(),
-    includesExtraordExp: z.coerce.boolean().optional(),
-    indexType: z.nativeEnum(AdjustmentIndex).default(AdjustmentIndex.ICL),
-    periodMonths: z.coerce.number().int().positive().default(6),
-    notes: z.string().optional(),
-  }),
+  z
+    .object({
+      propertyId: z.string().min(1),
+      ownerId: z.string().min(1),
+      tenantId: z.string().min(1),
+      guarantorIds: z.array(z.string().min(1)).max(5).default([]),
+      startDate: z.string().min(1),
+      endDate: z.string().min(1),
+      initialRent: z.coerce.number().positive(),
+      currency: z.nativeEnum(Currency).default(Currency.ARS),
+      depositAmount: z.coerce.number().nonnegative().default(0),
+      commissionMode: z.enum(COMMISSION_MODES).default("PERCENT_RENT"),
+      commissionValue: z.coerce.number().nonnegative().default(0),
+      commissionTenantPct: z.coerce.number().min(0).max(100).default(0),
+      commissionOwnerPct: z.coerce.number().min(0).max(100).default(100),
+      commissionInstallments: z.preprocess(
+        (v) => (v === "" || v == null || v === undefined ? undefined : v),
+        z.coerce.number().int().positive().optional(),
+      ),
+      lateFeeDailyRatePct: z.coerce.number().nonnegative().default(0),
+      includesOrdinaryExp: z.coerce.boolean().optional(),
+      includesExtraordExp: z.coerce.boolean().optional(),
+      indexType: z.nativeEnum(AdjustmentIndex).default(AdjustmentIndex.ICL),
+      periodMonths: z.coerce.number().int().positive().default(6),
+      notes: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.commissionMode === "CONTRACT_TOTAL") {
+        if (!(data.commissionValue > 0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Indicá el % de honorarios sobre el total del contrato.",
+            path: ["commissionValue"],
+          });
+        }
+        if (
+          !data.commissionInstallments ||
+          data.commissionInstallments < 1
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Indicá en cuántas cuotas se pagan los honorarios.",
+            path: ["commissionInstallments"],
+          });
+        }
+      }
+    }),
 );
 
 export const contractUpdateSchema = withPayerSum(

@@ -18,6 +18,7 @@ export const ROLE_LABELS: Record<OrganizationRole, string> = {
   AGENT: "Agente",
   OWNER: "Propietario",
   TENANT: "Inquilino",
+  GUARANTOR: "Garante",
   SUPPLIER: "Proveedor",
   VIEWER: "Solo lectura",
 };
@@ -95,6 +96,7 @@ export const SERVICE_COST_CATEGORY_LABELS: Record<
   MUNICIPAL: "Tasa municipal",
   WORKS: "Obras",
   OTHER: "Otro / ajuste",
+  COMMON: "Gasto común",
 };
 
 export const SALE_DEAL_STAGE_LABELS: Record<SaleDealStage, string> = {
@@ -115,6 +117,28 @@ export const SETTLEMENT_STATUS_LABELS: Record<SettlementStatus, string> = {
 export const ADJUSTMENT_INDEX_LABELS: Record<AdjustmentIndex, string> = {
   IPC: "IPC",
   ICL: "ICL",
+  CP: "CP",
+  MAX_ICL_IPC_CP: "Mayor entre ICL / IPC / CP",
   CUSTOM_PERCENT: "% personalizado",
   FIXED: "Fijo",
+};
+
+export const CONTRACT_ATTACHMENT_KINDS = [
+  "CONTRACT_DOC",
+  "ID_DOCS",
+  "PAY_STUB",
+  "OTHER",
+] as const;
+
+export type ContractAttachmentKind =
+  (typeof CONTRACT_ATTACHMENT_KINDS)[number];
+
+export const CONTRACT_ATTACHMENT_KIND_LABELS: Record<
+  ContractAttachmentKind,
+  string
+> = {
+  CONTRACT_DOC: "Contrato escrito",
+  ID_DOCS: "DNI / papeles",
+  PAY_STUB: "Recibos de sueldo",
+  OTHER: "Otro",
 };

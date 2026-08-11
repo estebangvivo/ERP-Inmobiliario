@@ -3,6 +3,10 @@ import { getUnitExpenseBreakdown } from "@/server/services/billing";
 
 const OPEN = ["PENDING", "PARTIAL", "OVERDUE"] as const;
 
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 export type TenantDebtRow = {
   tenantId: string;
   tenantName: string;
@@ -90,6 +94,8 @@ export type BillDebtDetail = {
   rentAmount: number;
   ordinaryExpenses: number;
   extraordinaryExpenses: number;
+  servicesAmount: number;
+  servicesExtraordinaryAmount: number;
   expensesAmount: number;
   commissionAmount: number;
   lateFeeAmount: number;
@@ -148,6 +154,8 @@ export async function getTenantDebtDetail(
 
     let ordinary = 0;
     let extraordinary = 0;
+    let services = 0;
+    let servicesExtraordinary = 0;
     if (bill.contract.property.unitId) {
       const breakdown = await getUnitExpenseBreakdown(
         bill.contract.property.unitId,
@@ -156,23 +164,29 @@ export async function getTenantDebtDetail(
       );
       ordinary = breakdown.ordinary;
       extraordinary = breakdown.extraordinary;
+      services = breakdown.services;
+      servicesExtraordinary = breakdown.servicesExtraordinary;
     }
+    const breakdownSum = round2(
+      ordinary + extraordinary + services + servicesExtraordinary,
+    );
     // Si no hay desglose en allocations, usar el snapshot de la cuota
-    if (
-      ordinary + extraordinary === 0 &&
-      Number(bill.expensesAmount) > 0
-    ) {
+    if (breakdownSum === 0 && Number(bill.expensesAmount) > 0) {
       ordinary = Number(bill.expensesAmount);
     }
-    // Si el desglose no cierra con el snapshot de la cuota, preferir el snapshot
-    // (evita sub-tildar el saldo en cobros).
+    // Si el desglose no cierra con el snapshot, no mezclar servicios con expensas:
+    // se deja el desglose proporcional o el snapshot en expensas ordinarias.
     const expensesSnap = Number(bill.expensesAmount);
     if (
       expensesSnap > 0.001 &&
-      Math.abs(ordinary + extraordinary - expensesSnap) > 0.05
+      Math.abs(breakdownSum - expensesSnap) > 0.05
     ) {
-      ordinary = expensesSnap;
-      extraordinary = 0;
+      if (services + servicesExtraordinary <= 0.001) {
+        ordinary = expensesSnap;
+        extraordinary = 0;
+      }
+      // Si hay servicios en allocations pero no cierran, se mantienen
+      // y la diferencia se absorbe en openConceptMap → Otros.
     }
 
     details.push({
@@ -187,6 +201,8 @@ export async function getTenantDebtDetail(
       rentAmount: Number(bill.rentAmount),
       ordinaryExpenses: ordinary,
       extraordinaryExpenses: extraordinary,
+      servicesAmount: services,
+      servicesExtraordinaryAmount: servicesExtraordinary,
       expensesAmount: Number(bill.expensesAmount),
       commissionAmount: Number(bill.commissionAmount),
       lateFeeAmount: Number(bill.lateFeeAmount),

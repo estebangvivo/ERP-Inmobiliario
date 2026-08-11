@@ -17,17 +17,19 @@ Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingres
 7. [Propiedades](#7-propiedades)
 8. [Contratos](#8-contratos)
 9. [Expensas](#9-expensas)
-10. [Cobros](#10-cobros)
-11. [Mantenimiento](#11-mantenimiento)
-12. [Rendiciones](#12-rendiciones)
-13. [Consultas](#13-consultas)
-14. [Visitas](#14-visitas)
-15. [Agenda unificada](#15-agenda-unificada)
-16. [Ventas](#16-ventas)
-17. [Turnero](#17-turnero)
-18. [Portal público](#18-portal-público)
-19. [Flujo completo de ejemplo](#19-flujo-completo-de-ejemplo)
-20. [Preguntas frecuentes](#20-preguntas-frecuentes)
+10. [Servicios](#10-servicios)
+11. [Cobros](#11-cobros)
+12. [Tesorería](#12-tesorería)
+13. [Obras y Mantenimiento](#13-obras-y-mantenimiento)
+14. [Rendiciones](#14-rendiciones)
+15. [Consultas](#15-consultas)
+16. [Visitas](#16-visitas)
+17. [Agenda unificada](#17-agenda-unificada)
+18. [Ventas](#18-ventas)
+19. [Turnero](#19-turnero)
+20. [Portal público](#20-portal-público)
+21. [Flujo completo de ejemplo](#21-flujo-completo-de-ejemplo)
+22. [Preguntas frecuentes](#22-preguntas-frecuentes)
 
 ---
 
@@ -50,10 +52,12 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 | Dashboard | Resumen del mes |
 | Propiedades | Portfolio de alquiler/venta |
 | Edificios | Edificios y unidades |
-| Contratos | Alquileres vigentes |
+| Contratos | Alquileres, índices y honorarios |
 | Cobros | Cuotas y pagos |
-| Expensas | Prorrateo por edificio |
-| Mantenimiento | Órdenes de trabajo |
+| Tesorería | Recibos, OP, caja, bancos |
+| Expensas | Prorrateo de gastos del edificio |
+| Servicios | Misma lógica que expensas + gasto común |
+| Obras y Mantenimiento | Órdenes de trabajo |
 | Rendiciones | Liquidación a propietarios |
 | Consultas | Leads del portal |
 | Visitas | Agenda de visitas del portal |
@@ -71,7 +75,7 @@ Para poner la inmobiliaria en marcha seguí este orden:
 
 ```text
 Ajustes → Usuarios → Edificios/Unidades → Propiedades
-        → Contratos → Expensas → Cobros → Mantenimiento → Rendiciones
+        → Contratos → Expensas/Servicios → Cobros → Mantenimiento → Rendiciones
         → Portal (Consultas + Visitas)
 ```
 
@@ -79,7 +83,7 @@ Ajustes → Usuarios → Edificios/Unidades → Propiedades
 2. **Cargá personas**: agentes, propietarios, inquilinos, proveedores.
 3. **Armá el stock**: edificios/unidades y propiedades publicables.
 4. **Formalizá alquileres** con contratos.
-5. **Operá el mes**: expensas → cuotas (o **Cierre del mes**) → cobros → OT → rendiciones.
+5. **Operá el mes**: expensas/servicios → cuotas (o **Cierre del mes**) → cobros → OT → rendiciones.
 6. **Atendé demanda** del portal: consultas, visitas y agenda.
 7. Si vendés: oportunidades en **Ventas** (interés → seña → cierre).
 
@@ -203,114 +207,145 @@ Usá búsqueda por título/dirección/ciudad, estado u operación para encontrar
 
 ![Nuevo contrato](images/07-contrato-nuevo.png)
 
-Los contratos formalizan el alquiler: partes, montos, índices y reglas de expensas.
+Los contratos formalizan el alquiler: partes, montos, índices, honorarios y reglas de expensas.
 
 ### Alta de contrato
 
 1. **Contratos** → **Nuevo contrato**.
-2. Elegí propiedad, propietario, inquilino y garante (opcional).
-3. Definí fechas, alquiler, depósito y % de mora.
-4. Configurá el **índice** de actualización (ICL, IPC, %, fijo).
-5. Indicá la **comisión** de la inmobiliaria y quién la paga.
-6. Marcá si el contrato **incluye expensas** ordinarias/extraordinarias.
-7. Guardá: el contrato queda **Activo** y la propiedad pasa a **Alquilada**.
+2. Elegí propiedad (autocompleta propietario y alquiler si ya están cargados).
+3. Buscá **inquilino** y **garante**. Si no existen, usá **Agregar nuevo**: pedí nombre y **DNI**; el sistema bloquea si ese DNI ya está como inquilino o garante.
+4. Definí fechas, alquiler, depósito y % de mora.
+5. Configurá **cada cuánto aumenta** (2, 3, 4, 6, 9 o 12 meses) y el índice (ICL, IPC, CP, mayor entre ellos, %, fijo).
+6. **Honorarios inmobiliarios**:
+   - Porcentaje del alquiler, o
+   - Monto fijo por período, o
+   - **Porcentaje sobre el total del contrato**: indicá el % y en **cuántas cuotas** se paga. El sistema calcula alquiler × meses × % y genera la parte del inquilino en esas cuotas con vencimiento el **día 10**.
+7. Marcá si incluye expensas ordinarias/extraordinarias.
+8. Guardá: el contrato queda **Activo**, la propiedad pasa a **Alquilada** y se generan automáticamente las **cuotas de alquiler** (vencimiento día 10) de todo el período.
+
+### Índices IPC / ICL / CP
+
+En la lista de Contratos (staff):
+
+1. Cargá **año**, **mes**, **período** (2/3/4/6/9/12 meses) y los % acumulados de IPC, ICL y CP.
+2. Pulsá **Aplicar los índices**.
+3. El sistema guarda el registro y toma el **mayor %** entre los tres.
+4. Ese % se aplica a los contratos activos de ese período cuya **próxima actualización** sea el **mes siguiente** (ej.: inicio en enero, cada 6 meses → aumento en julio; se carga en junio).
+5. Las cuotas abiertas desde esa vigencia se recalculan con el nuevo alquiler.
+6. Usá **Ver índices cargados** para consultar/filtrar lo ya guardado (año, mes, período).
 
 ### Detalle del contrato
 
-- Ves el **alquiler vigente** (incluye ajustes de índice ya aplicados).
-- Staff puede **aplicar un ajuste** cargando el % publicado (ICL/IPC/custom).
-- Card de **Depósito / garantía**: en custodia, devolver, o **Aplicar a saldo** de una cuota abierta.
-- Al pasar el contrato a **Rescindido** o **Vencido**, la propiedad vuelve a Disponible (si no hay otro contrato activo). Si el depósito sigue en custodia, el sistema te avisa.
+- Ves el **alquiler vigente** (incluye ajustes ya aplicados).
+- Staff puede **aplicar un ajuste** a mano (o dejar el % vacío para tomar índices cargados).
+- Card de **Depósito / garantía**: en custodia, devolver, o **Aplicar a saldo**.
+- Al pasar a **Rescindido** o **Vencido**, la propiedad vuelve a Disponible (si no hay otro contrato activo).
 
 **Tips**
-- El inquilino y el propietario deben existir como usuarios.
-- Las reglas de expensas del contrato definen qué se suma a la cuota al generar cobros.
-
----
+- El período del contrato debe coincidir con el período de índices que vayas a cargar.
+- Quién paga honorarios (inquilino / propietario / reparto) define qué parte entra en la cuota del inquilino.
 
 ## 9. Expensas
 
 ![Expensas](images/09-expensas.png)
 
-Cargás el total del mes por edificio y el sistema lo **prorratea** a cada unidad según su coeficiente.
+Cargás los **gastos del período** (agua, gas, luz, tasa, obras u otros) aplicados a un edificio o a una propiedad, y generás las expensas.
 
-### Cómo cargar
+### Cómo cargar gastos
 
-1. Elegí el edificio.
-2. Indicá si es ordinaria o extraordinaria, el concepto y el período.
-3. Ingresá el monto total.
-4. Si corresponde, marcá **Facturar a inquilinos** (se sumará a la cuota al generar cobros).
-5. Confirmá **Crear y prorratear**.
+1. Elegí alcance: **edificio** (se prorratea por m²) o **propiedad** (solo esa unidad).
+2. Categoría, concepto, período y monto.
+3. Confirmá la carga.
 
-**Orden sugerido del mes:** primero expensas, después generar cuotas en Cobros.
+### Generar expensas
 
----
+En **Generar expensas** elegí el alcance:
 
-## 10. Cobros
+- **Un edificio**: prorratea gastos del edificio por m² y suma gastos de cada propiedad.
+- **Una propiedad**: solo con los gastos cargados a esa propiedad.
+- **Todas las pendientes**: recorre edificios y propiedades con gastos sin documentos del período.
+
+Obras van como **extraordinarias**; el resto como **ordinarias**. Si ya hay documentos emitidos para ese alcance, el sistema lo bloquea.
+
+**Orden sugerido del mes:** primero gastos → generar expensas → (opcional) servicios → revisar cuotas en Cobros.
+
+## 10. Servicios
+
+Misma lógica que **Expensas**, con la categoría extra **Gasto común**.
+
+1. Cargá gastos del período (incluye gasto común) a edificio o propiedad.
+2. Generá servicios por edificio, por propiedad o **todas las pendientes**.
+3. Al generar, se actualizan las cuotas abiertas del período.
+4. En Cobros, los montos de servicios aparecen como conceptos **Servicios** / **Servicios extraordinarios**, separados de las expensas.
+
+Los ledgers no se mezclan: un período puede tener documentos de Expensas y de Servicios a la vez.
+
+## 11. Cobros
 
 ![Cobros](images/08-cobros.png)
 
-Acá viven las **cuotas** (alquiler + expensas + mora) y el registro de pagos.
+Acá viven las **cuotas** (alquiler + expensas + servicios + honorarios + mora) y el registro de pagos.
 
 ### Generar cuotas del período
 
-1. Como staff, usá **Generar cuotas del período**.
+1. Como staff, usá **Generar cuotas del período** (o el cierre del mes).
 2. Elegí año y mes.
-3. El sistema arma (o actualiza expensas de) las cuotas de los contratos activos, con vencimiento el **día configurado en Ajustes**.
+3. El sistema arma (o actualiza) las cuotas de contratos activos. Al **crear un contrato** ya se generan todas las cuotas del período con vencimiento día 10.
 
 ### Cierre del mes
 
-El botón **Ejecutar cierre del mes** genera las cuotas del mes en curso y sincroniza vencimientos/mora. En producción también puede correrse automáticamente el día 1 (cron).
+**Ejecutar cierre del mes** genera las cuotas del mes en curso y sincroniza vencimientos/mora.
+
+### Cuenta corriente del inquilino
+
+1. Abrí la cuenta del inquilino.
+2. En cada cuota podés tildar conceptos: **Alquiler**, **Expensas ordinarias/extraordinarias**, **Servicios**, **Honorarios**, **Mora**, etc.
+3. Solo se pueden tildar conceptos que entren en el monto a aplicar; el resto queda como saldo.
 
 ### Registrar un pago
 
-1. Abrí la cuota.
-2. **Registrar pago**: monto, medio (transferencia, efectivo, etc.), referencia y notas.
-3. Descargá el **recibo PDF** si lo necesitás.
-
-Inquilinos y propietarios ven sus cuotas en modo lectura (sin registrar pagos).
+1. Desde la cuota o la cuenta corriente.
+2. Indicá monto, medio, referencia y notas.
+3. Descargá el recibo PDF si lo necesitás.
 
 **Estados de cuota:** Pendiente · Parcial · Pagada · Vencida · Cancelada.
 
----
 
+## 12. Tesorería
 
-## 11. Tesorer�a
-
-M�dulo operativo de dinero de la inmobiliaria (staff): recibos, �rdenes de pago, caja, bancos y cheques. El men� **Tesorer�a** apunta a `/tesoreria`.
+Módulo operativo de dinero de la inmobiliaria (staff): recibos, órdenes de pago, caja, bancos y cheques. El menú **Tesorería** apunta a `/tesoreria`.
 
 ### Conceptos
 
-- **Recibo**: cobro (ingreso). Ciclo borrador ? emitido ? **imputado** ? anulado.
+- **Recibo**: cobro (ingreso). Ciclo borrador → emitido → **imputado** → anulado.
 - **Orden de pago (OP)**: egreso a proveedor, propietario u otro beneficiario.
-- **Caja diaria**: se abre por d�a/moneda; el efectivo de recibos/OP impacta ac�.
-- **Caja tesorer�a**: recibe cierres de caja diaria y movimientos de control.
-- **Bancos**: cuentas propias; transferencias y dep�sitos.
+- **Caja diaria**: se abre por día/moneda; el efectivo de recibos/OP impacta acá.
+- **Caja tesorería**: recibe cierres de caja diaria y movimientos de control.
+- **Bancos**: cuentas propias; transferencias y depósitos.
 - **Cheques**: cartera de terceros y cheques propios.
 
-### Flujo t�pico de cobro
+### Flujo típico de cobro
 
-1. Abr� **Caja** y una sesi�n diaria (si vas a cobrar en efectivo).
-2. **Recibos ? Nuevo**: inquilino o nombre libre, l�neas (contrato/propiedad), medios de pago (efectivo / transferencia / cheque).
-3. Pod�s aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
-4. Imprim� o descarg� el PDF del recibo.
+1. Abrí **Caja** y una sesión diaria (si vas a cobrar en efectivo).
+2. **Recibos → Nuevo**: inquilino o nombre libre, líneas (contrato/propiedad), medios de pago.
+3. Podés aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
+4. Imprimí o descargá el PDF del recibo.
 
-### Flujo t�pico de pago
+### Flujo típico de pago
 
-1. **�rdenes de pago ? Nueva**: proveedor o beneficiario, l�neas y medios.
-2. Aplic� a facturas de mantenimiento o a **rendiciones** pendientes.
+1. **Órdenes de pago → Nueva**: proveedor o beneficiario, líneas y medios.
+2. Aplicá a facturas de mantenimiento o a **rendiciones** pendientes.
 3. Al imputar, se actualiza el estado de esas facturas/rendiciones.
 
 ### Bancos y cheques
 
 - En **Ajustes** das de alta las cuentas bancarias.
 - **Depositar**: efectivo desde caja o cheques de cartera hacia un banco.
-- **Cheques**: cartera, entrega en OP, dep�sito, rechazo y d�bito de cheques propios.
+- **Cheques**: cartera, entrega en OP, depósito, rechazo y débito de cheques propios.
 
-Los cobros r�pidos desde `/cobros` siguen disponibles en paralelo.
+Los cobros rápidos desde `/cobros` siguen disponibles en paralelo.
 
----
-## 12. Mantenimiento
+## 13. Obras y Mantenimiento
 
 ![Mantenimiento](images/10-mantenimiento.png)
 
@@ -331,7 +366,7 @@ Los trabajos a cargo del propietario suelen impactar la **rendición**.
 
 ---
 
-## 13. Rendiciones
+## 14. Rendiciones
 
 ![Rendiciones](images/11-rendiciones.png)
 
@@ -351,7 +386,7 @@ También podés **Generar todas (ARS)** para crear borradores de todos los propi
 
 ---
 
-## 14. Consultas
+## 15. Consultas
 
 ![Consultas](images/12-consultas.png)
 
@@ -364,7 +399,7 @@ Inbox de interesados que escriben o agendan desde el **portal**.
 
 ---
 
-## 15. Visitas
+## 16. Visitas
 
 ![Visitas](images/13-visitas.png)
 
@@ -388,7 +423,7 @@ Cada reserva también genera una **consulta** vinculada.
 
 ---
 
-## 16. Agenda unificada
+## 17. Agenda unificada
 
 ![Agenda](images/21-agenda.png)
 
@@ -400,7 +435,7 @@ No reemplaza Visitas ni Turnero: es un tablero para ver ambos juntos. Links ráp
 
 ---
 
-## 17. Ventas
+## 18. Ventas
 
 ![Ventas](images/20-ventas.png)
 
@@ -414,7 +449,7 @@ Desde la ficha de una propiedad de venta: botón **Crear oportunidad**.
 
 ---
 
-## 18. Turnero
+## 19. Turnero
 
 ![Turnero](images/14-turnero.png)
 
@@ -427,7 +462,7 @@ Abrí según el dispositivo:
 
 ---
 
-## 18. Portal público
+## 20. Portal público
 
 El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes**.
 
@@ -449,7 +484,7 @@ Eso crea automáticamente:
 
 ---
 
-## 20. Flujo completo de ejemplo
+## 21. Flujo completo de ejemplo
 
 Caso típico de alquiler de un departamento:
 
@@ -467,7 +502,7 @@ Caso de venta: propiedad SALE → **Ventas** → seña (Reservada) → Vendida.
 
 ---
 
-## 21. Preguntas frecuentes
+## 22. Preguntas frecuentes
 
 **¿Por qué no veo una propiedad en el portal?**  
 Revisá que el estado sea Disponible o Reservada y que esté publicada. Borradores, inactivas o alquiladas no se muestran.
@@ -488,6 +523,19 @@ En **Visitas**, panel *Horarios y feriados* (administrador).
 Menú **Ventas**. Solo aplica a propiedades con operación Venta o Ambos.
 
 ---
+
+
+### ¿Cómo actualizo alquileres con IPC/ICL/CP?
+
+Cargá los % del período en Contratos y pulsá **Aplicar los índices**. Se usa el mayor entre IPC, ICL y CP, y se aplica a los contratos que deban aumentar el mes siguiente.
+
+### ¿Dónde veo los servicios en el cobro?
+
+En la cuenta corriente del inquilino, al abrir la cuota, aparecen como **Servicios** (y **Servicios extraordinarios** si hay obras), aparte de las expensas.
+
+### ¿Puedo crear un inquilino al armar el contrato?
+
+Sí: en el buscador de inquilino/garante usá **Agregar nuevo** e ingresá el DNI. Si ya existe como inquilino o garante, el sistema lo avisa.
 
 ## Créditos de capturas
 

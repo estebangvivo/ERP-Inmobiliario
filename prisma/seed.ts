@@ -449,12 +449,13 @@ async function main() {
 
   await prisma.expense.upsert({
     where: {
-      complexId_type_concept_periodYear_periodMonth: {
+      complexId_type_concept_periodYear_periodMonth_ledger: {
         complexId: complex.id,
         type: "ORDINARY",
         concept: "Expensas ordinarias agosto",
         periodYear: 2026,
         periodMonth: 8,
+        ledger: "EXPENSES",
       },
     },
     update: {},
@@ -467,6 +468,7 @@ async function main() {
       periodMonth: 8,
       totalAmount: 180000,
       currency: "ARS",
+      ledger: "EXPENSES",
       allocationMethod: "OWNERSHIP_COEFFICIENT",
       billToTenant: true,
       allocations: {

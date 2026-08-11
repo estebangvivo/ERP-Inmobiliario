@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/erp/page-chrome";
 import { ContractEditForm } from "@/components/erp/contract-form";
+import { ContractAttachmentsManager } from "@/components/erp/contract-attachments";
 import { ApplyAdjustmentForm } from "@/components/erp/apply-adjustment-form";
 import { DepositCard } from "@/components/erp/deposit-card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ export default async function ContratoDetailPage({ params }: { params: Params })
     include: {
       property: true,
       parties: { include: { user: true } },
+      attachments: { orderBy: { createdAt: "desc" } },
       adjustments: { orderBy: { effectiveFrom: "asc" } },
       tenantBills: {
         orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
@@ -182,6 +184,40 @@ export default async function ContratoDetailPage({ params }: { params: Params })
           contractId={contract.id}
           currentRentLabel={currentRentLabel}
         />
+      ) : null}
+
+      {staff ? (
+        <ContractAttachmentsManager
+          contractId={contract.id}
+          attachments={contract.attachments.map((a) => ({
+            id: a.id,
+            kind: a.kind,
+            fileName: a.fileName,
+            url: a.url,
+            sizeBytes: a.sizeBytes,
+            createdAt: a.createdAt.toISOString(),
+          }))}
+        />
+      ) : contract.attachments.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Archivos del contrato</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {contract.attachments.map((a) => (
+              <p key={a.id}>
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  {a.fileName}
+                </a>
+              </p>
+            ))}
+          </CardContent>
+        </Card>
       ) : null}
 
       {staff ? (

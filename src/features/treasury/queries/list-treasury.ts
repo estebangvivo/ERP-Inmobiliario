@@ -173,7 +173,7 @@ export async function listTenantsForTreasury() {
         some: { organizationId: session.organizationId, role: "TENANT" },
       },
     },
-    select: { id: true, name: true },
+    select: { id: true, name: true, documentNumber: true },
     orderBy: { name: "asc" },
   });
 }

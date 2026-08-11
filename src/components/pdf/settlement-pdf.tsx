@@ -145,7 +145,7 @@ export function SettlementPdfDocument({ data }: { data: SettlementPdfData }) {
             <Text>{formatMoneyLabel(data.grossRent, data.currency)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text>Comisión</Text>
+            <Text>Honorarios</Text>
             <Text style={styles.negative}>
               -{formatMoneyLabel(data.commissionAmount, data.currency)}
             </Text>

@@ -53,7 +53,7 @@ export default async function MantenimientoPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Mantenimiento"
+        title="Obras y Mantenimiento"
         description="Órdenes de trabajo y facturas de proveedores."
       />
 

@@ -184,7 +184,7 @@ Los **edificios** agrupan **unidades** (deptos, locales) con un **coeficiente** 
 ### Alta
 
 1. **Propiedades** → **Nueva propiedad**.
-2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio, ubicación.
+2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio y ubicación. Si elegís **Alquiler y venta**, cargá **precio de alquiler** y **precio de venta**, cada uno con su moneda (lo habitual: alquiler en ARS y venta en USD).
 3. Asigná **propietario** y, si corresponde, la **unidad** del edificio.
 4. Definí el **estado** y, si querés mostrarla en el sitio público, marcá **Publicar en el portal**.
 5. Guardá. En la edición podés subir **fotos** y video.
@@ -479,7 +479,7 @@ El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes*
 
 ![Portal — listado](images/17-portal-propiedades.png)
 
-Los visitantes filtran por operación, ciudad, ambientes y precio. Solo ven propiedades publicadas (Disponible / Reservada).
+Los visitantes filtran por operación, ciudad, ambientes y precio. Solo ven propiedades publicadas (Disponible / Reservada). Si la ficha es alquiler y venta, se muestran ambos precios, cada uno en su moneda.
 
 ### Ficha e agendar visita
 

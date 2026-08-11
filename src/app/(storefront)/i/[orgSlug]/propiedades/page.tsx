@@ -8,7 +8,7 @@ import {
   publicPropertyPath,
   publicPropertyWhereForOrg,
 } from "@/lib/public-org";
-import { formatMoney } from "@/lib/money";
+import { PropertyCardPrices } from "@/components/storefront/property-prices";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,8 +80,16 @@ export default async function TenantPropiedadesPage({
   }
   if (city) filters.push({ city: { contains: city, mode: "insensitive" } });
   if (rooms) filters.push({ rooms: { gte: rooms } });
-  if (minPrice) filters.push({ price: { gte: minPrice } });
-  if (maxPrice) filters.push({ price: { lte: maxPrice } });
+  if (minPrice) {
+    filters.push({
+      OR: [{ price: { gte: minPrice } }, { rentPrice: { gte: minPrice } }],
+    });
+  }
+  if (maxPrice) {
+    filters.push({
+      OR: [{ price: { lte: maxPrice } }, { rentPrice: { lte: maxPrice } }],
+    });
+  }
 
   const baseWhere = publicPropertyWhereForOrg(org.id);
   const where: Prisma.PropertyWhereInput = filters.length
@@ -201,9 +209,13 @@ export default async function TenantPropiedadesPage({
                     {property.rooms ? ` · ${property.rooms} amb.` : ""}
                     {property.areaM2 ? ` · ${property.areaM2} m²` : ""}
                   </p>
-                  <p className="text-lg font-semibold text-[var(--primary)]">
-                    {formatMoney(property.price.toString(), property.currency)}
-                  </p>
+                  <PropertyCardPrices
+                    operationType={property.operationType}
+                    price={property.price}
+                    rentPrice={property.rentPrice}
+                    currency={property.currency}
+                    rentCurrency={property.rentCurrency}
+                  />
                 </div>
               </Link>
             );

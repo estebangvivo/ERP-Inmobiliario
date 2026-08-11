@@ -3,7 +3,7 @@ import { OperationType, PropertyStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
 import { propertyScopeWhere } from "@/lib/tenant-scope";
-import { formatMoney } from "@/lib/money";
+import { formatPropertyPrices } from "@/lib/property-prices";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,7 +120,7 @@ export default async function PropiedadesPage({
             <td className="px-4 py-3">{PROPERTY_TYPE_LABELS[property.propertyType]}</td>
             <td className="px-4 py-3">{OPERATION_LABELS[property.operationType]}</td>
             <td className="px-4 py-3 font-medium">
-              {formatMoney(property.price.toString(), property.currency)}
+              {formatPropertyPrices(property)}
             </td>
             <td className="px-4 py-3">
               <Badge variant={property.status === "AVAILABLE" ? "success" : "secondary"}>

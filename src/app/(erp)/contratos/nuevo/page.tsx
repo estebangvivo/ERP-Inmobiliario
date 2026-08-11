@@ -14,7 +14,7 @@ export default async function NuevoContratoPage() {
       where: {
         AND: [
           propertyScopeWhere(session),
-          { operationType: "RENT" },
+          { operationType: { in: ["RENT", "BOTH"] } },
           { status: { in: ["AVAILABLE", "RESERVED"] } },
         ],
       },
@@ -23,7 +23,9 @@ export default async function NuevoContratoPage() {
         id: true,
         title: true,
         price: true,
+        rentPrice: true,
         currency: true,
+        rentCurrency: true,
         ownerships: {
           orderBy: [{ isPrimary: "desc" }, { sharePct: "desc" }],
           take: 1,
@@ -48,8 +50,8 @@ export default async function NuevoContratoPage() {
           return {
             id: p.id,
             title: p.title,
-            price: p.price?.toString() ?? null,
-            currency: p.currency,
+            price: (p.rentPrice ?? p.price)?.toString() ?? null,
+            currency: p.rentCurrency ?? p.currency,
             ownerId: primary?.owner.id ?? null,
             ownerName: primary?.owner.name ?? null,
           };

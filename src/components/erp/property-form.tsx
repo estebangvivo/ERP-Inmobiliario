@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Currency,
@@ -44,7 +44,9 @@ type PropertyFormProps = {
         operationType: OperationType;
         status: PropertyStatus;
         price: string;
+        rentPrice: string | null;
         currency: Currency;
+        rentCurrency: Currency | null;
         address: string;
         city: string;
         province: string | null;
@@ -66,6 +68,31 @@ export function PropertyForm(props: PropertyFormProps) {
   const action = props.mode === "create" ? createPropertyAction : updatePropertyAction;
   const [state, formAction, pending] = useActionState(action, initial);
   const p = props.mode === "edit" ? props.property : null;
+  const [operationType, setOperationType] = useState<OperationType>(
+    p?.operationType ?? "RENT",
+  );
+  const [salePrice, setSalePrice] = useState(
+    p && p.operationType !== "RENT" ? p.price : "",
+  );
+  const [rentAmount, setRentAmount] = useState(
+    p?.operationType === "BOTH"
+      ? (p.rentPrice ?? "")
+      : p?.operationType === "RENT"
+        ? p.price
+        : "",
+  );
+  const [saleCurrency, setSaleCurrency] = useState<Currency>(
+    p && p.operationType !== "RENT" ? p.currency : "USD",
+  );
+  const [rentCurrency, setRentCurrency] = useState<Currency>(
+    p?.operationType === "BOTH"
+      ? (p.rentCurrency ?? "ARS")
+      : p?.operationType === "RENT"
+        ? p.currency
+        : "ARS",
+  );
+  const showRent = operationType === "RENT" || operationType === "BOTH";
+  const showSale = operationType === "SALE" || operationType === "BOTH";
 
   useEffect(() => {
     if (state?.ok) {
@@ -98,7 +125,12 @@ export function PropertyForm(props: PropertyFormProps) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="operationType">Operación</Label>
-          <Select id="operationType" name="operationType" defaultValue={p?.operationType ?? "RENT"}>
+          <Select
+            id="operationType"
+            name="operationType"
+            value={operationType}
+            onChange={(e) => setOperationType(e.target.value as OperationType)}
+          >
             {(Object.keys(OPERATION_LABELS) as OperationType[]).map((k) => (
               <option key={k} value={k}>{OPERATION_LABELS[k]}</option>
             ))}
@@ -127,18 +159,62 @@ export function PropertyForm(props: PropertyFormProps) {
             </span>
           </span>
         </label>
-        <div className="space-y-2">
-          <Label htmlFor="currency">Moneda</Label>
-          <Select id="currency" name="currency" defaultValue={p?.currency ?? "ARS"}>
-            <option value="ARS">ARS</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="price">Precio</Label>
-          <Input id="price" name="price" type="number" step="0.01" defaultValue={p?.price} required />
-        </div>
+        {showRent ? (
+          <div className="space-y-2">
+            <Label htmlFor={operationType === "BOTH" ? "rentPrice" : "price"}>
+              Precio de alquiler
+            </Label>
+            <div className="grid grid-cols-[1fr_7rem] gap-2">
+              <Input
+                id={operationType === "BOTH" ? "rentPrice" : "price"}
+                name={operationType === "BOTH" ? "rentPrice" : "price"}
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={rentAmount}
+                onChange={(e) => setRentAmount(e.target.value)}
+                required
+              />
+              <Select
+                id={operationType === "BOTH" ? "rentCurrency" : "currency"}
+                name={operationType === "BOTH" ? "rentCurrency" : "currency"}
+                value={rentCurrency}
+                onChange={(e) => setRentCurrency(e.target.value as Currency)}
+              >
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+        {showSale ? (
+          <div className="space-y-2">
+            <Label htmlFor="price">Precio de venta</Label>
+            <div className="grid grid-cols-[1fr_7rem] gap-2">
+              <Input
+                id="price"
+                name="price"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={salePrice}
+                onChange={(e) => setSalePrice(e.target.value)}
+                required
+              />
+              <Select
+                id="currency"
+                name="currency"
+                value={saleCurrency}
+                onChange={(e) => setSaleCurrency(e.target.value as Currency)}
+              >
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </Select>
+            </div>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="ownerId">Propietario</Label>
           <Select id="ownerId" name="ownerId" defaultValue={p?.ownerId ?? ""}>

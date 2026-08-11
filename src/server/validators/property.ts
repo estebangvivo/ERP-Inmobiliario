@@ -13,7 +13,11 @@ export const propertyCreateSchema = z.object({
   operationType: z.nativeEnum(OperationType),
   status: z.nativeEnum(PropertyStatus).default(PropertyStatus.DRAFT),
   price: z.coerce.number().positive(),
+  rentPrice: z
+    .union([z.literal(""), z.coerce.number().positive()])
+    .optional(),
   currency: z.nativeEnum(Currency).default(Currency.ARS),
+  rentCurrency: z.union([z.nativeEnum(Currency), z.literal("")]).optional(),
   address: z.string().min(3),
   city: z.string().min(2),
   province: z.string().optional(),
@@ -29,6 +33,16 @@ export const propertyCreateSchema = z.object({
     .union([z.literal("on"), z.literal("true"), z.literal("false"), z.boolean()])
     .optional()
     .transform((v) => v === true || v === "on" || v === "true"),
+}).superRefine((d, ctx) => {
+  if (d.operationType === OperationType.BOTH) {
+    if (typeof d.rentPrice !== "number" || d.rentPrice <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rentPrice"],
+        message: "Indicá el precio de alquiler y el de venta.",
+      });
+    }
+  }
 });
 
 export const propertyUpdateSchema = propertyCreateSchema.extend({

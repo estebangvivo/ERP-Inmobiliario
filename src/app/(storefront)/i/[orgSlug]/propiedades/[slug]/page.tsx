@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatMoney } from "@/lib/money";
+import { PropertyCardPrices } from "@/components/storefront/property-prices";
 import {
   getPublicOrganization,
   publicPropertyWhereForOrg,
@@ -96,9 +96,14 @@ export default async function TenantPropertyDetailPage({
               ? ` · ${property.unit.complex.name} ${property.unit.code}`
               : ""}
           </p>
-          <p className="text-3xl font-semibold text-[var(--primary)]">
-            {formatMoney(property.price.toString(), property.currency)}
-          </p>
+          <PropertyCardPrices
+            size="detail"
+            operationType={property.operationType}
+            price={property.price}
+            rentPrice={property.rentPrice}
+            currency={property.currency}
+            rentCurrency={property.rentCurrency}
+          />
         </div>
 
         <dl className="grid grid-cols-2 gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-4">

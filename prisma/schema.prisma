@@ -293,7 +293,12 @@ model Property {
   operationType  OperationType
   status         PropertyStatus      @default(DRAFT)
   price          Decimal             @db.Decimal(14, 2)
+  /// Alquiler mensual cuando operationType es BOTH. En RENT el alquiler va en price.
+  rentPrice      Decimal?            @db.Decimal(14, 2)
+  /// Moneda de venta (SALE/BOTH) o del único precio (RENT).
   currency       Currency            @default(ARS)
+  /// Moneda del alquiler cuando operationType es BOTH.
+  rentCurrency   Currency?
   address        String
   city           String
   province       String?

@@ -78,7 +78,17 @@ export async function createPropertyAction(
       operationType: d.operationType,
       status: d.status,
       price: d.price,
+      rentPrice:
+        d.operationType === "BOTH" && typeof d.rentPrice === "number"
+          ? d.rentPrice
+          : null,
       currency: d.currency,
+      rentCurrency:
+        d.operationType === "BOTH"
+          ? d.rentCurrency && d.rentCurrency !== ""
+            ? d.rentCurrency
+            : "ARS"
+          : null,
       address: d.address,
       city: d.city,
       province: emptyToUndef(d.province) ?? null,
@@ -146,7 +156,17 @@ export async function updatePropertyAction(
       operationType: d.operationType,
       status: d.status,
       price: d.price,
+      rentPrice:
+        d.operationType === "BOTH" && typeof d.rentPrice === "number"
+          ? d.rentPrice
+          : null,
       currency: d.currency,
+      rentCurrency:
+        d.operationType === "BOTH"
+          ? d.rentCurrency && d.rentCurrency !== ""
+            ? d.rentCurrency
+            : "ARS"
+          : null,
       address: d.address,
       city: d.city,
       province: emptyToUndef(d.province) ?? null,

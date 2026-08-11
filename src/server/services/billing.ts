@@ -491,7 +491,15 @@ export function computeBillStatus(
 export async function applyLateFee(billId: string) {
   const bill = await prisma.tenantBill.findUniqueOrThrow({
     where: { id: billId },
-    include: { contract: true },
+    select: {
+      id: true,
+      status: true,
+      dueDate: true,
+      totalAmount: true,
+      paidAmount: true,
+      lateFeeAmount: true,
+      contract: { select: { lateFeeDailyRatePct: true } },
+    },
   });
 
   if (bill.status === "PAID" || bill.status === "CANCELLED") return bill;
@@ -543,40 +551,58 @@ export async function applyLateFee(billId: string) {
 
 /** Marca vencidas y recalcula mora (si hay tasa) para la org. */
 export async function syncOverdueBills(organizationId: string) {
-  const today = startOfUtcDay();
-  const bills = await prisma.tenantBill.findMany({
-    where: {
-      status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
-      dueDate: { lt: today },
-      contract: { organizationId },
-    },
-    include: { contract: { select: { lateFeeDailyRatePct: true } } },
-  });
+  try {
+    const today = startOfUtcDay();
+    const bills = await prisma.tenantBill.findMany({
+      where: {
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+        dueDate: { lt: today },
+        contract: { organizationId },
+      },
+      select: {
+        id: true,
+        status: true,
+        dueDate: true,
+        totalAmount: true,
+        paidAmount: true,
+        lateFeeAmount: true,
+        contract: { select: { lateFeeDailyRatePct: true } },
+      },
+      take: 80,
+      orderBy: { dueDate: "asc" },
+    });
 
-  let updated = 0;
-  for (const bill of bills) {
-    const rate = Number(bill.contract.lateFeeDailyRatePct);
-    if (rate > 0) {
-      const next = await applyLateFee(bill.id);
-      if (next.status !== bill.status || Number(next.lateFeeAmount) !== Number(bill.lateFeeAmount)) {
-        updated += 1;
-      }
-    } else {
-      const status = computeBillStatus(
-        Number(bill.totalAmount),
-        Number(bill.paidAmount),
-        bill.dueDate,
-      );
-      if (status !== bill.status) {
-        await prisma.tenantBill.update({
-          where: { id: bill.id },
-          data: { status },
-        });
-        updated += 1;
+    let updated = 0;
+    for (const bill of bills) {
+      const rate = Number(bill.contract.lateFeeDailyRatePct);
+      if (rate > 0) {
+        const next = await applyLateFee(bill.id);
+        if (
+          next.status !== bill.status ||
+          Number(next.lateFeeAmount) !== Number(bill.lateFeeAmount)
+        ) {
+          updated += 1;
+        }
+      } else {
+        const status = computeBillStatus(
+          Number(bill.totalAmount),
+          Number(bill.paidAmount),
+          bill.dueDate,
+        );
+        if (status !== bill.status) {
+          await prisma.tenantBill.update({
+            where: { id: bill.id },
+            data: { status },
+          });
+          updated += 1;
+        }
       }
     }
+    return updated;
+  } catch (error) {
+    console.error("syncOverdueBills", error);
+    return 0;
   }
-  return updated;
 }
 
 /** Sync de una cuota concreta (status + mora si aplica). */

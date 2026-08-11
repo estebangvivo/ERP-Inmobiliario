@@ -40,7 +40,19 @@ if (!rawUrl) {
     console.error("[start:prod] DATABASE_URL inválida");
   }
 
-  const pushCode = run("db push", "npx", ["prisma", "db", "push", "--skip-generate"]);
+  let pushCode = run("db push", "npx", ["prisma", "db", "push", "--skip-generate"]);
+  if (pushCode !== 0) {
+    console.warn(
+      "[start:prod] db push pidió confirmación (p. ej. unique nuevo). Reintento con --accept-data-loss.",
+    );
+    pushCode = run("db push (accept-data-loss)", "npx", [
+      "prisma",
+      "db",
+      "push",
+      "--skip-generate",
+      "--accept-data-loss",
+    ]);
+  }
   if (pushCode !== 0) {
     console.error(
       "[start:prod] prisma db push falló. Revisá que DATABASE_URL apunte al Postgres de Railway.",

@@ -195,7 +195,7 @@ model IndexRate {
   periodYear     Int
   periodMonth    Int
   /// Duración del período en meses (2, 3, 4, 6, 9, 12).
-  periodMonths   Int
+  periodMonths   Int             @default(3)
   percent        Decimal         @db.Decimal(8, 4)
   notes          String?
   createdAt      DateTime        @default(now())

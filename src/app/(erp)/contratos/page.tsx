@@ -51,23 +51,37 @@ export default async function ContratosPage({
   const [contracts, indexRates] = await Promise.all([
     prisma.contract.findMany({
       where,
-      include: {
-        property: true,
-        parties: { include: { user: true } },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        initialRent: true,
+        currency: true,
+        property: { select: { title: true } },
+        parties: {
+          select: { role: true, user: { select: { name: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
     staff
-      ? prisma.indexRate.findMany({
-          where: { organizationId: session.organizationId },
-          orderBy: [
-            { periodYear: "desc" },
-            { periodMonth: "desc" },
-            { periodMonths: "asc" },
-            { indexType: "asc" },
-          ],
-          take: 200,
-        })
+      ? prisma.indexRate
+          .findMany({
+            where: { organizationId: session.organizationId },
+            orderBy: [
+              { periodYear: "desc" },
+              { periodMonth: "desc" },
+              { periodMonths: "asc" },
+              { indexType: "asc" },
+            ],
+            take: 200,
+          })
+          .catch((error) => {
+            console.error("contratos indexRates", error);
+            return [];
+          })
       : Promise.resolve([]),
   ]);
 

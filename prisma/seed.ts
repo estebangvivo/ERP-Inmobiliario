@@ -447,38 +447,39 @@ async function main() {
     },
   });
 
-  await prisma.expense.upsert({
+  const existingExpense = await prisma.expense.findFirst({
     where: {
-      complexId_type_concept_periodYear_periodMonth_ledger: {
-        complexId: complex.id,
-        type: "ORDINARY",
-        concept: "Expensas ordinarias agosto",
-        periodYear: 2026,
-        periodMonth: 8,
-        ledger: "EXPENSES",
-      },
-    },
-    update: {},
-    create: {
-      organizationId: org.id,
       complexId: complex.id,
       type: "ORDINARY",
       concept: "Expensas ordinarias agosto",
       periodYear: 2026,
       periodMonth: 8,
-      totalAmount: 180000,
-      currency: "ARS",
-      ledger: "EXPENSES",
-      allocationMethod: "OWNERSHIP_COEFFICIENT",
-      billToTenant: true,
-      allocations: {
-        create: units.map((u) => ({
-          unitId: u.id,
-          amount: 45000,
-        })),
-      },
     },
+    select: { id: true },
   });
+  if (!existingExpense) {
+    await prisma.expense.create({
+      data: {
+        organizationId: org.id,
+        complexId: complex.id,
+        type: "ORDINARY",
+        concept: "Expensas ordinarias agosto",
+        periodYear: 2026,
+        periodMonth: 8,
+        totalAmount: 180000,
+        currency: "ARS",
+        ledger: "EXPENSES",
+        allocationMethod: "OWNERSHIP_COEFFICIENT",
+        billToTenant: true,
+        allocations: {
+          create: units.map((u) => ({
+            unitId: u.id,
+            amount: 45000,
+          })),
+        },
+      },
+    });
+  }
 
   const existingLeads = await prisma.lead.count({
     where: { organizationId: org.id },

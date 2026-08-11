@@ -56,78 +56,136 @@ export default async function DashboardPage() {
   const dueSoonEnd = new Date(todayUtc);
   dueSoonEnd.setUTCDate(dueSoonEnd.getUTCDate() + DUE_SOON_DAYS);
 
-  const [
-    properties,
-    contracts,
-    pendingBills,
-    overdueBills,
-    dueSoonBills,
-    openLeads,
-    openWorkOrders,
-    paymentsThisMonth,
-    recentBills,
-    recentLeads,
-  ] = await Promise.all([
-    prisma.property.count({ where: propertyWhere }),
-    prisma.contract.count({
-      where: { ...contractWhere, status: "ACTIVE" },
-    }),
-    prisma.tenantBill.count({
-      where: {
-        AND: [billWhere, { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] } }],
-      },
-    }),
-    prisma.tenantBill.count({
-      where: {
-        AND: [billWhere, { status: "OVERDUE" }],
-      },
-    }),
-    canSeeBills
-      ? prisma.tenantBill.count({
-          where: {
-            AND: [
-              billWhere,
-              { status: { in: ["PENDING", "PARTIAL"] } },
-              { dueDate: { gte: todayUtc, lt: dueSoonEnd } },
-            ],
+  const emptyDashboard = {
+    properties: 0,
+    contracts: 0,
+    pendingBills: 0,
+    overdueBills: 0,
+    dueSoonBills: 0,
+    openLeads: 0,
+    openWorkOrders: 0,
+    paymentsThisMonth: [] as { amount: { toString(): string } | number; currency: "ARS" | "USD" | "EUR" }[],
+    recentBills: [] as Array<{
+      id: string;
+      periodMonth: number;
+      periodYear: number;
+      status: "PENDING" | "PARTIAL" | "OVERDUE" | "PAID" | "CANCELLED";
+      dueDate: Date;
+      paidAmount: { toString(): string } | number;
+      totalAmount: { toString(): string } | number;
+      currency: "ARS" | "USD" | "EUR";
+      contract: { property: { title: string } };
+    }>,
+    recentLeads: [] as Array<{
+      id: string;
+      name: string;
+      property: { title: string } | null;
+    }>,
+  };
+
+  let properties = emptyDashboard.properties;
+  let contracts = emptyDashboard.contracts;
+  let pendingBills = emptyDashboard.pendingBills;
+  let overdueBills = emptyDashboard.overdueBills;
+  let dueSoonBills = emptyDashboard.dueSoonBills;
+  let openLeads = emptyDashboard.openLeads;
+  let openWorkOrders = emptyDashboard.openWorkOrders;
+  let paymentsThisMonth = emptyDashboard.paymentsThisMonth;
+  let recentBills = emptyDashboard.recentBills;
+  let recentLeads = emptyDashboard.recentLeads;
+
+  try {
+    [
+      properties,
+      contracts,
+      pendingBills,
+      overdueBills,
+      dueSoonBills,
+      openLeads,
+      openWorkOrders,
+      paymentsThisMonth,
+      recentBills,
+      recentLeads,
+    ] = await Promise.all([
+      prisma.property.count({ where: propertyWhere }),
+      prisma.contract.count({
+        where: { ...contractWhere, status: "ACTIVE" },
+      }),
+      prisma.tenantBill.count({
+        where: {
+          AND: [billWhere, { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] } }],
+        },
+      }),
+      prisma.tenantBill.count({
+        where: {
+          AND: [billWhere, { status: "OVERDUE" }],
+        },
+      }),
+      canSeeBills
+        ? prisma.tenantBill.count({
+            where: {
+              AND: [
+                billWhere,
+                { status: { in: ["PENDING", "PARTIAL"] } },
+                { dueDate: { gte: todayUtc, lt: dueSoonEnd } },
+              ],
+            },
+          })
+        : Promise.resolve(0),
+      canSeeLeads
+        ? prisma.lead.count({ where: { ...leadWhere, status: "NEW" } })
+        : Promise.resolve(0),
+      prisma.workOrder.count({
+        where: {
+          AND: [
+            workOrderWhere,
+            { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] } },
+          ],
+        },
+      }),
+      prisma.payment.findMany({
+        where: {
+          paidAt: { gte: periodStart, lt: periodEnd },
+          tenantBill: billWhere,
+        },
+        select: { amount: true, currency: true },
+      }),
+      prisma.tenantBill.findMany({
+        where: billWhere,
+        take: 6,
+        orderBy: { issuedAt: "desc" },
+        select: {
+          id: true,
+          periodMonth: true,
+          periodYear: true,
+          status: true,
+          dueDate: true,
+          paidAmount: true,
+          totalAmount: true,
+          currency: true,
+          contract: {
+            select: {
+              property: { select: { title: true } },
+            },
           },
-        })
-      : Promise.resolve(0),
-    canSeeLeads
-      ? prisma.lead.count({ where: { ...leadWhere, status: "NEW" } })
-      : Promise.resolve(0),
-    prisma.workOrder.count({
-      where: {
-        AND: [
-          workOrderWhere,
-          { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] } },
-        ],
-      },
-    }),
-    prisma.payment.findMany({
-      where: {
-        paidAt: { gte: periodStart, lt: periodEnd },
-        tenantBill: billWhere,
-      },
-      select: { amount: true, currency: true },
-    }),
-    prisma.tenantBill.findMany({
-      where: billWhere,
-      take: 6,
-      orderBy: { issuedAt: "desc" },
-      include: {
-        contract: { include: { property: true } },
-      },
-    }),
-    canSeeLeads
-      ? prisma.lead.findMany({
-          where: { ...leadWhere, status: "NEW" },
-          take: 5,
-          orderBy: { createdAt: "desc" },
-          include: { property: true },
-        })
-      : Promise.resolve([]),
-  ]);
+        },
+      }),
+      canSeeLeads
+        ? prisma.lead.findMany({
+            where: { ...leadWhere, status: "NEW" },
+            take: 5,
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              name: true,
+              property: { select: { title: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+  } catch (error) {
+    console.error("dashboard queries", error);
+  }
 
   const pendingSettlements =
     staff && canSeeSettlements
@@ -135,6 +193,9 @@ export default async function DashboardPage() {
           organizationId: session.organizationId,
           periodYear: year,
           periodMonth: month,
+        }).catch((error) => {
+          console.error("dashboard settlements", error);
+          return [];
         })
       : [];
 

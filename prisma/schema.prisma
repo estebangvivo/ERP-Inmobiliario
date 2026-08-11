@@ -1017,6 +1017,10 @@ model SaleDeal {
   stage              SaleDealStage @default(LEAD)
   offerAmount        Decimal?      @db.Decimal(14, 2)
   reservationAmount  Decimal?      @db.Decimal(14, 2)
+  reservationPaid    Boolean       @default(false)
+  commissionPct      Decimal?      @db.Decimal(5, 2)
+  commissionAmount   Decimal?      @db.Decimal(14, 2)
+  deedDate           DateTime?     @db.Date
   currency           Currency      @default(ARS)
   reservedAt         DateTime?
   closedAt           DateTime?

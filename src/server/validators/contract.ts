@@ -74,6 +74,11 @@ export const contractCreateSchema = withPayerSum(
     }),
 );
 
+export const contractGuarantorsSchema = z.object({
+  id: z.string().min(1),
+  guarantorIds: z.array(z.string().min(1)).max(5).default([]),
+});
+
 export const contractUpdateSchema = withPayerSum(
   z.object({
     id: z.string().min(1),

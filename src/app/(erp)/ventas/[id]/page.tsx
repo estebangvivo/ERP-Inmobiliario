@@ -5,6 +5,7 @@ import { SaleDealEditForm } from "@/components/erp/sale-deal-forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SALE_DEAL_STAGE_LABELS } from "@/lib/labels";
+import { formatDateOnly, toDateInputValue } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
@@ -47,7 +48,19 @@ export default async function VentaDetailPage({ params }: { params: Params }) {
           <span>
             Seña:{" "}
             {formatMoney(deal.reservationAmount.toString(), deal.currency)}
+            {deal.reservationPaid ? " · cobrada" : " · pendiente"}
           </span>
+        ) : null}
+        {deal.commissionPct != null ? (
+          <span>
+            Comisión {Number(deal.commissionPct)}%
+            {deal.commissionAmount != null
+              ? ` · ${formatMoney(deal.commissionAmount.toString(), deal.currency)}`
+              : ""}
+          </span>
+        ) : null}
+        {deal.deedDate ? (
+          <span>Boleto: {formatDateOnly(deal.deedDate)}</span>
         ) : null}
         {deal.assignee ? <span>Agente: {deal.assignee.name}</span> : null}
       </div>
@@ -74,6 +87,9 @@ export default async function VentaDetailPage({ params }: { params: Params }) {
           stage: deal.stage,
           offerAmount: deal.offerAmount?.toString() ?? null,
           reservationAmount: deal.reservationAmount?.toString() ?? null,
+          reservationPaid: deal.reservationPaid,
+          commissionPct: deal.commissionPct?.toString() ?? null,
+          deedDate: deal.deedDate ? toDateInputValue(deal.deedDate) : "",
           notes: deal.notes,
         }}
       />

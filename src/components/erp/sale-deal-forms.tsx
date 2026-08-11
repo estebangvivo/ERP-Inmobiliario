@@ -83,7 +83,7 @@ export function CreateSaleDealForm({
         <Input id="offerAmount" name="offerAmount" type="number" step="0.01" />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="reservationAmount">Seña</Label>
+        <Label htmlFor="reservationAmount">Seña / reserva</Label>
         <Input
           id="reservationAmount"
           name="reservationAmount"
@@ -91,6 +91,25 @@ export function CreateSaleDealForm({
           step="0.01"
         />
       </div>
+      <div className="space-y-1">
+        <Label htmlFor="commissionPct">Comisión de venta %</Label>
+        <Input
+          id="commissionPct"
+          name="commissionPct"
+          type="number"
+          step="0.01"
+          min={0}
+          max={100}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="deedDate">Fecha de boleto</Label>
+        <Input id="deedDate" name="deedDate" type="date" />
+      </div>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="reservationPaid" className="h-4 w-4" />
+        Seña cobrada
+      </label>
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="notes">Notas</Label>
         <Textarea id="notes" name="notes" />
@@ -120,6 +139,9 @@ export function SaleDealEditForm({
     stage: SaleDealStage;
     offerAmount: string | null;
     reservationAmount: string | null;
+    reservationPaid: boolean;
+    commissionPct: string | null;
+    deedDate: string;
     notes: string | null;
   };
 }) {
@@ -192,6 +214,36 @@ export function SaleDealEditForm({
           defaultValue={deal.reservationAmount ?? ""}
         />
       </div>
+      <div className="space-y-1">
+        <Label htmlFor="commissionPct">Comisión de venta %</Label>
+        <Input
+          id="commissionPct"
+          name="commissionPct"
+          type="number"
+          step="0.01"
+          min={0}
+          max={100}
+          defaultValue={deal.commissionPct ?? ""}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="deedDate">Fecha de boleto</Label>
+        <Input
+          id="deedDate"
+          name="deedDate"
+          type="date"
+          defaultValue={deal.deedDate}
+        />
+      </div>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          name="reservationPaid"
+          defaultChecked={deal.reservationPaid}
+          className="h-4 w-4"
+        />
+        Seña cobrada
+      </label>
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="notes">Notas</Label>
         <Textarea id="notes" name="notes" defaultValue={deal.notes ?? ""} />

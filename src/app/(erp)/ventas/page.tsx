@@ -48,7 +48,7 @@ export default async function VentasPage({
     <div className="space-y-6">
       <PageHeader
         title="Ventas"
-        description="Pipeline de oportunidades: interés → seña → cierre."
+        description="Pipeline de venta: interés, seña cobrada, boleto y comisión."
       />
 
       <CreateSaleDealForm
@@ -90,6 +90,16 @@ export default async function VentasPage({
                         Seña{" "}
                         {formatMoney(
                           d.reservationAmount.toString(),
+                          d.currency,
+                        )}
+                        {d.reservationPaid ? " · cobrada" : ""}
+                      </p>
+                    ) : null}
+                    {d.commissionAmount != null ? (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Comisión{" "}
+                        {formatMoney(
+                          d.commissionAmount.toString(),
                           d.currency,
                         )}
                       </p>

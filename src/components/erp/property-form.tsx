@@ -56,6 +56,7 @@ type PropertyFormProps = {
         unitId: string | null;
         ownerId: string | null;
         coverImageUrl: string | null;
+        listedPublic: boolean;
       };
     }
 );
@@ -111,6 +112,21 @@ export function PropertyForm(props: PropertyFormProps) {
             ))}
           </Select>
         </div>
+        <label className="flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-sm sm:col-span-2">
+          <input
+            type="checkbox"
+            name="listedPublic"
+            defaultChecked={p?.listedPublic ?? false}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="font-medium">Publicar en el portal</span>
+            <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+              Solo las marcadas aparecen en /i/tu-inmobiliaria/propiedades.
+              Además tiene que estar Disponible o Reservada.
+            </span>
+          </span>
+        </label>
         <div className="space-y-2">
           <Label htmlFor="currency">Moneda</Label>
           <Select id="currency" name="currency" defaultValue={p?.currency ?? "ARS"}>

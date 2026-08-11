@@ -40,11 +40,18 @@ export default async function CuentaCorrientePage({
         title="Cuenta corriente"
         description="Inquilinos con cuotas pendientes, parciales o vencidas."
         actions={
-          <Link href="/cobros">
-            <Button variant="outline" size="sm">
-              Ver cuotas
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <a href="/api/export/morosos">
+              <Button variant="outline" size="sm">
+                Exportar morosos
+              </Button>
+            </a>
+            <Link href="/cobros">
+              <Button variant="outline" size="sm">
+                Ver cuotas
+              </Button>
+            </Link>
+          </div>
         }
       />
 

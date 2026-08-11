@@ -88,7 +88,7 @@ export async function createPropertyAction(
       amenities,
       videoUrl: emptyToUndef(d.videoUrl) ?? null,
       unitId: emptyToUndef(d.unitId) ?? null,
-      publishedAt: d.status === "AVAILABLE" ? new Date() : null,
+      publishedAt: d.listedPublic ? new Date() : null,
       images: d.coverImageUrl
         ? {
             create: [
@@ -156,7 +156,9 @@ export async function updatePropertyAction(
       amenities,
       videoUrl: emptyToUndef(d.videoUrl) ?? null,
       unitId: emptyToUndef(d.unitId) ?? null,
-      publishedAt: d.status === "AVAILABLE" ? new Date() : undefined,
+      publishedAt: d.listedPublic
+        ? existing.publishedAt ?? new Date()
+        : null,
     },
   });
 
@@ -174,6 +176,34 @@ export async function updatePropertyAction(
 
   revalidatePath("/gestion/propiedades");
   revalidatePath(`/gestion/propiedades/${d.id}`);
+  await revalidatePublicCatalog(session.organizationId, existing.slug);
+  return { ok: true };
+}
+
+export async function togglePropertyPublicAction(
+  propertyId: string,
+  listedPublic: boolean,
+): Promise<ActionResult> {
+  const session = await requireStaff();
+  const existing = await prisma.property.findFirst({
+    where: { id: propertyId, organizationId: session.organizationId },
+    select: { id: true, slug: true, publishedAt: true },
+  });
+  if (!existing) {
+    return { ok: false, error: "Propiedad no encontrada." };
+  }
+
+  await prisma.property.update({
+    where: { id: existing.id },
+    data: {
+      publishedAt: listedPublic
+        ? existing.publishedAt ?? new Date()
+        : null,
+    },
+  });
+
+  revalidatePath("/gestion/propiedades");
+  revalidatePath(`/gestion/propiedades/${existing.id}`);
   await revalidatePublicCatalog(session.organizationId, existing.slug);
   return { ok: true };
 }

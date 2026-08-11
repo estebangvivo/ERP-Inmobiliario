@@ -163,7 +163,8 @@ export function ContractAttachmentsManager({
       <div>
         <h3 className="text-base font-semibold">Archivos del contrato</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Contrato escrito, papeles, recibos de sueldo, etc.
+          Podés sumar o sacar archivos en cualquier momento: contrato escrito,
+          DNI, recibos de sueldo u otros (PDF, imagen o Word, máx. 10MB).
         </p>
       </div>
 

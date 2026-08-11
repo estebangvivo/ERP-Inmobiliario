@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { auth } from "@/lib/auth";
+import { getOrganizationSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasModule } from "@/features/auth/lib/modules";
+import { settlementScopeWhere } from "@/lib/tenant-scope";
 import { SettlementPdfDocument } from "@/components/pdf/settlement-pdf";
 
 type Params = Promise<{ id: string }>;
@@ -10,14 +12,20 @@ export async function GET(
   _request: Request,
   { params }: { params: Params },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const session = await getOrganizationSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (
+    session.organizationRole !== "ADMIN" &&
+    !hasModule(session.allowedModules, "rendiciones")
+  ) {
+    return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
   const { id } = await params;
-  const settlement = await prisma.ownerSettlement.findUnique({
-    where: { id },
+  const settlement = await prisma.ownerSettlement.findFirst({
+    where: { id, AND: [settlementScopeWhere(session)] },
     include: {
       owner: true,
       lines: { orderBy: { createdAt: "asc" } },

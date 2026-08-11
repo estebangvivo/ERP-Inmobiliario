@@ -25,6 +25,10 @@ export const propertyCreateSchema = z.object({
   unitId: z.string().optional().or(z.literal("")),
   ownerId: z.string().optional().or(z.literal("")),
   coverImageUrl: z.string().url().optional().or(z.literal("")),
+  listedPublic: z
+    .union([z.literal("on"), z.literal("true"), z.literal("false"), z.boolean()])
+    .optional()
+    .transform((v) => v === true || v === "on" || v === "true"),
 });
 
 export const propertyUpdateSchema = propertyCreateSchema.extend({

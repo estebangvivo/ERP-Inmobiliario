@@ -14,11 +14,13 @@ import {
   PROPERTY_TYPE_LABELS,
   STATUS_LABELS,
 } from "@/server/validators/property";
+import { PropertyPublicToggle } from "@/components/erp/property-public-toggle";
 
 type SearchParams = Promise<{
   q?: string;
   status?: string;
   operationType?: string;
+  portal?: string;
 }>;
 
 export default async function PropiedadesPage({
@@ -32,6 +34,7 @@ export default async function PropiedadesPage({
   const q = params.q?.trim() ?? "";
   const status = params.status as PropertyStatus | undefined;
   const operationType = params.operationType as OperationType | undefined;
+  const portal = params.portal === "si" || params.portal === "no" ? params.portal : "";
 
   const scope = propertyScopeWhere(session);
   const where: Prisma.PropertyWhereInput = {
@@ -48,6 +51,11 @@ export default async function PropiedadesPage({
         : {},
       status ? { status } : {},
       operationType ? { operationType } : {},
+      portal === "si"
+        ? { publishedAt: { not: null } }
+        : portal === "no"
+          ? { publishedAt: null }
+          : {},
     ],
   };
 
@@ -88,11 +96,16 @@ export default async function PropiedadesPage({
             <option key={o} value={o}>{OPERATION_LABELS[o]}</option>
           ))}
         </Select>
+        <Select name="portal" defaultValue={portal}>
+          <option value="">Portal: todas</option>
+          <option value="si">En el portal</option>
+          <option value="no">No publicadas</option>
+        </Select>
         <Button type="submit" variant="secondary">Filtrar</Button>
       </FilterBar>
 
       <DataTable
-        headers={["Propiedad", "Tipo", "Operación", "Precio", "Estado", "Propietario", ""]}
+        headers={["Propiedad", "Tipo", "Operación", "Precio", "Estado", "Portal", "Propietario", ""]}
         empty={properties.length === 0}
       >
         {properties.map((property) => (
@@ -113,6 +126,18 @@ export default async function PropiedadesPage({
               <Badge variant={property.status === "AVAILABLE" ? "success" : "secondary"}>
                 {STATUS_LABELS[property.status]}
               </Badge>
+            </td>
+            <td className="px-4 py-3">
+              {staff ? (
+                <PropertyPublicToggle
+                  propertyId={property.id}
+                  listedPublic={property.publishedAt != null}
+                />
+              ) : property.publishedAt ? (
+                <Badge variant="success">En portal</Badge>
+              ) : (
+                <span className="text-xs text-[var(--muted-foreground)]">No</span>
+              )}
             </td>
             <td className="px-4 py-3 text-[var(--muted-foreground)]">
               {property.ownerships[0]?.owner.name ?? "—"}

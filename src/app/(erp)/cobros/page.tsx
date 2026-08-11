@@ -70,11 +70,18 @@ export default async function CobrosPage({
         description="Cuotas de alquiler, expensas y registro de pagos."
         actions={
           staff ? (
-            <Link href="/cobros/cuenta-corriente">
-              <Button variant="outline" size="sm">
-                Cuenta corriente
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <a href="/api/export/morosos">
+                <Button variant="outline" size="sm">
+                  Exportar morosos
+                </Button>
+              </a>
+              <Link href="/cobros/cuenta-corriente">
+                <Button variant="outline" size="sm">
+                  Cuenta corriente
+                </Button>
+              </Link>
+            </div>
           ) : undefined
         }
       />

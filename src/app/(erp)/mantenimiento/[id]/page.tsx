@@ -12,17 +12,19 @@ import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
-import { requireStaff } from "@/lib/session";
+import { isStaffRole, requireModule } from "@/lib/session";
+import { workOrderScopeWhere } from "@/lib/tenant-scope";
 
 type Params = Promise<{ id: string }>;
 
 export default async function WorkOrderDetailPage({ params }: { params: Params }) {
-  const session = await requireStaff();
+  const session = await requireModule("mantenimiento");
+  const staff = isStaffRole(session.organizationRole);
   const { id } = await params;
 
   const [workOrder, supplierMembers, bankAccounts] = await Promise.all([
-    prisma.workOrder.findUnique({
-      where: { id },
+    prisma.workOrder.findFirst({
+      where: { id, AND: [workOrderScopeWhere(session)] },
       include: {
         property: true,
         assignee: true,
@@ -71,16 +73,20 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
         }
       />
 
-      <WorkOrderStatusButtons id={workOrder.id} status={workOrder.status} />
+      {staff ? (
+        <WorkOrderStatusButtons id={workOrder.id} status={workOrder.status} />
+      ) : null}
 
       {workOrder.description ? (
         <p className="text-sm text-[var(--muted-foreground)]">{workOrder.description}</p>
       ) : null}
 
-      <SupplierInvoiceForm
-        workOrderId={workOrder.id}
-        suppliers={supplierMembers.map((m) => m.user)}
-      />
+      {staff ? (
+        <SupplierInvoiceForm
+          workOrderId={workOrder.id}
+          suppliers={supplierMembers.map((m) => m.user)}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -111,7 +117,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
                     </p>
                   </div>
                 </div>
-                {!inv.paidAt ? (
+                {staff && !inv.paidAt ? (
                   <PaySupplierInvoiceForm
                     invoiceId={inv.id}
                     amountLabel={formatMoney(inv.amount.toString(), inv.currency)}

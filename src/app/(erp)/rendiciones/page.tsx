@@ -42,6 +42,13 @@ export default async function RendicionesPage() {
       <PageHeader
         title="Rendiciones"
         description="Liquidaciones automáticas a propietarios (alquiler − honorarios − reparaciones − extraordinarias)."
+        actions={
+          staff ? (
+            <a href="/api/export/rendiciones">
+              <Button variant="outline">Exportar CSV</Button>
+            </a>
+          ) : undefined
+        }
       />
 
       {staff ? (

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import {
   contractCreateSchema,
+  contractGuarantorsSchema,
   contractUpdateSchema,
 } from "@/server/validators/contract";
 import {
@@ -296,6 +297,75 @@ export async function updateContractAction(
   revalidatePath(`/contratos/${d.id}`);
   revalidatePath("/gestion/propiedades");
   return { ok: true };
+}
+
+export async function updateContractGuarantorsAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await requireStaff();
+  const parsed = contractGuarantorsSchema.safeParse({
+    id: String(formData.get("id") ?? ""),
+    guarantorIds: parseGuarantorIds(formData),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const { id, guarantorIds } = parsed.data;
+  const contract = await prisma.contract.findFirst({
+    where: { id, organizationId: session.organizationId },
+    select: {
+      id: true,
+      parties: { select: { id: true, userId: true, role: true } },
+    },
+  });
+  if (!contract) {
+    return { ok: false, error: "Contrato no encontrado." };
+  }
+
+  const tenantId = contract.parties.find((p) => p.role === "TENANT")?.userId;
+  if (tenantId && guarantorIds.includes(tenantId)) {
+    return {
+      ok: false,
+      error: "El inquilino no puede figurar también como garante.",
+    };
+  }
+  const ownerId = contract.parties.find((p) => p.role === "OWNER")?.userId;
+  if (ownerId && guarantorIds.includes(ownerId)) {
+    return {
+      ok: false,
+      error: "El propietario no puede figurar también como garante.",
+    };
+  }
+
+  const current = contract.parties.filter((p) => p.role === "GUARANTOR");
+  const currentIds = new Set(current.map((p) => p.userId));
+  const nextIds = new Set(guarantorIds);
+  const toRemove = current.filter((p) => !nextIds.has(p.userId));
+  const toAdd = guarantorIds.filter((userId) => !currentIds.has(userId));
+
+  await prisma.$transaction([
+    ...toRemove.map((p) =>
+      prisma.contractParty.delete({ where: { id: p.id } }),
+    ),
+    ...toAdd.map((userId) =>
+      prisma.contractParty.create({
+        data: { contractId: contract.id, userId, role: "GUARANTOR" },
+      }),
+    ),
+  ]);
+
+  revalidatePath("/contratos");
+  revalidatePath(`/contratos/${contract.id}`);
+  const count = guarantorIds.length;
+  return {
+    ok: true,
+    message:
+      count === 0
+        ? "Contrato sin garantes."
+        : `Se guardaron ${count} garante${count === 1 ? "" : "s"}.`,
+  };
 }
 
 export async function updateDepositAction(

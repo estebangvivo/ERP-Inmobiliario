@@ -24,9 +24,11 @@ const payInitial: DocActionResult | null = null;
 export function WorkOrderForm({
   properties,
   suppliers,
+  portalMode = false,
 }: {
   properties: { id: string; title: string }[];
   suppliers: { id: string; name: string }[];
+  portalMode?: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(createWorkOrderAction, initial);
@@ -39,7 +41,14 @@ export function WorkOrderForm({
     <form action={formAction} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2">
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="title">Título</Label>
-        <Input id="title" name="title" required placeholder="Reparación de cañería" />
+        <Input
+          id="title"
+          name="title"
+          required
+          placeholder={
+            portalMode ? "Perdida de agua en el baño" : "Reparación de cañería"
+          }
+        />
       </div>
       <div className="space-y-1">
         <Label htmlFor="propertyId">Propiedad</Label>
@@ -50,30 +59,38 @@ export function WorkOrderForm({
           ))}
         </Select>
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="assigneeId">Proveedor</Label>
-        <Select id="assigneeId" name="assigneeId" defaultValue="">
-          <option value="">Sin asignar</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </Select>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="costBearer">Cargo</Label>
-        <Select id="costBearer" name="costBearer" defaultValue="OWNER_DEDUCTIBLE">
-          <option value="OWNER_DEDUCTIBLE">Deducible propietario</option>
-          <option value="TENANT">Inquilino</option>
-          <option value="AGENCY">Agencia</option>
-        </Select>
-      </div>
+      {portalMode ? null : (
+        <>
+          <div className="space-y-1">
+            <Label htmlFor="assigneeId">Proveedor</Label>
+            <Select id="assigneeId" name="assigneeId" defaultValue="">
+              <option value="">Sin asignar</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="costBearer">Cargo</Label>
+            <Select id="costBearer" name="costBearer" defaultValue="OWNER_DEDUCTIBLE">
+              <option value="OWNER_DEDUCTIBLE">Deducible propietario</option>
+              <option value="TENANT">Inquilino</option>
+              <option value="AGENCY">Agencia</option>
+            </Select>
+          </div>
+        </>
+      )}
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="description">Detalle</Label>
         <Textarea id="description" name="description" />
       </div>
       <div>
         <Button type="submit" disabled={pending}>
-          {pending ? "Creando…" : "Crear orden de trabajo"}
+          {pending
+            ? "Enviando…"
+            : portalMode
+              ? "Enviar reclamo"
+              : "Crear orden de trabajo"}
         </Button>
       </div>
       {state && !state.ok ? (

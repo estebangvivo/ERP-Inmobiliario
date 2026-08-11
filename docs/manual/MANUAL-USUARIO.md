@@ -93,13 +93,15 @@ Ajustes → Usuarios → Edificios/Unidades → Propiedades
 
 ![Dashboard](images/02-dashboard.png)
 
-El dashboard muestra un resumen del período: propiedades, contratos activos, cuotas, consultas nuevas, órdenes abiertas y cobrado.
+El dashboard cambia según el rol:
+
+- **Staff:** al empezar el día ves **Hoy cobré**, **Hoy pagué** (órdenes de pago) y **Qué vence** (cuotas vencidas o del día). Abajo siguen las métricas del mes.
+- **Inquilino / propietario:** es tu portal. Ves contratos, saldo o rendiciones, recibos PDF y podés cargar un **reclamo de mantenimiento**.
 
 **Cómo usarlo**
-- Hacé clic en las tarjetas para ir al módulo correspondiente.
-- Revisá cuotas vencidas, **por vencer (7 días)** y consultas nuevas al empezar el día.
-- Staff ve **Pendientes de rendir** cuando hay cobros del mes sin liquidación al propietario.
-- El contenido se filtra según tu rol (un propietario no ve lo mismo que un agente).
+- Hacé clic en las tarjetas o filas para ir al módulo.
+- Staff: priorizá lo que vence y los cobros/pagos del día antes de abrir Tesorería o Cuenta corriente.
+- Inquilino: descargá el PDF de las cuotas pagadas y avisá roturas desde el mismo inicio.
 
 ---
 
@@ -184,20 +186,18 @@ Los **edificios** agrupan **unidades** (deptos, locales) con un **coeficiente** 
 1. **Propiedades** → **Nueva propiedad**.
 2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio, ubicación.
 3. Asigná **propietario** y, si corresponde, la **unidad** del edificio.
-4. Definí el **estado**. Para aparecer en el portal usá **Disponible** (también se publican las **Reservadas**).
+4. Definí el **estado** y, si querés mostrarla en el sitio público, marcá **Publicar en el portal**.
 5. Guardá. En la edición podés subir **fotos** y video.
 
 ### Filtros
 
-Usá búsqueda por título/dirección/ciudad, estado u operación para encontrar inmuebles rápido.
+Usá búsqueda por título/dirección/ciudad, estado, operación o si está en el portal.
 
 ### Relación con el portal
 
-| Estado | ¿Sale en el portal? |
-|--------|---------------------|
-| Disponible | Sí |
-| Reservada | Sí |
-| Alquilada / Borrador / Inactiva | No |
+Solo salen en `/i/{tu-slug}/propiedades` las propiedades **marcadas para publicar** y que además estén **Disponible** o **Reservada**.
+
+En el listado podés tildar o destildar **En portal** sin abrir la ficha. Las alquiladas, vendidas, en borrador o inactivas no se muestran aunque estén marcadas.
 
 ---
 
@@ -239,6 +239,8 @@ En la lista de Contratos (staff):
 - Ves el **alquiler vigente** (incluye ajustes ya aplicados).
 - Staff puede **aplicar un ajuste** a mano (o dejar el % vacío para tomar índices cargados).
 - Card de **Depósito / garantía**: en custodia, devolver, o **Aplicar a saldo**.
+- **Garantes:** en un contrato ya creado podés cambiar la cantidad, agregar, reemplazar o quitar garantes (y dar de alta uno nuevo con DNI).
+- **Archivos del contrato:** adjuntá o eliminá contrato escrito, DNI, recibos de sueldo u otros en cualquier momento.
 - Al pasar a **Rescindido** o **Vencido**, la propiedad vuelve a Disponible (si no hay otro contrato activo).
 
 **Tips**
@@ -285,6 +287,8 @@ Los ledgers no se mezclan: un período puede tener documentos de Expensas y de S
 ![Cobros](images/08-cobros.png)
 
 Acá viven las **cuotas** (alquiler + expensas + servicios + honorarios + mora) y el registro de pagos.
+
+Staff puede **Exportar morosos** (CSV) desde Cobros o Cuenta corriente.
 
 ### Generar cuotas del período
 
@@ -381,6 +385,9 @@ Liquidación al propietario del período:
 3. **Emitir** cuando esté correcta.
 4. **Marcar pagada** al hacer la transferencia (podés cargar referencia).
 5. Descargá el **PDF** para enviar al propietario.
+6. Staff: **Exportar CSV** de todas las rendiciones.
+
+El propietario también entra a sus rendiciones desde el dashboard y descarga el PDF.
 
 También podés **Generar todas (ARS)** para crear borradores de todos los propietarios del período.
 
@@ -441,9 +448,11 @@ No reemplaza Visitas ni Turnero: es un tablero para ver ambos juntos. Links ráp
 
 Pipeline para propiedades en **Venta** o **Ambos**:
 
-1. Creá una **oportunidad** (comprador, oferta, seña).
-2. Mové las etapas: Interés → Negociación → Seña/reserva → Vendida (o Perdida).
-3. Al pasar a **Seña**, la propiedad pasa a **Reservada**; al **Vendida**, a **SOLD** (sale del portal).
+1. Creá una **oportunidad** (comprador, oferta, seña, % de comisión y fecha de boleto).
+2. Marcá **Seña cobrada** cuando el dinero entra.
+3. Mové las etapas: Interés → Negociación → Seña/reserva → Vendida (o Perdida).
+4. Al pasar a **Seña**, la propiedad pasa a **Reservada**; al **Vendida**, a **SOLD** (sale del portal).
+5. La comisión se calcula como % sobre la oferta.
 
 Desde la ficha de una propiedad de venta: botón **Crear oportunidad**.
 

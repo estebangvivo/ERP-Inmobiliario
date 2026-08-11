@@ -6,16 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
-import { requireStaff } from "@/lib/session";
+import { isStaffRole, requireModule } from "@/lib/session";
+import { settlementScopeWhere } from "@/lib/tenant-scope";
 
 type Params = Promise<{ id: string }>;
 
 export default async function RendicionDetailPage({ params }: { params: Params }) {
-  const session = await requireStaff();
+  const session = await requireModule("rendiciones");
+  const staff = isStaffRole(session.organizationRole);
   const { id } = await params;
 
-  const settlement = await prisma.ownerSettlement.findUnique({
-    where: { id },
+  const settlement = await prisma.ownerSettlement.findFirst({
+    where: { id, AND: [settlementScopeWhere(session)] },
     include: {
       owner: true,
       lines: { orderBy: { createdAt: "asc" } },
@@ -53,16 +55,18 @@ export default async function RendicionDetailPage({ params }: { params: Params }
         }
       />
 
-      <SettlementActions
-        id={settlement.id}
-        status={settlement.status}
-        currency={settlement.currency}
-        bankAccounts={bankAccounts.map((b) => ({
-          id: b.id,
-          currency: b.currency,
-          label: `${b.name} · ${b.bankName} (${b.currency})`,
-        }))}
-      />
+      {staff ? (
+        <SettlementActions
+          id={settlement.id}
+          status={settlement.status}
+          currency={settlement.currency}
+          bankAccounts={bankAccounts.map((b) => ({
+            id: b.id,
+            currency: b.currency,
+            label: `${b.name} · ${b.bankName} (${b.currency})`,
+          }))}
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Stat

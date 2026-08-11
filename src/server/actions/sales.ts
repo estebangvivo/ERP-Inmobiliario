@@ -73,6 +73,11 @@ export async function createSaleDealAction(
   const reservationAmount = formData.get("reservationAmount")
     ? Number(formData.get("reservationAmount"))
     : null;
+  const commissionPct = formData.get("commissionPct")
+    ? Number(formData.get("commissionPct"))
+    : null;
+  const deedDate = String(formData.get("deedDate") ?? "").trim();
+  const reservationPaid = formData.get("reservationPaid") === "on";
   const notes = String(formData.get("notes") ?? "").trim();
   const leadId = String(formData.get("leadId") ?? "").trim();
 
@@ -105,6 +110,13 @@ export async function createSaleDealAction(
       offerAmount: offerAmount && offerAmount > 0 ? offerAmount : null,
       reservationAmount:
         reservationAmount && reservationAmount > 0 ? reservationAmount : null,
+      reservationPaid,
+      commissionPct: commissionPct && commissionPct > 0 ? commissionPct : null,
+      commissionAmount:
+        commissionPct && commissionPct > 0 && offerAmount && offerAmount > 0
+          ? Math.round(((offerAmount * commissionPct) / 100) * 100) / 100
+          : null,
+      deedDate: deedDate ? new Date(deedDate) : null,
       currency: property.currency,
       notes: notes || null,
       leadId: leadId || null,
@@ -170,6 +182,11 @@ export async function updateSaleDealAction(
   const reservationAmount = formData.get("reservationAmount")
     ? Number(formData.get("reservationAmount"))
     : null;
+  const commissionPct = formData.get("commissionPct")
+    ? Number(formData.get("commissionPct"))
+    : null;
+  const deedDate = String(formData.get("deedDate") ?? "").trim();
+  const reservationPaid = formData.get("reservationPaid") === "on";
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!id || !buyerName) {
@@ -191,6 +208,13 @@ export async function updateSaleDealAction(
       offerAmount: offerAmount && offerAmount > 0 ? offerAmount : null,
       reservationAmount:
         reservationAmount && reservationAmount > 0 ? reservationAmount : null,
+      reservationPaid,
+      commissionPct: commissionPct && commissionPct > 0 ? commissionPct : null,
+      commissionAmount:
+        commissionPct && commissionPct > 0 && offerAmount && offerAmount > 0
+          ? Math.round(((offerAmount * commissionPct) / 100) * 100) / 100
+          : null,
+      deedDate: deedDate ? new Date(deedDate) : null,
       notes: notes || null,
       reservedAt:
         stage === "RESERVED" ? deal.reservedAt ?? new Date() : deal.reservedAt,

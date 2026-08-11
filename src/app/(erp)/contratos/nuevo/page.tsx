@@ -1,30 +1,9 @@
 import { PageHeader } from "@/components/erp/page-chrome";
 import { ContractCreateForm } from "@/components/erp/contract-form";
-import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import { propertyScopeWhere } from "@/lib/tenant-scope";
-
-async function membersAsUsers(
-  organizationId: string,
-  roles: ("OWNER" | "TENANT" | "GUARANTOR" | "VIEWER" | "AGENT")[],
-) {
-  const rows = await prisma.organizationMember.findMany({
-    where: {
-      organizationId,
-      role: { in: roles },
-      user: {
-        isActive: true,
-        ...excludePlatformSuperadminFromUser(),
-      },
-    },
-    include: {
-      user: { select: { id: true, name: true, documentNumber: true } },
-    },
-    orderBy: { user: { name: "asc" } },
-  });
-  return rows.map((r) => r.user);
-}
+import { listOrgPeople } from "@/server/queries/org-people";
 
 export default async function NuevoContratoPage() {
   const session = await requireStaff();
@@ -52,9 +31,9 @@ export default async function NuevoContratoPage() {
         },
       },
     }),
-    membersAsUsers(orgId, ["OWNER"]),
-    membersAsUsers(orgId, ["TENANT"]),
-    membersAsUsers(orgId, ["GUARANTOR", "OWNER", "TENANT", "VIEWER", "AGENT"]),
+    listOrgPeople(orgId, ["OWNER"]),
+    listOrgPeople(orgId, ["TENANT"]),
+    listOrgPeople(orgId, ["GUARANTOR", "OWNER", "TENANT", "VIEWER", "AGENT"]),
   ]);
 
   return (

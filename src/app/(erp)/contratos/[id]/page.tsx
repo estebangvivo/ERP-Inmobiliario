@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/erp/page-chrome";
-import { ContractEditForm } from "@/components/erp/contract-form";
+import {
+  ContractEditForm,
+  ContractGuarantorsForm,
+} from "@/components/erp/contract-form";
 import { ContractAttachmentsManager } from "@/components/erp/contract-attachments";
 import { ApplyAdjustmentForm } from "@/components/erp/apply-adjustment-form";
 import { DepositCard } from "@/components/erp/deposit-card";
@@ -21,6 +24,7 @@ import { requireModule, isStaffRole } from "@/lib/session";
 import { contractScopeWhere } from "@/lib/tenant-scope";
 import { getCurrentRent } from "@/server/services/billing";
 import { hasModule } from "@/features/auth/lib/modules";
+import { listOrgPeople } from "@/server/queries/org-people";
 
 type Params = Promise<{ id: string }>;
 
@@ -44,6 +48,27 @@ export default async function ContratoDetailPage({ params }: { params: Params })
     },
   });
   if (!contract) notFound();
+
+  const guarantorParties = contract.parties.filter((p) => p.role === "GUARANTOR");
+  const catalogGuarantors = staff
+    ? await listOrgPeople(session.organizationId, [
+        "GUARANTOR",
+        "OWNER",
+        "TENANT",
+        "VIEWER",
+        "AGENT",
+      ])
+    : [];
+  const guarantorOptions = [
+    ...catalogGuarantors,
+    ...guarantorParties.map((p) => ({
+      id: p.user.id,
+      name: p.user.name,
+      documentNumber: p.user.documentNumber,
+    })),
+  ].filter(
+    (person, index, all) => all.findIndex((p) => p.id === person.id) === index,
+  );
 
   const currentRent = await getCurrentRent(contract.id);
   const currentRentLabel = formatMoney(String(currentRent), contract.currency);
@@ -183,6 +208,14 @@ export default async function ContratoDetailPage({ params }: { params: Params })
         <ApplyAdjustmentForm
           contractId={contract.id}
           currentRentLabel={currentRentLabel}
+        />
+      ) : null}
+
+      {staff ? (
+        <ContractGuarantorsForm
+          contractId={contract.id}
+          initialIds={guarantorParties.map((p) => p.userId)}
+          guarantors={guarantorOptions}
         />
       ) : null}
 

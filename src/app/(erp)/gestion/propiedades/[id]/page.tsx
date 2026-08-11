@@ -100,6 +100,7 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
           unitId: property.unitId,
           ownerId: property.ownerships[0]?.ownerId ?? null,
           coverImageUrl: property.images.find((i) => i.isCover)?.url ?? null,
+          listedPublic: property.publishedAt != null,
         }}
       />
     </div>

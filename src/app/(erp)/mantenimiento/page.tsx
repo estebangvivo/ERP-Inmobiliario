@@ -54,13 +54,18 @@ export default async function MantenimientoPage() {
     <div className="space-y-6">
       <PageHeader
         title="Obras y Mantenimiento"
-        description="Órdenes de trabajo y facturas de proveedores."
+        description={
+          staff
+            ? "Órdenes de trabajo y facturas de proveedores."
+            : "Consultá tus reclamos o cargá uno nuevo."
+        }
       />
 
-      {staff ? (
+      {properties.length > 0 ? (
         <WorkOrderForm
           properties={properties}
           suppliers={suppliers.map((s) => s.user)}
+          portalMode={!staff}
         />
       ) : null}
 

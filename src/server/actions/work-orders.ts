@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { issuePaymentOrderForSupplierInvoice } from "@/features/treasury/lib/issue-docs-from-billing";
 import { prisma } from "@/lib/prisma";
-import { requireStaff } from "@/lib/session";
+import { isStaffRole, requireModule, requireStaff } from "@/lib/session";
+import { propertyScopeWhere } from "@/lib/tenant-scope";
 import type { DocActionResult } from "@/server/actions/billing";
 import type { ActionResult } from "@/server/actions/users";
 
@@ -24,23 +25,44 @@ export async function createWorkOrderAction(
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireStaff();
+  const session = await requireModule("mantenimiento");
+  const staff = isStaffRole(session.organizationRole);
   const propertyId = String(formData.get("propertyId") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "");
-  const costBearer = String(formData.get("costBearer") ?? "OWNER_DEDUCTIBLE") as CostBearer;
-  const assigneeId = String(formData.get("assigneeId") ?? "");
-  const contractId = String(formData.get("contractId") ?? "");
+  let costBearer = String(
+    formData.get("costBearer") ?? "OWNER_DEDUCTIBLE",
+  ) as CostBearer;
+  let assigneeId = String(formData.get("assigneeId") ?? "");
+  let contractId = String(formData.get("contractId") ?? "");
 
   if (!propertyId || !title) {
     return { ok: false, error: "Propiedad y título son obligatorios" };
   }
 
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, organizationId: session.organizationId },
+    where: { id: propertyId, AND: [propertyScopeWhere(session)] },
   });
   if (!property) {
     return { ok: false, error: "Propiedad no encontrada." };
+  }
+
+  if (!staff) {
+    assigneeId = "";
+    costBearer =
+      session.organizationRole === "TENANT" ? "TENANT" : "OWNER_DEDUCTIBLE";
+    if (!contractId) {
+      const linked = await prisma.contract.findFirst({
+        where: {
+          propertyId,
+          organizationId: session.organizationId,
+          status: "ACTIVE",
+          parties: { some: { userId: session.user.id } },
+        },
+        select: { id: true },
+      });
+      contractId = linked?.id ?? "";
+    }
   }
 
   if (assigneeId) {

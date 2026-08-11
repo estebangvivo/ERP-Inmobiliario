@@ -116,9 +116,14 @@ export default async function ContratosPage({
         description="Alquileres activos, partes y condiciones de ajuste."
         actions={
           staff ? (
-            <Link href="/contratos/nuevo">
-              <Button>Nuevo contrato</Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <a href="/api/export/contratos">
+                <Button variant="outline">Exportar CSV</Button>
+              </a>
+              <Link href="/contratos/nuevo">
+                <Button>Nuevo contrato</Button>
+              </Link>
+            </div>
           ) : undefined
         }
       />

@@ -21,6 +21,8 @@ import {
 import { hasModule } from "@/features/auth/lib/modules";
 import { syncOverdueBills } from "@/server/services/billing";
 import { listOwnersPendingSettlement } from "@/server/services/monthly-job";
+import { getStaffDaySnapshot } from "@/server/queries/ops-snapshot";
+import { PortalHome, StaffOpsBoard } from "@/components/erp/portal-home";
 
 const DUE_SOON_DAYS = 7;
 
@@ -199,6 +201,13 @@ export default async function DashboardPage() {
         })
       : [];
 
+  const daySnapshot = staff
+    ? await getStaffDaySnapshot(session.organizationId).catch((error) => {
+        console.error("dashboard ops snapshot", error);
+        return null;
+      })
+    : null;
+
   const collectedByCurrency = paymentsThisMonth.reduce<Record<string, number>>(
     (acc, p) => {
       acc[p.currency] = (acc[p.currency] ?? 0) + Number(p.amount);
@@ -254,6 +263,22 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {staff && daySnapshot ? (
+        <StaffOpsBoard
+          collected={daySnapshot.collected}
+          paidOut={daySnapshot.paidOut}
+          paymentsToday={daySnapshot.paymentsToday}
+          ordersToday={daySnapshot.ordersToday}
+          dueBills={daySnapshot.dueBills}
+        />
+      ) : null}
+
+      {role === "TENANT" || role === "OWNER" ? (
+        <PortalHome session={session} />
+      ) : null}
+
+      {staff ? (
+        <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {canSeeProperties ? (
           <StatCard
@@ -432,6 +457,8 @@ export default async function DashboardPage() {
           </Card>
         ) : null}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }

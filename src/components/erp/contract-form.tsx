@@ -21,6 +21,7 @@ import {
 import {
   createContractAction,
   updateContractAction,
+  updateContractGuarantorsAction,
 } from "@/server/actions/contracts";
 import type { ActionResult } from "@/server/actions/users";
 import { CONTRACT_STATUS_LABELS } from "@/lib/labels";
@@ -43,6 +44,58 @@ type PropertyOpt = {
 };
 
 type PayerPreset = "OWNER" | "TENANT" | "SPLIT";
+
+function GuarantorFields({
+  count,
+  ids,
+  options,
+  onCountChange,
+  onIdChange,
+}: {
+  count: number;
+  ids: string[];
+  options: Person[];
+  onCountChange: (count: number) => void;
+  onIdChange: (index: number, value: string) => void;
+}) {
+  return (
+    <div className="space-y-2 sm:col-span-2">
+      <Label htmlFor="guarantorCount">Cantidad de garantes</Label>
+      <Select
+        id="guarantorCount"
+        value={String(count)}
+        onChange={(e) => onCountChange(Number(e.target.value))}
+      >
+        {[0, 1, 2, 3, 4, 5].map((n) => (
+          <option key={n} value={n}>
+            {n === 0 ? "Sin garantes" : n}
+          </option>
+        ))}
+      </Select>
+      {count > 0 ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {ids.map((id, index) => (
+            <div key={index} className="space-y-2">
+              <Label htmlFor={`guarantorId-${index}`}>
+                Garante {index + 1}
+              </Label>
+              <PartyPersonSearchSelect
+                id={`guarantorId-${index}`}
+                name="guarantorId"
+                kind="GUARANTOR"
+                value={id}
+                onChange={(value) => onIdChange(index, value)}
+                options={options}
+                emptyLabel="Seleccionar…"
+                required
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function CommissionFields({
   defaultMode = "PERCENT_RENT",
@@ -324,45 +377,17 @@ export function ContractCreateForm({
             required
           />
         </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="guarantorCount">Cantidad de garantes</Label>
-          <Select
-            id="guarantorCount"
-            value={String(guarantorCount)}
-            onChange={(e) => setGuarantorCount(Number(e.target.value))}
-          >
-            {[0, 1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? "Sin garantes" : n}
-              </option>
-            ))}
-          </Select>
-          {guarantorCount > 0 ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {guarantorIds.map((id, index) => (
-                <div key={index} className="space-y-2">
-                  <Label htmlFor={`guarantorId-${index}`}>
-                    Garante {index + 1}
-                  </Label>
-                  <PartyPersonSearchSelect
-                    id={`guarantorId-${index}`}
-                    name="guarantorId"
-                    kind="GUARANTOR"
-                    value={id}
-                    onChange={(value) =>
-                      setGuarantorIds((prev) =>
-                        prev.map((v, i) => (i === index ? value : v)),
-                      )
-                    }
-                    options={guarantors}
-                    emptyLabel="Seleccionar…"
-                    required
-                  />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <GuarantorFields
+          count={guarantorCount}
+          ids={guarantorIds}
+          options={guarantors}
+          onCountChange={setGuarantorCount}
+          onIdChange={(index, value) =>
+            setGuarantorIds((prev) =>
+              prev.map((v, i) => (i === index ? value : v)),
+            )
+          }
+        />
         <ContractCreateAttachmentsFields
           rows={attachRows}
           onChange={setAttachRows}
@@ -525,7 +550,6 @@ export function ContractEditForm({
 
   useEffect(() => {
     if (state?.ok) {
-      router.push("/contratos");
       router.refresh();
     }
   }, [state, router]);
@@ -535,6 +559,7 @@ export function ContractEditForm({
       action={formAction}
       className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6"
     >
+      <h3 className="text-base font-semibold">Datos del contrato</h3>
       <input type="hidden" name="id" value={contract.id} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -607,8 +632,87 @@ export function ContractEditForm({
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)]">{state.error}</p>
       ) : null}
+      {state?.ok ? (
+        <p className="text-sm text-emerald-700">Cambios guardados.</p>
+      ) : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Guardando…" : "Guardar cambios"}
+      </Button>
+    </form>
+  );
+}
+
+export function ContractGuarantorsForm({
+  contractId,
+  initialIds,
+  guarantors,
+}: {
+  contractId: string;
+  initialIds: string[];
+  guarantors: Person[];
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(
+    updateContractGuarantorsAction,
+    initial,
+  );
+  const [guarantorCount, setGuarantorCount] = useState(
+    Math.min(5, initialIds.length),
+  );
+  const [guarantorIds, setGuarantorIds] = useState<string[]>(
+    initialIds.slice(0, 5),
+  );
+
+  const initialKey = initialIds.join(",");
+  useEffect(() => {
+    const ids = initialKey ? initialKey.split(",") : [];
+    setGuarantorCount(Math.min(5, ids.length));
+    setGuarantorIds(ids.slice(0, 5));
+  }, [initialKey]);
+
+  useEffect(() => {
+    setGuarantorIds((prev) => {
+      const next = prev.slice(0, guarantorCount);
+      while (next.length < guarantorCount) next.push("");
+      return next;
+    });
+  }, [guarantorCount]);
+
+  useEffect(() => {
+    if (state?.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <form
+      action={formAction}
+      className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6"
+    >
+      <input type="hidden" name="id" value={contractId} />
+      <div>
+        <h3 className="text-base font-semibold">Garantes</h3>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Podés agregar, cambiar o quitar garantes de un contrato ya creado.
+        </p>
+      </div>
+      <GuarantorFields
+        count={guarantorCount}
+        ids={guarantorIds}
+        options={guarantors}
+        onCountChange={setGuarantorCount}
+        onIdChange={(index, value) =>
+          setGuarantorIds((prev) =>
+            prev.map((v, i) => (i === index ? value : v)),
+          )
+        }
+      />
+      {state && !state.ok ? (
+        <p className="text-sm text-[var(--destructive)]">{state.error}</p>
+      ) : null}
+      {state?.ok ? (
+        <p className="text-sm text-emerald-700">{state.message}</p>
+      ) : null}
+      <Button type="submit" disabled={pending}>
+        {pending ? "Guardando…" : "Guardar garantes"}
       </Button>
     </form>
   );

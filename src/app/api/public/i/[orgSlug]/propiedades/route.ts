@@ -9,9 +9,26 @@ type Params = Promise<{ orgSlug: string }>;
 
 function absoluteUrl(origin: string, url: string | null | undefined) {
   if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/")) return `${origin}${url}`;
-  return url;
+  const publicOrigin =
+    process.env.APP_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    origin;
+
+  if (url.startsWith("/")) return `${publicOrigin}${url}`;
+
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === "0.0.0.0" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1"
+    ) {
+      return `${publicOrigin}${parsed.pathname}${parsed.search}`;
+    }
+    return url;
+  } catch {
+    return url;
+  }
 }
 
 export async function GET(
@@ -88,7 +105,7 @@ export async function GET(
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
     },
   });
 }

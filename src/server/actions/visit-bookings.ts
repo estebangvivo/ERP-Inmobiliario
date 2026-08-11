@@ -125,17 +125,14 @@ export async function getAvailableVisitDays(
   });
 }
 
-export async function bookPropertyVisitAction(
-  _prev: VisitActionResult | null,
-  formData: FormData,
-): Promise<VisitActionResult> {
-  const parsed = bookSchema.safeParse({
-    propertyId: formData.get("propertyId"),
-    startsAt: formData.get("startsAt"),
-    name: formData.get("name"),
-    email: formData.get("email"),
-    phone: formData.get("phone") || undefined,
-  });
+export async function bookPropertyVisit(input: {
+  propertyId: string;
+  startsAt: string;
+  name: string;
+  email: string;
+  phone?: string;
+}): Promise<VisitActionResult> {
+  const parsed = bookSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
@@ -234,12 +231,27 @@ export async function bookPropertyVisitAction(
       message: `Visita reservada para el ${display}.`,
     };
   } catch (error) {
-    console.error("bookPropertyVisitAction", error);
+    console.error("bookPropertyVisit", error);
     return {
       ok: false,
       error: "No se pudo reservar. El horario puede haber sido tomado.",
     };
   }
+}
+
+export async function bookPropertyVisitAction(
+  _prev: VisitActionResult | null,
+  formData: FormData,
+): Promise<VisitActionResult> {
+  return bookPropertyVisit({
+    propertyId: String(formData.get("propertyId") ?? ""),
+    startsAt: String(formData.get("startsAt") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    phone: formData.get("phone")
+      ? String(formData.get("phone"))
+      : undefined,
+  });
 }
 
 export type VisitBookingRow = {

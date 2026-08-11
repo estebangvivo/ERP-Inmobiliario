@@ -9,6 +9,7 @@ import {
   publicPropertyWhereForOrg,
 } from "@/lib/public-org";
 import { PropertyCardPrices } from "@/components/storefront/property-prices";
+import { propertyImageSrc } from "@/lib/property-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +102,7 @@ export default async function TenantPropiedadesPage({
       where,
       include: {
         images: {
+          omit: { data: true },
           orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }],
           take: 1,
         },
@@ -179,9 +181,9 @@ export default async function TenantPropiedadesPage({
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {properties.map((property) => {
-            const cover =
-              property.images[0]?.url ??
-              "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800";
+            const cover = property.images[0]
+              ? propertyImageSrc(property.images[0])
+              : "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800";
             return (
               <Link
                 key={property.id}

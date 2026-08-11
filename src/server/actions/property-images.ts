@@ -65,22 +65,21 @@ export async function uploadPropertyImagesAction(
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const stored = await storage.put({
-      buffer,
-      filename: file.name,
-      contentType: file.type,
-      folder: `properties/${propertyId}`,
-    });
-
     const isCover = !coverAssigned;
-    await prisma.propertyImage.create({
+    const created = await prisma.propertyImage.create({
       data: {
         propertyId,
-        url: stored.url,
+        url: "",
         alt: property.title,
         sortOrder,
         isCover,
+        contentType: file.type || "image/jpeg",
+        data: buffer,
       },
+    });
+    await prisma.propertyImage.update({
+      where: { id: created.id },
+      data: { url: `/api/media/property-images/${created.id}` },
     });
     if (isCover) coverAssigned = true;
     sortOrder += 1;
@@ -98,8 +97,10 @@ export async function deletePropertyImageAction(imageId: string): Promise<Action
   });
   if (!image) return { ok: false, error: "Imagen no encontrada" };
 
-  const key = image.url.replace(/^\/uploads\//, "");
-  await storage.delete(key);
+  if (image.url.startsWith("/uploads/")) {
+    const key = image.url.replace(/^\/uploads\//, "");
+    await storage.delete(key);
+  }
   await prisma.propertyImage.delete({ where: { id: imageId } });
 
   if (image.isCover) {

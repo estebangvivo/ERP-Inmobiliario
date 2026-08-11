@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,9 +9,30 @@ import {
   setCoverPropertyImageAction,
   uploadPropertyImagesAction,
 } from "@/server/actions/property-images";
+import { propertyImageSrc } from "@/lib/property-image";
 import type { ActionResult } from "@/server/actions/users";
 
 const initial: ActionResult | null = null;
+
+function GalleryThumb({ src, alt }: { src: string; alt: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <div className="flex aspect-[4/3] items-center justify-center bg-[var(--muted)] px-3 text-center text-xs text-[var(--muted-foreground)]">
+        No se puede mostrar. Eliminala y volvé a subirla.
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className="aspect-[4/3] w-full bg-[var(--muted)] object-cover"
+      onError={() => setBroken(true)}
+    />
+  );
+}
 
 type ImageItem = {
   id: string;
@@ -46,6 +67,7 @@ export function PropertyImagesManager({
         <h3 className="text-lg font-semibold">Galería de fotos</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
           Subí JPG, PNG o WebP (máx. 8MB c/u). La primera queda como portada.
+          Las fotos se guardan en la base (no en el disco del servidor).
         </p>
       </div>
 
@@ -85,10 +107,7 @@ export function PropertyImagesManager({
               key={img.id}
               className="overflow-hidden rounded-lg border border-[var(--border)]"
             >
-              <div
-                className="aspect-[4/3] bg-cover bg-center"
-                style={{ backgroundImage: `url(${img.url})` }}
-              />
+              <GalleryThumb src={propertyImageSrc(img)} alt={img.alt ?? ""} />
               <div className="flex flex-wrap items-center gap-2 p-2">
                 {img.isCover ? (
                   <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">

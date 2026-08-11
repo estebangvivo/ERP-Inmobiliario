@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { propertyImageSrc } from "@/lib/property-image";
 
 type ImageItem = { id: string; url: string; alt: string | null };
 
@@ -28,7 +29,9 @@ export function PropertyGallery({
     <div className="space-y-3">
       <div
         className="aspect-[16/10] overflow-hidden rounded-xl bg-cover bg-center"
-        style={{ backgroundImage: `url(${items[active]?.url})` }}
+        style={{
+          backgroundImage: `url(${propertyImageSrc(items[active]!)})`,
+        }}
         role="img"
         aria-label={items[active]?.alt ?? title}
       />
@@ -43,7 +46,7 @@ export function PropertyGallery({
                 "h-16 w-24 shrink-0 rounded-md bg-cover bg-center border-2",
                 i === active ? "border-[var(--primary)]" : "border-transparent opacity-80",
               )}
-              style={{ backgroundImage: `url(${img.url})` }}
+              style={{ backgroundImage: `url(${propertyImageSrc(img)})` }}
               aria-label={`Foto ${i + 1}`}
             />
           ))}

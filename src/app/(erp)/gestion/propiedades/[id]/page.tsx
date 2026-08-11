@@ -19,7 +19,10 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
       where: { id },
       include: {
         ownerships: true,
-        images: { orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] },
+        images: {
+          omit: { data: true },
+          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }],
+        },
         unit: { include: { complex: true } },
       },
     }),

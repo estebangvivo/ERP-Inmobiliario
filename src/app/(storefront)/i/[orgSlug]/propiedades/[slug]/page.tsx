@@ -62,7 +62,10 @@ export default async function TenantPropertyDetailPage({
   const property = await prisma.property.findFirst({
     where: propertyWhere(org.id, slug),
     include: {
-      images: { orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] },
+      images: {
+          omit: { data: true },
+          orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }],
+        },
       unit: { include: { complex: true } },
     },
   });

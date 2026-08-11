@@ -337,14 +337,17 @@ model Property {
 }
 
 model PropertyImage {
-  id         String   @id @default(cuid())
-  propertyId String
-  url        String
-  alt        String?
-  sortOrder  Int      @default(0)
-  isCover    Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  propertyId  String
+  url         String
+  alt         String?
+  sortOrder   Int      @default(0)
+  isCover     Boolean  @default(false)
+  contentType String?
+  /// Bytes en DB: en Railway /uploads es efímero y Next no sirve archivos escritos en runtime.
+  data        Bytes?
+  createdAt   DateTime @default(now())
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId, sortOrder])
 }

@@ -46,6 +46,7 @@ export async function GET(
     where: publicPropertyWhereForOrg(org.id),
     include: {
       images: {
+        omit: { data: true },
         orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }],
       },
     },

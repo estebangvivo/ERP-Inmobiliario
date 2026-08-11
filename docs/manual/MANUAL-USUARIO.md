@@ -187,7 +187,7 @@ Los **edificios** agrupan **unidades** (deptos, locales) con un **coeficiente** 
 2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio y ubicación. Si elegís **Alquiler y venta**, cargá **precio de alquiler** y **precio de venta**, cada uno con su moneda (lo habitual: alquiler en ARS y venta en USD).
 3. Asigná **propietario** y, si corresponde, la **unidad** del edificio.
 4. Definí el **estado** y, si querés mostrarla en el sitio público, marcá **Publicar en el portal**.
-5. Guardá. En la edición podés subir **fotos** y video.
+5. Guardá. En la edición podés subir **fotos** y video. Las fotos quedan en la base de datos (si no se ven, eliminalas y volvé a subirlas).
 
 ### Filtros
 

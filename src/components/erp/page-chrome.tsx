@@ -68,6 +68,7 @@ export function FilterBar({
 }) {
   return (
     <form
+      method="get"
       className={cn(
         "mb-4 grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-4",
         className,

@@ -42,7 +42,9 @@ export default async function AjustesPage() {
         paidUntil: true,
       },
     }),
-    canManageUsers ? listOrganizationUsers() : Promise.resolve([]),
+    canManageUsers
+      ? listOrganizationUsers().then((r) => r.users)
+      : Promise.resolve([]),
     listBankAccounts(),
     getEnabledCurrencies(),
   ]);

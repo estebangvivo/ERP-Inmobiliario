@@ -1,13 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { OrganizationRole } from "@prisma/client";
+import type { OrganizationRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   requireAuthSession,
   type SessionContext,
 } from "@/lib/auth";
-import { isPlatformSuperadminEmail } from "@/features/auth/lib/platform-admin";
+import {
+  excludePlatformSuperadminFromUser,
+  isPlatformSuperadminEmail,
+} from "@/features/auth/lib/platform-admin";
 import {
   hashPassword,
   validatePasswordStrength,
@@ -16,6 +19,11 @@ import {
   ORG_MODULE_KEYS,
   type AppModuleKey,
 } from "@/features/auth/lib/modules";
+import {
+  parseUserListPageSize,
+  USER_LIST_DEFAULT_PAGE_SIZE,
+  type UserListStatus,
+} from "@/features/auth/lib/user-list";
 
 export type UserActionResult =
   | { ok: true; userId?: string }
@@ -30,6 +38,39 @@ export type OrganizationUserRow = {
   allowedModules: string[];
   isActive: boolean;
 };
+
+export type ListOrganizationUsersOptions = {
+  q?: string;
+  role?: OrganizationRole;
+  status?: UserListStatus;
+  page?: number;
+  pageSize?: number;
+};
+
+export type ListOrganizationUsersResult = {
+  users: OrganizationUserRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+function mapMember(m: {
+  id: string;
+  userId: string;
+  role: OrganizationRole;
+  allowedModules: string[];
+  user: { name: string; email: string; isActive: boolean };
+}): OrganizationUserRow {
+  return {
+    membershipId: m.id,
+    userId: m.userId,
+    name: m.user.name,
+    email: m.user.email,
+    role: m.role,
+    allowedModules: m.allowedModules,
+    isActive: m.user.isActive,
+  };
+}
 
 async function assertCanManageUsers(
   organizationId: string,
@@ -59,32 +100,62 @@ function assertNotProtectingPlatformSuperadmin(
 
 export async function listOrganizationUsers(
   organizationId?: string,
-): Promise<OrganizationUserRow[]> {
+  options: ListOrganizationUsersOptions = {},
+): Promise<ListOrganizationUsersResult> {
   const session = await requireAuthSession();
   const orgId = organizationId ?? session.organizationId;
-  if (!orgId) return [];
+  if (!orgId) {
+    return { users: [], total: 0, page: 1, pageSize: USER_LIST_DEFAULT_PAGE_SIZE };
+  }
   await assertCanManageUsers(orgId);
 
+  const q = options.q?.trim() ?? "";
+  const userWhere: Prisma.UserWhereInput = {
+    ...excludePlatformSuperadminFromUser(),
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+    ...(options.status === "activo"
+      ? { isActive: true }
+      : options.status === "inactivo"
+        ? { isActive: false }
+        : {}),
+  };
+
+  const where: Prisma.OrganizationMemberWhereInput = {
+    organizationId: orgId,
+    user: userWhere,
+    ...(options.role ? { role: options.role } : {}),
+  };
+
+  const paginate = options.pageSize != null;
+  const pageSize = paginate
+    ? parseUserListPageSize(String(options.pageSize))
+    : USER_LIST_DEFAULT_PAGE_SIZE;
+  const requestedPage = Math.max(1, options.page ?? 1);
+
+  const total = await prisma.organizationMember.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = paginate ? Math.min(requestedPage, totalPages) : 1;
+
   const members = await prisma.organizationMember.findMany({
-    where: { organizationId: orgId },
+    where,
     include: { user: true },
     orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+    ...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
   });
 
-  return members
-    .filter((m) => {
-      // El superadmin de plataforma no forma parte del staff de la inmobiliaria.
-      return !isPlatformSuperadminEmail(m.user.email);
-    })
-    .map((m) => ({
-      membershipId: m.id,
-      userId: m.userId,
-      name: m.user.name,
-      email: m.user.email,
-      role: m.role,
-      allowedModules: m.allowedModules,
-      isActive: m.user.isActive,
-    }));
+  return {
+    users: members.map(mapMember),
+    total,
+    page,
+    pageSize: paginate ? pageSize : members.length || pageSize,
+  };
 }
 
 export async function createOrganizationUser(input: {

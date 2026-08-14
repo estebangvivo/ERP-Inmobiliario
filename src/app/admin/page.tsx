@@ -61,7 +61,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     featureRequests,
   ] = await Promise.all([
     selectedOrgId
-      ? listOrganizationUsers(selectedOrgId)
+      ? listOrganizationUsers(selectedOrgId).then((r) => r.users)
       : Promise.resolve([]),
     listAdminBillingPayments(),
     getAdminMercadoPagoConfig(),

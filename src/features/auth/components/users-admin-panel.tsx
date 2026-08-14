@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { OrganizationRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar } from "@/components/erp/page-chrome";
 import { ORG_MODULE_KEYS, APP_MODULES } from "@/features/auth/lib/modules";
 import { ROLE_LABELS } from "@/lib/labels";
 import {
@@ -16,10 +17,25 @@ import {
   removeOrganizationUser,
   type OrganizationUserRow,
 } from "@/features/auth/actions/user-actions";
+import {
+  USER_LIST_DEFAULT_PAGE_SIZE,
+  USER_LIST_PAGE_SIZES,
+  USER_LIST_ROLES,
+} from "@/features/auth/lib/user-list";
+
+export type UsersListQuery = {
+  q: string;
+  role: string;
+  status: string;
+  page: number;
+  pageSize: number;
+  total: number;
+};
 
 type Props = {
   users: OrganizationUserRow[];
   organizationId?: string;
+  list?: UsersListQuery;
 };
 
 const ASSIGNABLE_ROLES: OrganizationRole[] = [
@@ -36,11 +52,33 @@ const MODULE_LABELS = Object.fromEntries(
   APP_MODULES.map((m) => [m.key, m.label]),
 ) as Record<string, string>;
 
-export function UsersAdminPanel({ users, organizationId }: Props) {
+export function UsersAdminPanel({ users, organizationId, list }: Props) {
+  const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OrganizationUserRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const totalPages = list
+    ? Math.max(1, Math.ceil(list.total / list.pageSize))
+    : 1;
+  const from = list && list.total > 0 ? (list.page - 1) * list.pageSize + 1 : 0;
+  const to = list ? Math.min(list.page * list.pageSize, list.total) : users.length;
+
+  function pushList(patch: Partial<UsersListQuery>) {
+    if (!list) return;
+    const next = { ...list, ...patch };
+    const params = new URLSearchParams();
+    if (next.q) params.set("q", next.q);
+    if (next.role) params.set("role", next.role);
+    if (next.status) params.set("status", next.status);
+    if (next.pageSize !== USER_LIST_DEFAULT_PAGE_SIZE) {
+      params.set("pageSize", String(next.pageSize));
+    }
+    if (next.page > 1) params.set("page", String(next.page));
+    const qs = params.toString();
+    router.push(qs ? `?${qs}` : "?");
+  }
 
   function closeForm() {
     setShowForm(false);
@@ -129,6 +167,40 @@ export function UsersAdminPanel({ users, organizationId }: Props) {
           Nuevo usuario
         </Button>
       </div>
+
+      {list ? (
+        <FilterBar
+          key={`${list.q}|${list.role}|${list.status}|${list.pageSize}`}
+          className="lg:grid-cols-[minmax(12rem,1fr)_12rem_12rem_auto]"
+        >
+          <Input
+            name="q"
+            placeholder="Buscar nombre o email"
+            defaultValue={list.q}
+          />
+          <Select name="role" defaultValue={list.role}>
+            <option value="">Todos los roles</option>
+            {USER_LIST_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </Select>
+          <Select name="status" defaultValue={list.status}>
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </Select>
+          <div>
+            {list.pageSize !== USER_LIST_DEFAULT_PAGE_SIZE ? (
+              <input type="hidden" name="pageSize" value={list.pageSize} />
+            ) : null}
+            <Button type="submit" variant="secondary">
+              Filtrar
+            </Button>
+          </div>
+        </FilterBar>
+      ) : null}
 
       {(showForm || editing) && (
         <form
@@ -270,6 +342,58 @@ export function UsersAdminPanel({ users, organizationId }: Props) {
           </tr>
         ))}
       </DataTable>
+
+      {list ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[var(--muted-foreground)]">
+            {list.total === 0
+              ? "No hay usuarios para mostrar."
+              : `Mostrando ${from}–${to} de ${list.total}`}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2">
+              <span className="text-[var(--muted-foreground)]">Mostrar</span>
+              <Select
+                className="h-9 w-[4.5rem]"
+                value={String(list.pageSize)}
+                onChange={(e) =>
+                  pushList({ pageSize: Number(e.target.value), page: 1 })
+                }
+                aria-label="Usuarios por página"
+              >
+                {USER_LIST_PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={list.page <= 1}
+                onClick={() => pushList({ page: list.page - 1 })}
+              >
+                Anterior
+              </Button>
+              <span className="min-w-[7rem] text-center text-[var(--muted-foreground)]">
+                Página {list.page} de {totalPages}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={list.page >= totalPages}
+                onClick={() => pushList({ page: list.page + 1 })}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

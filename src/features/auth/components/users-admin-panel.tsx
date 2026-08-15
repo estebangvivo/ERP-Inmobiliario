@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrganizationRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -54,10 +54,24 @@ const MODULE_LABELS = Object.fromEntries(
 
 export function UsersAdminPanel({ users, organizationId, list }: Props) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OrganizationUserRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const formOpen = showForm || !!editing;
+
+  useEffect(() => {
+    if (!formOpen) return;
+    const form = formRef.current;
+    if (!form) return;
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    const nameInput = form.querySelector<HTMLInputElement>("#name");
+    const frame = window.requestAnimationFrame(() => {
+      nameInput?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [formOpen, editing?.userId]);
 
   const totalPages = list
     ? Math.max(1, Math.ceil(list.total / list.pageSize))
@@ -202,10 +216,12 @@ export function UsersAdminPanel({ users, organizationId, list }: Props) {
         </FilterBar>
       ) : null}
 
-      {(showForm || editing) && (
+      {formOpen && (
         <form
+          ref={formRef}
+          key={editing?.userId ?? "new"}
           onSubmit={editing ? handleUpdate : handleCreate}
-          className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6"
+          className="scroll-mt-6 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6"
         >
           <h3 className="font-semibold">
             {editing ? "Editar usuario" : "Alta de usuario"}

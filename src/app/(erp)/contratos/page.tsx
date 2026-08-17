@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import {
+  PersonNameLink,
+  PropertyHistoryLink,
+} from "@/components/erp/history-sections";
 import { IndexRatesForm } from "@/components/erp/index-rates-form";
 import { IndexRatesLoadedButton } from "@/components/erp/index-rates-loaded";
 import { INDEX_PERIOD_OPTIONS, indexRateKey } from "@/lib/index-periods";
@@ -59,9 +63,9 @@ export default async function ContratosPage({
         endDate: true,
         initialRent: true,
         currency: true,
-        property: { select: { title: true } },
+        property: { select: { id: true, title: true } },
         parties: {
-          select: { role: true, user: { select: { name: true } } },
+          select: { role: true, user: { select: { id: true, name: true } } },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -195,9 +199,18 @@ export default async function ContratosPage({
           return (
             <tr key={c.id} className="hover:bg-[var(--muted)]/40">
               <td className="px-4 py-3 font-medium">{c.code}</td>
-              <td className="px-4 py-3">{c.property.title}</td>
+              <td className="px-4 py-3">
+                <PropertyHistoryLink
+                  id={c.property.id}
+                  title={c.property.title}
+                />
+              </td>
               <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                {tenant?.name ?? "—"}
+                {tenant ? (
+                  <PersonNameLink id={tenant.id} name={tenant.name} />
+                ) : (
+                  "—"
+                )}
               </td>
               <td className="px-4 py-3">
                 {formatMoney(c.initialRent.toString(), c.currency)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { OrganizationRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -334,6 +335,11 @@ export function UsersAdminPanel({ users, organizationId, list }: Props) {
             </td>
             <td className="px-4 py-3">
               <div className="flex justify-end gap-2">
+                <Link href={`/personas/${user.userId}`}>
+                  <Button size="sm" variant="outline">
+                    Historial
+                  </Button>
+                </Link>
                 <Button
                   size="sm"
                   variant="outline"

@@ -5,6 +5,7 @@ import { getOwnerAccountStatement } from "@/features/treasury/queries/account-st
 import { formatMoney } from "@/features/treasury/lib/labels";
 import { formatDateAR } from "@/lib/format-date";
 import { PageHeader } from "@/components/erp/page-chrome";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,13 @@ export default async function CuentaPropietarioPage({ params }: PageProps) {
       <PageHeader
         title={stmt.partyName}
         description="Cuenta corriente del propietario"
+        actions={
+          <Link href={`/personas/${ownerId}`}>
+            <Button variant="outline" size="sm">
+              Historial
+            </Button>
+          </Link>
+        }
       />
       <p className="text-sm">
         <Link href="/tesoreria/cuentas" className="text-[var(--primary)] hover:underline">

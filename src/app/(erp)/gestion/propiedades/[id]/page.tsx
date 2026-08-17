@@ -68,6 +68,9 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
                 </Button>
               </Link>
             ) : null}
+            <Link href={`/gestion/propiedades/${property.id}/historial`}>
+              <Button size="sm">Historial</Button>
+            </Link>
           </div>
         }
       />

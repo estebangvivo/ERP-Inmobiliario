@@ -140,18 +140,30 @@ export default async function PropiedadesPage({
               )}
             </td>
             <td className="px-4 py-3 text-[var(--muted-foreground)]">
-              {property.ownerships[0]?.owner.name ?? "—"}
-            </td>
-            <td className="px-4 py-3 text-right">
-              {staff ? (
-                <Link href={`/gestion/propiedades/${property.id}`}>
-                  <Button size="sm" variant="outline">Editar</Button>
+              {property.ownerships[0]?.owner ? (
+                <Link
+                  href={`/personas/${property.ownerships[0].owner.id}`}
+                  className="text-[var(--primary)] hover:underline"
+                >
+                  {property.ownerships[0].owner.name}
                 </Link>
               ) : (
-                <Link href={`/contratos?property=${property.id}`}>
-                  <Button size="sm" variant="outline">Ver</Button>
-                </Link>
+                "—"
               )}
+            </td>
+            <td className="px-4 py-3 text-right">
+              <div className="flex justify-end gap-2">
+                <Link href={`/gestion/propiedades/${property.id}/historial`}>
+                  <Button size="sm" variant="outline">
+                    Historial
+                  </Button>
+                </Link>
+                {staff ? (
+                  <Link href={`/gestion/propiedades/${property.id}`}>
+                    <Button size="sm" variant="outline">Editar</Button>
+                  </Link>
+                ) : null}
+              </div>
             </td>
           </tr>
         ))}

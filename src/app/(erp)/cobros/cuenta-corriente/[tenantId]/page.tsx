@@ -50,11 +50,18 @@ export default async function CuentaCorrienteDetallePage({
         title={tenant.name}
         description={`${tenant.email}${tenant.phone ? ` · ${tenant.phone}` : ""}`}
         actions={
-          <Link href="/cobros/cuenta-corriente">
-            <Button variant="outline" size="sm">
-              Volver al listado
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/personas/${tenant.id}`}>
+              <Button variant="outline" size="sm">
+                Historial
+              </Button>
+            </Link>
+            <Link href="/cobros/cuenta-corriente">
+              <Button variant="outline" size="sm">
+                Volver al listado
+              </Button>
+            </Link>
+          </div>
         }
       />
 

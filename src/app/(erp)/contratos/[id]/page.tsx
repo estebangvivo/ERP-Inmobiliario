@@ -24,6 +24,7 @@ import { requireModule, isStaffRole } from "@/lib/session";
 import { contractScopeWhere } from "@/lib/tenant-scope";
 import { getCurrentRent } from "@/server/services/billing";
 import { hasModule } from "@/features/auth/lib/modules";
+import { PersonNameLink } from "@/components/erp/history-sections";
 import { listOrgPeople } from "@/server/queries/org-people";
 
 type Params = Promise<{ id: string }>;
@@ -113,7 +114,7 @@ export default async function ContratoDetailPage({ params }: { params: Params })
                 <span className="text-[var(--muted-foreground)]">
                   {PARTY_ROLE_LABELS[p.role]}:{" "}
                 </span>
-                {p.user.name}
+                <PersonNameLink id={p.user.id} name={p.user.name} />
               </p>
             ))}
           </CardContent>

@@ -36,7 +36,7 @@ export const APP_MODULES: AppModuleDef[] = [
     pathPrefixes: ["/gestion/propiedades"],
   },
   { key: "complejos", label: "Edificios", pathPrefixes: ["/complejos"] },
-  { key: "contratos", label: "Contratos", pathPrefixes: ["/contratos"] },
+  { key: "contratos", label: "Contratos", pathPrefixes: ["/contratos", "/personas"] },
   { key: "cobros", label: "Cobros", pathPrefixes: ["/cobros"] },
   { key: "tesoreria", label: "Tesorería", pathPrefixes: ["/tesoreria"] },
   { key: "expensas", label: "Expensas", pathPrefixes: ["/expensas"] },
@@ -138,6 +138,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/ventas": "ventas",
   "/turnero": "turnero",
   "/usuarios": "usuarios",
+  "/personas": "contratos",
   "/ajustes": "ajustes",
   "/manual": "manual",
   "/admin": "admin",
@@ -146,6 +147,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
 export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/usuarios")) return "usuarios";
+  if (pathname.startsWith("/personas")) return "contratos";
   if (pathname.startsWith("/gestion/propiedades")) return "propiedades";
   if (pathname.startsWith("/complejos")) return "complejos";
   if (pathname.startsWith("/contratos")) return "contratos";

@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 
-export default function UsuarioEditPage() {
-  redirect("/usuarios");
+type Params = Promise<{ id: string }>;
+
+export default async function UsuarioEditPage({ params }: { params: Params }) {
+  const { id } = await params;
+  redirect(`/personas/${id}`);
 }

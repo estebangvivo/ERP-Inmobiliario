@@ -173,3 +173,153 @@ export async function createPartyPersonAction(input: {
     return { ok: false, error: "No se pudo crear la persona." };
   }
 }
+
+export type PartyPersonDetails = {
+  id: string;
+  name: string;
+  documentNumber: string | null;
+  phone: string | null;
+};
+
+export async function getPartyPersonAction(
+  personId: string,
+): Promise<{ ok: true; person: PartyPersonDetails } | { ok: false; error: string }> {
+  try {
+    const session = await requireStaff();
+    const member = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: session.organizationId,
+        userId: personId,
+        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
+      },
+      select: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            documentNumber: true,
+            phone: true,
+          },
+        },
+      },
+    });
+    if (!member) {
+      return { ok: false, error: "Persona no encontrada." };
+    }
+    return {
+      ok: true,
+      person: {
+        id: member.user.id,
+        name: member.user.name,
+        documentNumber: member.user.documentNumber,
+        phone: member.user.phone,
+      },
+    };
+  } catch (error) {
+    console.error("getPartyPersonAction", error);
+    return { ok: false, error: "No se pudo cargar la persona." };
+  }
+}
+
+export type UpdatePartyPersonResult =
+  | {
+      ok: true;
+      person: { id: string; name: string; documentNumber: string };
+    }
+  | { ok: false; error: string };
+
+/** Actualiza datos básicos de propietario, inquilino o garante. */
+export async function updatePartyPersonAction(input: {
+  personId: string;
+  name: string;
+  dni: string;
+  phone?: string;
+}): Promise<UpdatePartyPersonResult> {
+  try {
+    const session = await requireStaff();
+    const orgId = session.organizationId;
+    const name = input.name.trim();
+    const dni = normalizeDni(input.dni);
+    const phone = input.phone?.trim() || null;
+
+    if (name.length < 2) {
+      return { ok: false, error: "Ingresá el nombre completo." };
+    }
+    if (!isValidDni(dni)) {
+      return {
+        ok: false,
+        error: "DNI inválido. Usá entre 7 y 11 dígitos.",
+      };
+    }
+
+    const member = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: input.personId,
+        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
+      },
+      select: { userId: true },
+    });
+    if (!member) {
+      return { ok: false, error: "Persona no encontrada en la organización." };
+    }
+
+    const membersWithDoc = await prisma.organizationMember.findMany({
+      where: {
+        organizationId: orgId,
+        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
+        userId: { not: input.personId },
+        user: { documentNumber: { not: null } },
+      },
+      include: {
+        user: { select: { name: true, documentNumber: true } },
+      },
+    });
+
+    const clash = membersWithDoc.find(
+      (m) => normalizeDni(m.user.documentNumber ?? "") === dni,
+    );
+    if (clash) {
+      const as =
+        clash.role in PARTY_KIND_LABEL
+          ? PARTY_KIND_LABEL[clash.role as PartyPersonKind]
+          : "persona";
+      return {
+        ok: false,
+        error: `Ya existe el DNI ${dni} como ${as}: ${clash.user.name}.`,
+      };
+    }
+
+    const user = await prisma.user.update({
+      where: { id: input.personId },
+      data: {
+        name,
+        phone,
+        documentType: "DNI",
+        documentNumber: dni,
+      },
+      select: { id: true, name: true, documentNumber: true },
+    });
+
+    revalidatePath("/contratos");
+    revalidatePath("/contratos/nuevo");
+    revalidatePath("/usuarios");
+    revalidatePath("/tesoreria");
+    revalidatePath("/cobros");
+    revalidatePath("/gestion/propiedades");
+    revalidatePath("/rendiciones");
+    revalidatePath(`/personas/${user.id}`);
+
+    return {
+      ok: true,
+      person: {
+        id: user.id,
+        name: user.name,
+        documentNumber: user.documentNumber ?? dni,
+      },
+    };
+  } catch (error) {
+    console.error("updatePartyPersonAction", error);
+    return { ok: false, error: "No se pudo actualizar la persona." };
+  }
+}

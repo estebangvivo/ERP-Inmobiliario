@@ -115,7 +115,7 @@ export async function listChecks(opts?: {
     },
   });
 
-  const items = rows.map((c) => {
+  const items: CheckListItem[] = rows.map((c) => {
     const seen = new Set<string>();
     const allocationTargets: CheckAllocationTarget[] = [];
     const sourceLines = [

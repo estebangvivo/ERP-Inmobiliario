@@ -9,12 +9,12 @@ export type PaginatedResult<T> = {
   pageSize: ListPageSize;
 };
 
-export function parseListPage(raw?: string): number {
+export function parseListPage(raw?: string | number): number {
   const n = Math.floor(Number(raw));
   return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
-export function parseListPageSize(raw?: string): ListPageSize {
+export function parseListPageSize(raw?: string | number): ListPageSize {
   const n = Number(raw);
   return (LIST_PAGE_SIZES as readonly number[]).includes(n)
     ? (n as ListPageSize)

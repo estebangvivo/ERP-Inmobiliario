@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/erp/page-chrome";
 import {
-  AgendaWeekPanel,
+  AgendaMonthPanel,
   type AgendaVisitItem,
-} from "@/components/erp/agenda-week-panel";
+  type AgendaMonthCell,
+} from "@/components/erp/agenda-month-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasModule } from "@/features/auth/lib/modules";
 import {
   formatArtDateKey,
   formatArtTimeLabel,
-  VISIT_TZ,
 } from "@/lib/visit-slots";
 import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
@@ -36,53 +36,96 @@ function endOfArtDayUtc(dateKey: string) {
   return new Date(start.getTime() + 24 * 60 * 60 * 1000);
 }
 
-function formatArtDayLabel(dateKey: string): string {
-  const utc = startOfArtDayUtc(dateKey);
-  return new Intl.DateTimeFormat("es-AR", {
-    timeZone: VISIT_TZ,
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(utc);
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
 }
 
-export default async function AgendaPage() {
+function parseMonthParam(raw: string | undefined, todayKey: string) {
+  const match = raw?.match(/^(\d{4})-(\d{2})$/);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
+      return { year, month };
+    }
+  }
+  const [y, m] = todayKey.split("-").map(Number);
+  return { year: y!, month: m! };
+}
+
+function shiftMonth(year: number, month: number, delta: number) {
+  const d = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+  };
+}
+
+/** Grilla lun–dom del mes (incluye días del mes anterior/siguiente). */
+function buildMonthCells(year: number, month: number): AgendaMonthCell[] {
+  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const mondayOffset = firstWeekday === 0 ? 6 : firstWeekday - 1;
+  const start = new Date(Date.UTC(year, month - 1, 1 - mondayOffset));
+  const cells: AgendaMonthCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getTime() + i * 86_400_000);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    cells.push({
+      dateKey: `${y}-${pad2(m)}-${pad2(day)}`,
+      day,
+      inMonth: y === year && m === month,
+    });
+  }
+  let lastInMonth = -1;
+  for (let i = cells.length - 1; i >= 0; i--) {
+    if (cells[i]!.inMonth) {
+      lastInMonth = i;
+      break;
+    }
+  }
+  if (lastInMonth < 0) return cells;
+  const end = Math.ceil((lastInMonth + 1) / 7) * 7;
+  return cells.slice(0, end);
+}
+
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
   const session = await requireModule("consultas");
   const staff = isStaffRole(session.organizationRole);
   const canTurnero =
     staff || hasModule(session.allowedModules, "turnero");
+  const sp = await searchParams;
 
   const todayKey = artTodayKey();
-  const weekStart = (() => {
-    const shifted = new Date(Date.now() + ART_OFFSET_MS);
-    const weekday = shifted.getUTCDay();
-    const daysFromMonday = weekday === 0 ? 6 : weekday - 1;
-    const monday = new Date(
-      Date.UTC(
-        shifted.getUTCFullYear(),
-        shifted.getUTCMonth(),
-        shifted.getUTCDate() - daysFromMonday,
-      ),
-    );
-    return `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, "0")}-${String(monday.getUTCDate()).padStart(2, "0")}`;
-  })();
+  const { year, month } = parseMonthParam(sp.mes, todayKey);
+  const cells = buildMonthCells(year, month);
 
-  const weekKeys = [0, 1, 2, 3, 4, 5, 6].map((i) => {
-    const [y, m, d] = weekStart.split("-").map(Number);
-    const dt = new Date(Date.UTC(y!, m! - 1, d! + i));
-    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
-  });
+  // Incluir padding de la grilla para visitas visibles en bordes
+  const rangeStartUtc = startOfArtDayUtc(cells[0]!.dateKey);
+  const rangeEndUtc = endOfArtDayUtc(cells[cells.length - 1]!.dateKey);
 
-  const weekStartUtc = startOfArtDayUtc(weekKeys[0]!);
-  const weekEndUtc = endOfArtDayUtc(weekKeys[6]!);
+  const prev = shiftMonth(year, month, -1);
+  const next = shiftMonth(year, month, 1);
+  const prevHref = `/agenda?mes=${prev.year}-${pad2(prev.month)}`;
+  const nextHref = `/agenda?mes=${next.year}-${pad2(next.month)}`;
+
+  const monthLabel = new Intl.DateTimeFormat("es-AR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
 
   const [visits, turnosHoy, properties, scheduleSettings] = await Promise.all([
     prisma.propertyVisitBooking.findMany({
       where: {
         organizationId: session.organizationId,
         status: { in: ["RESERVED", "COMPLETED"] },
-        startsAt: { gte: weekStartUtc, lt: weekEndUtc },
+        startsAt: { gte: rangeStartUtc, lt: rangeEndUtc },
       },
       include: {
         property: { select: { title: true } },
@@ -110,7 +153,7 @@ export default async function AgendaPage() {
   ]);
 
   const visitsByDay: Record<string, AgendaVisitItem[]> = {};
-  for (const key of weekKeys) visitsByDay[key] = [];
+  for (const cell of cells) visitsByDay[cell.dateKey] = [];
   for (const v of visits) {
     const key = formatArtDateKey(v.startsAt);
     const list = visitsByDay[key];
@@ -127,15 +170,11 @@ export default async function AgendaPage() {
     }
   }
 
-  const dayLabels = Object.fromEntries(
-    weekKeys.map((key) => [key, formatArtDayLabel(key)]),
-  );
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Agenda"
-        description="Visitas del portal y turnero. Podés agendar visitas con los mismos turnos que la web."
+        description="Calendario mensual de visitas. Podés agendar cualquier propiedad activa, esté o no en el portal."
         actions={
           <div className="flex flex-wrap gap-2 text-sm">
             <Link href="/visitas" className="text-[var(--primary)] underline">
@@ -151,14 +190,18 @@ export default async function AgendaPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <AgendaWeekPanel
-          weekKeys={weekKeys}
+        <AgendaMonthPanel
+          year={year}
+          month={month}
+          monthLabel={monthLabel}
           todayKey={todayKey}
-          dayLabels={dayLabels}
+          cells={cells}
           visitsByDay={visitsByDay}
           properties={properties}
           scheduleSummary={scheduleSettings.summary}
           canCreate={staff}
+          prevHref={prevHref}
+          nextHref={nextHref}
         />
 
         <Card>

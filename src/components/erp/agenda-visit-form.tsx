@@ -8,6 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
+  SearchableSelect,
+  type SearchableOption,
+} from "@/components/ui/searchable-select";
+import {
   bookPropertyVisitAction,
   getAvailableVisitDays,
   type AvailableDay,
@@ -44,6 +48,16 @@ export function AgendaVisitForm({
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === propertyId) ?? null,
     [properties, propertyId],
+  );
+
+  const propertyOptions: SearchableOption[] = useMemo(
+    () =>
+      properties.map((p) => ({
+        value: p.id,
+        label: p.listedPublic ? p.title : `${p.title} · Sin portal`,
+        keywords: p.listedPublic ? "portal publicada" : "sin portal interna",
+      })),
+    [properties],
   );
 
   function refreshSlots(nextPropertyId: string, preferDateKey?: string) {
@@ -120,8 +134,8 @@ export function AgendaVisitForm({
   if (properties.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-4 text-sm text-[var(--muted-foreground)]">
-        No hay propiedades publicadas en el portal. Publicá una propiedad para
-        agendar visitas con los mismos criterios que la web.
+        No hay propiedades activas para agendar. Cargá una en Propiedades
+        (borrador o inactiva no cuentan).
       </p>
     );
   }
@@ -163,24 +177,21 @@ export function AgendaVisitForm({
       <div>
         <h3 className="font-semibold">Nueva visita</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Mismos turnos y reglas que el portal: propiedad publicada, horario de
-          agenda y slots de 1 hora.
+          Elegí cualquier propiedad activa (con o sin portal). Se usan los
+          horarios de agenda configurados (slots de 1 hora).
         </p>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="agenda-visit-property">Propiedad</Label>
-        <Select
+        <SearchableSelect
           id="agenda-visit-property"
           value={propertyId}
-          onChange={(e) => setPropertyId(e.target.value)}
-        >
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title}
-            </option>
-          ))}
-        </Select>
+          onChange={setPropertyId}
+          options={propertyOptions}
+          placeholder="Buscar propiedad…"
+          searchPlaceholder="Título o portal…"
+        />
       </div>
 
       {loadingSlots || pendingLoad ? (

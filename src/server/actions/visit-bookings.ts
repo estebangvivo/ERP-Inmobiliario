@@ -68,21 +68,28 @@ export type AvailableDay = {
 export type VisitBookableProperty = {
   id: string;
   title: string;
+  /** Publicada en el portal web. */
+  listedPublic: boolean;
 };
 
+/** Propiedades para agendar visitas desde el ERP (con o sin portal). */
 export async function listVisitBookableProperties(): Promise<
   VisitBookableProperty[]
 > {
   const session = await requireModule("consultas");
-  return prisma.property.findMany({
+  const rows = await prisma.property.findMany({
     where: {
       organizationId: session.organizationId,
-      status: { in: ["AVAILABLE", "RESERVED"] },
-      publishedAt: { not: null },
+      status: { notIn: ["DRAFT", "INACTIVE"] },
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, publishedAt: true },
     orderBy: { title: "asc" },
   });
+  return rows.map((p) => ({
+    id: p.id,
+    title: p.title,
+    listedPublic: p.publishedAt != null,
+  }));
 }
 
 export async function getAvailableVisitDays(

@@ -8,6 +8,7 @@ import {
   complexUpdateSchema,
   unitCreateSchema,
 } from "@/server/validators/complex";
+import { LINKABLE_COMPLEX_PROPERTY_TYPES } from "@/server/validators/property";
 import type { ActionResult } from "@/server/actions/users";
 
 function formDataToObject(formData: FormData) {
@@ -113,7 +114,7 @@ export async function createUnitAction(
       id: d.propertyId,
       organizationId: session.organizationId,
       unitId: null,
-      propertyType: { in: ["APARTMENT", "OFFICE", "COMMERCIAL"] },
+      propertyType: { in: LINKABLE_COMPLEX_PROPERTY_TYPES },
     },
     select: {
       id: true,
@@ -127,7 +128,7 @@ export async function createUnitAction(
   if (!property) {
     return {
       ok: false,
-      error: "La propiedad no existe, ya está en un edificio o no es un departamento/local.",
+      error: "La propiedad no existe, ya está en un edificio o no puede vincularse como unidad.",
     };
   }
 

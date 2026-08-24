@@ -63,6 +63,15 @@ export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
   OTHER: "Otro",
 };
 
+/** Tipos de propiedad que pueden vincularse como unidad de un edificio. */
+export const LINKABLE_COMPLEX_PROPERTY_TYPES: PropertyType[] = [
+  PropertyType.APARTMENT,
+  PropertyType.OFFICE,
+  PropertyType.COMMERCIAL,
+  PropertyType.OTHER,
+  PropertyType.HOUSE,
+];
+
 export const OPERATION_LABELS: Record<OperationType, string> = {
   RENT: "Alquiler",
   SALE: "Venta",

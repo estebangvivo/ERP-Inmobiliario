@@ -37,11 +37,13 @@ export function UnitForm({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return properties;
-    return properties.filter((p) => {
-      const hay = `${p.title} ${p.address} ${p.city} ${PROPERTY_TYPE_LABELS[p.propertyType]}`.toLowerCase();
-      return hay.includes(q);
-    });
+    const base = q
+      ? properties.filter((p) => {
+          const hay = `${p.title} ${p.address} ${p.city} ${PROPERTY_TYPE_LABELS[p.propertyType]}`.toLowerCase();
+          return hay.includes(q);
+        })
+      : properties;
+    return base.slice(0, q ? base.length : 80);
   }, [properties, query]);
 
   const selected = useMemo(
@@ -60,12 +62,11 @@ export function UnitForm({
   if (properties.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-4 text-sm text-[var(--muted-foreground)]">
-        No hay departamentos disponibles. Creá propiedades tipo departamento, local u
-        oficina en{" "}
+        No hay propiedades disponibles. Creá inmuebles en{" "}
         <Link href="/gestion/propiedades/nueva" className="text-[var(--primary)] underline">
           Propiedades
         </Link>{" "}
-        que aún no estén vinculadas a un edificio.
+        que aún no estén vinculadas a un edificio (departamento, local, oficina u otro).
       </p>
     );
   }
@@ -94,6 +95,12 @@ export function UnitForm({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Título, dirección o ciudad"
         />
+        {properties.length > 50 && !query.trim() ? (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Hay {properties.length} propiedades sin edificio. Escribí en la búsqueda
+            (ej. calle o barrio) para encontrar la que necesitás.
+          </p>
+        ) : null}
       </div>
 
       <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-[var(--border)] p-2">

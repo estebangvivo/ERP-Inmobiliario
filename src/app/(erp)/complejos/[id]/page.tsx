@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
+import { LINKABLE_COMPLEX_PROPERTY_TYPES } from "@/server/validators/property";
 
 type Params = Promise<{ id: string }>;
 
@@ -50,7 +51,7 @@ export default async function ComplejoDetailPage({
       where: {
         organizationId: session.organizationId,
         unitId: null,
-        propertyType: { in: ["APARTMENT", "OFFICE", "COMMERCIAL"] },
+        propertyType: { in: LINKABLE_COMPLEX_PROPERTY_TYPES },
       },
       select: {
         id: true,

@@ -65,6 +65,26 @@ export type AvailableDay = {
   slots: Array<{ startsAt: string; timeLabel: string }>;
 };
 
+export type VisitBookableProperty = {
+  id: string;
+  title: string;
+};
+
+export async function listVisitBookableProperties(): Promise<
+  VisitBookableProperty[]
+> {
+  const session = await requireModule("consultas");
+  return prisma.property.findMany({
+    where: {
+      organizationId: session.organizationId,
+      status: { in: ["AVAILABLE", "RESERVED"] },
+      publishedAt: { not: null },
+    },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+}
+
 export async function getAvailableVisitDays(
   propertyId: string,
 ): Promise<AvailableDay[]> {
@@ -222,6 +242,7 @@ export async function bookPropertyVisit(input: {
       );
     }
     revalidatePath("/visitas");
+    revalidatePath("/agenda");
     revalidatePath("/leads");
 
     return {

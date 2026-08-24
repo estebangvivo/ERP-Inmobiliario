@@ -9,10 +9,16 @@ import { LEAD_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import { LeadStatusButton } from "@/components/erp/lead-status-button";
 
-type SearchParams = Promise<{ status?: string }>;
+type SearchParams = Promise<{ status?: string; page?: string; pageSize?: string }>;
 
 export default async function LeadsPage({
   searchParams,
@@ -20,28 +26,37 @@ export default async function LeadsPage({
   searchParams: SearchParams;
 }) {
   const session = await requireModule("consultas");
-  const { status } = await searchParams;
+  const { status, page: pageRaw, pageSize: pageSizeRaw } = await searchParams;
   const statusFilter = status as LeadStatus | undefined;
+  const pageSize = parseListPageSize(pageSizeRaw);
+  const listParams = {
+    status: statusFilter || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   const scope = leadScopeWhere(session);
   const where: Prisma.LeadWhereInput = {
     AND: [scope, statusFilter ? { status: statusFilter } : {}],
   };
 
-  const [leads, org] = await Promise.all([
-    prisma.lead.findMany({
-      where,
-      include: {
-        property: true,
-        assignee: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
+  const [total, org] = await Promise.all([
+    prisma.lead.count({ where }),
     prisma.organization.findUnique({
       where: { id: session.organizationId },
       select: { slug: true },
     }),
   ]);
+
+  const page = clampListPage(parseListPage(pageRaw), total, pageSize);
+  const leads = await prisma.lead.findMany({
+    where,
+    include: {
+      property: true,
+      assignee: true,
+    },
+    orderBy: { createdAt: "desc" },
+    ...prismaSkipTake(page, pageSize),
+  });
 
   const orgSlug = org?.slug ?? "";
 
@@ -68,7 +83,7 @@ export default async function LeadsPage({
 
       <DataTable
         headers={["Fecha", "Contacto", "Propiedad", "Mensaje", "Estado", ""]}
-        empty={leads.length === 0}
+        empty={total === 0}
       >
         {leads.map((lead) => (
           <tr key={lead.id}>
@@ -109,6 +124,12 @@ export default async function LeadsPage({
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

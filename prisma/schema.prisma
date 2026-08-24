@@ -42,7 +42,7 @@ model Contract {
   depositAmount       Decimal              @default(0) @db.Decimal(14, 2)
   depositHeld         Boolean              @default(true)
   agencyCommissionPct Decimal              @default(0) @db.Decimal(5, 2)
-  lateFeeDailyRatePct Decimal              @default(0) @db.Decimal(6, 4)
+  lateFeeDailyRatePct Decimal              @default(1.2) @db.Decimal(6, 4)
   includesOrdinaryExp Boolean              @default(true)
   includesExtraordExp Boolean              @default(false)
   notes               String?

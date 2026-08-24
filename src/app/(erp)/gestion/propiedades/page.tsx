@@ -8,7 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import {
   OPERATION_LABELS,
   PROPERTY_TYPE_LABELS,
@@ -21,6 +27,8 @@ type SearchParams = Promise<{
   status?: string;
   operationType?: string;
   portal?: string;
+  page?: string;
+  pageSize?: string;
 }>;
 
 export default async function PropiedadesPage({
@@ -35,6 +43,14 @@ export default async function PropiedadesPage({
   const status = params.status as PropertyStatus | undefined;
   const operationType = params.operationType as OperationType | undefined;
   const portal = params.portal === "si" || params.portal === "no" ? params.portal : "";
+  const pageSize = parseListPageSize(params.pageSize);
+  const listParams = {
+    q: q || undefined,
+    status: status || undefined,
+    operationType: operationType || undefined,
+    portal: portal || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   const scope = propertyScopeWhere(session);
   const where: Prisma.PropertyWhereInput = {
@@ -59,6 +75,8 @@ export default async function PropiedadesPage({
     ],
   };
 
+  const total = await prisma.property.count({ where });
+  const page = clampListPage(parseListPage(params.page), total, pageSize);
   const properties = await prisma.property.findMany({
     where,
     include: {
@@ -66,6 +84,7 @@ export default async function PropiedadesPage({
       unit: { include: { complex: true } },
     },
     orderBy: { updatedAt: "desc" },
+    ...prismaSkipTake(page, pageSize),
   });
 
   return (
@@ -106,7 +125,7 @@ export default async function PropiedadesPage({
 
       <DataTable
         headers={["Propiedad", "Tipo", "Operación", "Precio", "Estado", "Portal", "Propietario", ""]}
-        empty={properties.length === 0}
+        empty={total === 0}
       >
         {properties.map((property) => (
           <tr key={property.id} className="hover:bg-[var(--muted)]/40">
@@ -168,6 +187,12 @@ export default async function PropiedadesPage({
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

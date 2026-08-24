@@ -36,6 +36,8 @@ export type UsersListQuery = {
 type Props = {
   users: OrganizationUserRow[];
   organizationId?: string;
+  openAlta?: boolean;
+  defaultAltaRole?: OrganizationRole;
   list?: UsersListQuery;
 };
 
@@ -53,7 +55,13 @@ const MODULE_LABELS = Object.fromEntries(
   APP_MODULES.map((m) => [m.key, m.label]),
 ) as Record<string, string>;
 
-export function UsersAdminPanel({ users, organizationId, list }: Props) {
+export function UsersAdminPanel({
+  users,
+  organizationId,
+  openAlta,
+  defaultAltaRole,
+  list,
+}: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [showForm, setShowForm] = useState(false);
@@ -61,6 +69,13 @@ export function UsersAdminPanel({ users, organizationId, list }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formOpen = showForm || !!editing;
+
+  useEffect(() => {
+    if (!openAlta) return;
+    setEditing(null);
+    setShowForm(true);
+    setError(null);
+  }, [openAlta]);
 
   useEffect(() => {
     if (!formOpen) return;
@@ -242,7 +257,7 @@ export function UsersAdminPanel({ users, organizationId, list }: Props) {
               <Select
                 id="role"
                 name="role"
-                defaultValue={editing?.role ?? "AGENT"}
+                defaultValue={editing?.role ?? defaultAltaRole ?? "AGENT"}
                 required
               >
                 {ASSIGNABLE_ROLES.map((r) => (

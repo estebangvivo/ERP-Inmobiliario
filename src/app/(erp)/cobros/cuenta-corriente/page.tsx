@@ -4,12 +4,18 @@ import { formatDateOnly } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  paginateArray,
+  parseListPage,
+  parseListPageSize,
+} from "@/lib/list-pagination";
 import { listTenantsWithDebt } from "@/server/services/tenant-ledger";
 import { syncOverdueBills } from "@/server/services/billing";
 import { redirect } from "next/navigation";
 
-type SearchParams = Promise<{ q?: string }>;
+type SearchParams = Promise<{ q?: string; page?: string; pageSize?: string }>;
 
 export default async function CuentaCorrientePage({
   searchParams,
@@ -22,17 +28,25 @@ export default async function CuentaCorrientePage({
   }
 
   await syncOverdueBills(session.organizationId);
-  const { q } = await searchParams;
+  const params = await searchParams;
+  const { q, page: pageRaw, pageSize: pageSizeRaw } = params;
   const query = q?.trim().toLowerCase() ?? "";
+  const pageSize = parseListPageSize(pageSizeRaw);
+  const listParams = {
+    q: q?.trim() || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
-  let rows = await listTenantsWithDebt(session.organizationId);
-  if (query) {
-    rows = rows.filter(
-      (r) =>
-        r.tenantName.toLowerCase().includes(query) ||
-        r.tenantEmail.toLowerCase().includes(query),
-    );
-  }
+  const rows = await listTenantsWithDebt(session.organizationId);
+  const filtered = query
+    ? rows.filter(
+        (r) =>
+          r.tenantName.toLowerCase().includes(query) ||
+          r.tenantEmail.toLowerCase().includes(query),
+      )
+    : rows;
+  const page = clampListPage(parseListPage(pageRaw), filtered.length, pageSize);
+  const { total, items: pageRows } = paginateArray(filtered, page, pageSize);
 
   return (
     <div className="space-y-6">
@@ -75,9 +89,9 @@ export default async function CuentaCorrientePage({
           "Venc. más antiguo",
           "",
         ]}
-        empty={rows.length === 0}
+        empty={total === 0}
       >
-        {rows.map((r) => (
+        {pageRows.map((r) => (
           <tr key={r.tenantId} className="hover:bg-[var(--muted)]/40">
             <td className="px-4 py-3 font-medium">{r.tenantName}</td>
             <td className="px-4 py-3 text-[var(--muted-foreground)]">
@@ -107,6 +121,12 @@ export default async function CuentaCorrientePage({
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   getTreasuryFlowTotals,
   listPaymentOrders,
   listReceipts,
+  type TreasuryListItem,
 } from "@/features/treasury/queries/list-treasury";
 import {
   formatMoney,
@@ -31,8 +32,8 @@ export default async function TesoreriaPage() {
   await requireModule("tesoreria");
 
   const [receipts, orders, cash, bankAccounts, flows] = await Promise.all([
-    listReceipts(),
-    listPaymentOrders(),
+    listReceipts({ page: 1, pageSize: 8 }),
+    listPaymentOrders({ page: 1, pageSize: 8 }),
     getCashOverview("ARS"),
     listBankAccounts({ activeOnly: true }),
     getTreasuryFlowTotals(),
@@ -154,7 +155,7 @@ export default async function TesoreriaPage() {
             </Link>
           </div>
           <DocList
-            items={receipts.slice(0, 8)}
+            items={receipts.items}
             href={(id) => `/tesoreria/recibos/${id}`}
             empty="Todavía no hay recibos. Los cobros de cuotas generan recibos automáticamente."
           />
@@ -170,7 +171,7 @@ export default async function TesoreriaPage() {
             </Link>
           </div>
           <DocList
-            items={orders.slice(0, 8)}
+            items={orders.items}
             href={(id) => `/tesoreria/ordenes-pago/${id}`}
             empty="Todavía no hay órdenes de pago."
           />
@@ -190,7 +191,7 @@ function DocList({
   href,
   empty = "Sin documentos aún.",
 }: {
-  items: Awaited<ReturnType<typeof listReceipts>>;
+  items: TreasuryListItem[];
   href: (id: string) => string;
   empty?: string;
 }) {

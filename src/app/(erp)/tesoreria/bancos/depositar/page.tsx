@@ -19,11 +19,12 @@ export default async function DepositarPage({ searchParams }: PageProps) {
   const session = await requireModule("tesoreria");
   const { bankId } = await searchParams;
 
-  const [banks, checks, enabledCurrencies] = await Promise.all([
+  const [banks, checksResult, enabledCurrencies] = await Promise.all([
     listBankAccounts({ activeOnly: true }),
     listChecks({ status: "IN_PORTFOLIO" }),
     getEnabledCurrencies(),
   ]);
+  const checks = checksResult.items;
 
   const overviews = await Promise.all(
     enabledCurrencies.map(async (currency) => ({

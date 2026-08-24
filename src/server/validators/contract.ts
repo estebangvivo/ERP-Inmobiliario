@@ -44,7 +44,7 @@ export const contractCreateSchema = withPayerSum(
         (v) => (v === "" || v == null || v === undefined ? undefined : v),
         z.coerce.number().int().positive().optional(),
       ),
-      lateFeeDailyRatePct: z.coerce.number().nonnegative().default(0),
+      lateFeeDailyRatePct: z.coerce.number().nonnegative().default(1.2),
       includesOrdinaryExp: z.coerce.boolean().optional(),
       includesExtraordExp: z.coerce.boolean().optional(),
       indexType: z.nativeEnum(AdjustmentIndex).default(AdjustmentIndex.ICL),

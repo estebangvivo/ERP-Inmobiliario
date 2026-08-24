@@ -1,15 +1,23 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/erp/page-chrome";
+import {
+  AgendaWeekPanel,
+  type AgendaVisitItem,
+} from "@/components/erp/agenda-week-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasModule } from "@/features/auth/lib/modules";
 import {
   formatArtDateKey,
-  formatArtDisplay,
   formatArtTimeLabel,
+  VISIT_TZ,
 } from "@/lib/visit-slots";
 import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
+import {
+  getVisitScheduleSettings,
+  listVisitBookableProperties,
+} from "@/server/actions/visit-bookings";
 
 const ART_OFFSET_MS = -3 * 60 * 60 * 1000;
 
@@ -20,12 +28,23 @@ function artTodayKey() {
 
 function startOfArtDayUtc(dateKey: string) {
   const [y, m, d] = dateKey.split("-").map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!, 3, 0, 0)); // ART midnight ≈ UTC 03:00
+  return new Date(Date.UTC(y!, m! - 1, d!, 3, 0, 0));
 }
 
 function endOfArtDayUtc(dateKey: string) {
   const start = startOfArtDayUtc(dateKey);
   return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
+function formatArtDayLabel(dateKey: string): string {
+  const utc = startOfArtDayUtc(dateKey);
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: VISIT_TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(utc);
 }
 
 export default async function AgendaPage() {
@@ -58,48 +77,65 @@ export default async function AgendaPage() {
   const weekStartUtc = startOfArtDayUtc(weekKeys[0]!);
   const weekEndUtc = endOfArtDayUtc(weekKeys[6]!);
 
-  const visits = await prisma.propertyVisitBooking.findMany({
-    where: {
-      organizationId: session.organizationId,
-      status: { in: ["RESERVED", "COMPLETED"] },
-      startsAt: { gte: weekStartUtc, lt: weekEndUtc },
-    },
-    include: {
-      property: { select: { title: true } },
-      assignee: { select: { name: true } },
-    },
-    orderBy: { startsAt: "asc" },
-  });
-
-  const turnosHoy = canTurnero
-    ? await prisma.turneroTurno.findMany({
-        where: {
-          organizationId: session.organizationId,
-          estado: { in: ["ESPERA", "LLAMADO"] },
-          creadoEn: {
-            gte: startOfArtDayUtc(todayKey),
-            lt: endOfArtDayUtc(todayKey),
+  const [visits, turnosHoy, properties, scheduleSettings] = await Promise.all([
+    prisma.propertyVisitBooking.findMany({
+      where: {
+        organizationId: session.organizationId,
+        status: { in: ["RESERVED", "COMPLETED"] },
+        startsAt: { gte: weekStartUtc, lt: weekEndUtc },
+      },
+      include: {
+        property: { select: { title: true } },
+        assignee: { select: { name: true } },
+      },
+      orderBy: { startsAt: "asc" },
+    }),
+    canTurnero
+      ? prisma.turneroTurno.findMany({
+          where: {
+            organizationId: session.organizationId,
+            estado: { in: ["ESPERA", "LLAMADO"] },
+            creadoEn: {
+              gte: startOfArtDayUtc(todayKey),
+              lt: endOfArtDayUtc(todayKey),
+            },
           },
-        },
-        include: { cliente: true },
-        orderBy: { creadoEn: "asc" },
-        take: 40,
-      })
-    : [];
+          include: { cliente: true },
+          orderBy: { creadoEn: "asc" },
+          take: 40,
+        })
+      : Promise.resolve([]),
+    staff ? listVisitBookableProperties() : Promise.resolve([]),
+    getVisitScheduleSettings(),
+  ]);
 
-  const visitsByDay = new Map<string, typeof visits>();
-  for (const key of weekKeys) visitsByDay.set(key, []);
+  const visitsByDay: Record<string, AgendaVisitItem[]> = {};
+  for (const key of weekKeys) visitsByDay[key] = [];
   for (const v of visits) {
     const key = formatArtDateKey(v.startsAt);
-    const list = visitsByDay.get(key);
-    if (list) list.push(v);
+    const list = visitsByDay[key];
+    if (list) {
+      list.push({
+        id: v.id,
+        startsAt: v.startsAt.toISOString(),
+        timeLabel: formatArtTimeLabel(v.startsAt),
+        name: v.name,
+        propertyTitle: v.property.title,
+        assigneeName: v.assignee?.name ?? null,
+        status: v.status as "RESERVED" | "COMPLETED",
+      });
+    }
   }
+
+  const dayLabels = Object.fromEntries(
+    weekKeys.map((key) => [key, formatArtDayLabel(key)]),
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Agenda"
-        description="Vista unificada: visitas del portal esta semana y cola del turnero de hoy."
+        description="Visitas del portal y turnero. Podés agendar visitas con los mismos turnos que la web."
         actions={
           <div className="flex flex-wrap gap-2 text-sm">
             <Link href="/visitas" className="text-[var(--primary)] underline">
@@ -115,64 +151,15 @@ export default async function AgendaPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold">Visitas · semana</h3>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {weekKeys.map((key) => {
-              const dayVisits = visitsByDay.get(key) ?? [];
-              const isToday = key === todayKey;
-              return (
-                <Card
-                  key={key}
-                  className={isToday ? "border-[var(--primary)]" : undefined}
-                >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">
-                      {formatArtDisplay(startOfArtDayUtc(key))}
-                      {isToday ? (
-                        <Badge className="ml-2" variant="secondary">
-                          Hoy
-                        </Badge>
-                      ) : null}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {dayVisits.length === 0 ? (
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        Sin visitas
-                      </p>
-                    ) : (
-                      dayVisits.map((v) => (
-                        <div
-                          key={v.id}
-                          className="rounded-md border border-[var(--border)] p-2"
-                        >
-                          <p className="font-medium">
-                            {formatArtTimeLabel(v.startsAt)} · {v.name}
-                          </p>
-                          <p className="text-xs text-[var(--muted-foreground)]">
-                            {v.property.title}
-                            {v.assignee ? ` · ${v.assignee.name}` : ""}
-                          </p>
-                          <Badge
-                            variant={
-                              v.status === "COMPLETED" ? "success" : "secondary"
-                            }
-                            className="mt-1"
-                          >
-                            {v.status === "COMPLETED"
-                              ? "Completada"
-                              : "Reservada"}
-                          </Badge>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+        <AgendaWeekPanel
+          weekKeys={weekKeys}
+          todayKey={todayKey}
+          dayLabels={dayLabels}
+          visitsByDay={visitsByDay}
+          properties={properties}
+          scheduleSummary={scheduleSettings.summary}
+          canCreate={staff}
+        />
 
         <Card>
           <CardHeader>

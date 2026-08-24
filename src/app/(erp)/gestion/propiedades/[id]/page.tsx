@@ -4,9 +4,9 @@ import { PageHeader } from "@/components/erp/page-chrome";
 import { PropertyForm } from "@/components/erp/property-form";
 import { PropertyImagesManager } from "@/components/erp/property-images-manager";
 import { Button } from "@/components/ui/button";
-import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
+import { listOrgPeople } from "@/server/queries/org-people";
 
 type Params = Promise<{ id: string }>;
 
@@ -14,7 +14,7 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
   const session = await requireStaff();
   const { id } = await params;
 
-  const [property, ownerMembers, units] = await Promise.all([
+  const [property, owners, units] = await Promise.all([
     prisma.property.findUnique({
       where: { id },
       include: {
@@ -26,18 +26,7 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
         unit: { include: { complex: true } },
       },
     }),
-    prisma.organizationMember.findMany({
-      where: {
-        organizationId: session.organizationId,
-        role: "OWNER",
-        user: {
-          isActive: true,
-          ...excludePlatformSuperadminFromUser(),
-        },
-      },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { user: { name: "asc" } },
-    }),
+    listOrgPeople(session.organizationId, ["OWNER"]),
     prisma.unit.findMany({
       include: { complex: true, property: true },
       orderBy: [{ complex: { name: "asc" } }, { code: "asc" }],
@@ -79,7 +68,7 @@ export default async function EditPropiedadPage({ params }: { params: Params }) 
 
       <PropertyForm
         mode="edit"
-        owners={ownerMembers.map((m) => m.user)}
+        owners={owners}
         units={units
           .filter((u) => !u.property || u.property.id === property.id)
           .map((u) => ({

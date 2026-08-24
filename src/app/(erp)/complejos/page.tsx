@@ -5,9 +5,15 @@ import { requireModule, isStaffRole } from "@/lib/session";
 import { complexScopeWhere } from "@/lib/tenant-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 
-type SearchParams = Promise<{ q?: string }>;
+type SearchParams = Promise<{ q?: string; page?: string; pageSize?: string }>;
 
 export default async function ComplejosPage({
   searchParams,
@@ -16,8 +22,13 @@ export default async function ComplejosPage({
 }) {
   const session = await requireModule("complejos");
   const staff = isStaffRole(session.organizationRole);
-  const { q } = await searchParams;
+  const { q, page: pageRaw, pageSize: pageSizeRaw } = await searchParams;
   const query = q?.trim() ?? "";
+  const pageSize = parseListPageSize(pageSizeRaw);
+  const listParams = {
+    q: query || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   const scope = complexScopeWhere(session);
   const where: Prisma.ComplexWhereInput = {
@@ -35,10 +46,13 @@ export default async function ComplejosPage({
     ],
   };
 
+  const total = await prisma.complex.count({ where });
+  const page = clampListPage(parseListPage(pageRaw), total, pageSize);
   const complexes = await prisma.complex.findMany({
     where,
     include: { _count: { select: { units: true } } },
     orderBy: { name: "asc" },
+    ...prismaSkipTake(page, pageSize),
   });
 
   return (
@@ -60,7 +74,7 @@ export default async function ComplejosPage({
       </FilterBar>
       <DataTable
         headers={["Nombre", "Dirección", "Ciudad", "Unidades", ""]}
-        empty={complexes.length === 0}
+        empty={total === 0}
       >
         {complexes.map((c) => (
           <tr key={c.id} className="hover:bg-[var(--muted)]/40">
@@ -76,6 +90,12 @@ export default async function ComplejosPage({
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

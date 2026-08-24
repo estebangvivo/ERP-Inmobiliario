@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import {
   generateSettlementAction,
   generateSettlementsForPeriodAction,
@@ -21,10 +22,16 @@ const payInitial: DocActionResult | null = null;
 export function GenerateSettlementForm({
   owners,
 }: {
-  owners: { id: string; name: string }[];
+  owners: {
+    id: string;
+    name: string;
+    documentNumber?: string | null;
+    email?: string | null;
+  }[];
 }) {
   const router = useRouter();
   const now = new Date();
+  const [ownerId, setOwnerId] = useState("");
   const [state, formAction, pending] = useActionState(generateSettlementAction, initial);
   const [batchState, batchAction, batchPending] = useActionState(
     generateSettlementsForPeriodAction,
@@ -40,12 +47,15 @@ export function GenerateSettlementForm({
       <form action={formAction} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1 lg:col-span-2">
           <Label htmlFor="ownerId">Propietario</Label>
-          <Select id="ownerId" name="ownerId" required defaultValue="">
-            <option value="" disabled>Seleccionar…</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </Select>
+          <PartyPersonSearchSelect
+            id="ownerId"
+            name="ownerId"
+            kind="OWNER"
+            value={ownerId}
+            onChange={setOwnerId}
+            options={owners}
+            required
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="periodYear">Año</Label>

@@ -1,26 +1,15 @@
 import { PageHeader } from "@/components/erp/page-chrome";
 import { PropertyForm } from "@/components/erp/property-form";
-import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import { complexScopeWhere } from "@/lib/tenant-scope";
+import { listOrgPeople } from "@/server/queries/org-people";
 
 export default async function NuevaPropiedadPage() {
   const session = await requireStaff();
 
   const [owners, units] = await Promise.all([
-    prisma.organizationMember.findMany({
-      where: {
-        organizationId: session.organizationId,
-        role: "OWNER",
-        user: {
-          isActive: true,
-          ...excludePlatformSuperadminFromUser(),
-        },
-      },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { user: { name: "asc" } },
-    }),
+    listOrgPeople(session.organizationId, ["OWNER"]),
     prisma.unit.findMany({
       where: { complex: complexScopeWhere(session) },
       include: { complex: true, property: true },
@@ -33,7 +22,7 @@ export default async function NuevaPropiedadPage() {
       <PageHeader title="Nueva propiedad" description="Alta de inmueble en el portfolio." />
       <PropertyForm
         mode="create"
-        owners={owners.map((o) => o.user)}
+        owners={owners}
         units={units
           .filter((u) => !u.property)
           .map((u) => ({

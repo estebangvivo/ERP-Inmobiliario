@@ -8,7 +8,13 @@ import { isValidDni, normalizeDni } from "@/lib/dni";
 import { ROLE_DEFAULT_MODULES } from "@/features/auth/lib/modules";
 import { hashPassword } from "@/features/auth/lib/password";
 
-export type PartyPersonKind = "TENANT" | "GUARANTOR";
+export type PartyPersonKind = "OWNER" | "TENANT" | "GUARANTOR";
+
+const PARTY_KIND_LABEL: Record<PartyPersonKind, string> = {
+  OWNER: "propietario",
+  TENANT: "inquilino",
+  GUARANTOR: "garante",
+};
 
 export type CreatePartyPersonResult =
   | {
@@ -18,9 +24,8 @@ export type CreatePartyPersonResult =
   | { ok: false; error: string };
 
 /**
- * Alta rápida de inquilino o garante desde selectores de búsqueda.
- * Exige DNI y bloquea si ya existe ese documento como inquilino o garante
- * en la organización.
+ * Alta rápida de propietario, inquilino o garante desde selectores de búsqueda.
+ * Exige DNI y bloquea si ya existe ese documento como parte en la organización.
  */
 export async function createPartyPersonAction(input: {
   kind: PartyPersonKind;
@@ -49,7 +54,7 @@ export async function createPartyPersonAction(input: {
     const membersWithDoc = await prisma.organizationMember.findMany({
       where: {
         organizationId: orgId,
-        role: { in: ["TENANT", "GUARANTOR"] },
+        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
         user: { documentNumber: { not: null } },
       },
       include: {
@@ -61,7 +66,10 @@ export async function createPartyPersonAction(input: {
       (m) => normalizeDni(m.user.documentNumber ?? "") === dni,
     );
     if (clash) {
-      const as = clash.role === "TENANT" ? "inquilino" : "garante";
+      const as =
+        clash.role in PARTY_KIND_LABEL
+          ? PARTY_KIND_LABEL[clash.role as PartyPersonKind]
+          : "persona";
       return {
         ok: false,
         error: `Ya existe el DNI ${dni} como ${as}: ${clash.user.name}.`,
@@ -118,14 +126,11 @@ export async function createPartyPersonAction(input: {
       },
     });
     if (existingMember) {
-      if (
-        existingMember.role === "TENANT" ||
-        existingMember.role === "GUARANTOR"
-      ) {
+      if (existingMember.role in PARTY_KIND_LABEL) {
         return {
           ok: false,
           error: `Esa persona ya está cargada como ${
-            existingMember.role === "TENANT" ? "inquilino" : "garante"
+            PARTY_KIND_LABEL[existingMember.role as PartyPersonKind]
           }.`,
         };
       }
@@ -152,6 +157,8 @@ export async function createPartyPersonAction(input: {
     revalidatePath("/usuarios");
     revalidatePath("/tesoreria");
     revalidatePath("/cobros");
+    revalidatePath("/gestion/propiedades");
+    revalidatePath("/rendiciones");
 
     return {
       ok: true,

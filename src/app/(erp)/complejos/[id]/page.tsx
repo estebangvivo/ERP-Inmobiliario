@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, DataTable } from "@/components/erp/page-chrome";
+import { PageHeader, DataTable, ListPagination } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  paginateArray,
+  parseListPage,
+  parseListPageSize,
+} from "@/lib/list-pagination";
 import { ComplexForm } from "@/components/erp/complex-form";
 import { UnitForm } from "@/components/erp/unit-form";
 import { Badge } from "@/components/ui/badge";
@@ -11,24 +17,61 @@ import { requireStaff } from "@/lib/session";
 
 type Params = Promise<{ id: string }>;
 
-export default async function ComplejoDetailPage({ params }: { params: Params }) {
-  await requireStaff();
+export default async function ComplejoDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Promise<{ unitsPage?: string; pageSize?: string }>;
+}) {
+  const session = await requireStaff();
   const { id } = await params;
+  const sp = await searchParams;
+  const pageSize = parseListPageSize(sp.pageSize);
+  const listParams = {
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
-  const complex = await prisma.complex.findUnique({
-    where: { id },
-    include: {
-      units: {
-        include: { property: true },
-        orderBy: { code: "asc" },
+  const [complex, linkableProperties] = await Promise.all([
+    prisma.complex.findFirst({
+      where: { id, organizationId: session.organizationId },
+      include: {
+        units: {
+          include: { property: true },
+          orderBy: { code: "asc" },
+        },
+        expenses: {
+          take: 3,
+          orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+        },
       },
-      expenses: {
-        take: 3,
-        orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+    }),
+    prisma.property.findMany({
+      where: {
+        organizationId: session.organizationId,
+        unitId: null,
+        propertyType: { in: ["APARTMENT", "OFFICE", "COMMERCIAL"] },
       },
-    },
-  });
+      select: {
+        id: true,
+        title: true,
+        address: true,
+        city: true,
+        propertyType: true,
+        areaM2: true,
+        rooms: true,
+      },
+      orderBy: [{ city: "asc" }, { title: "asc" }],
+    }),
+  ]);
   if (!complex) notFound();
+
+  const unitsPage = clampListPage(
+    parseListPage(sp.unitsPage),
+    complex.units.length,
+    pageSize,
+  );
+  const unitsSlice = paginateArray(complex.units, unitsPage, pageSize);
 
   return (
     <div className="space-y-8">
@@ -84,12 +127,23 @@ export default async function ComplejoDetailPage({ params }: { params: Params })
 
       <section className="space-y-3">
         <h3 className="text-lg font-semibold">Unidades</h3>
-        <UnitForm complexId={complex.id} />
+        <UnitForm
+          complexId={complex.id}
+          properties={linkableProperties.map((p) => ({
+            id: p.id,
+            title: p.title,
+            address: p.address,
+            city: p.city,
+            propertyType: p.propertyType,
+            areaM2: p.areaM2?.toString() ?? null,
+            rooms: p.rooms,
+          }))}
+        />
         <DataTable
           headers={["Código", "Piso", "Coeficiente", "m²", "Ambientes", "Propiedad"]}
           empty={complex.units.length === 0}
         >
-          {complex.units.map((u) => (
+          {unitsSlice.items.map((u) => (
             <tr key={u.id}>
               <td className="px-4 py-3 font-medium">{u.code}</td>
               <td className="px-4 py-3">{u.floor ?? "—"}</td>
@@ -98,14 +152,26 @@ export default async function ComplejoDetailPage({ params }: { params: Params })
               <td className="px-4 py-3">{u.rooms ?? "—"}</td>
               <td className="px-4 py-3">
                 {u.property ? (
-                  <Badge variant="success">{u.property.title}</Badge>
+                  <Link
+                    href={`/gestion/propiedades/${u.property.id}`}
+                    className="inline-flex"
+                  >
+                    <Badge variant="success">{u.property.title}</Badge>
+                  </Link>
                 ) : (
-                  <Badge variant="outline">Sin publicar</Badge>
+                  <Badge variant="outline">Sin vincular</Badge>
                 )}
               </td>
             </tr>
           ))}
         </DataTable>
+        <ListPagination
+          page={unitsPage}
+          pageSize={pageSize}
+          total={complex.units.length}
+          params={listParams}
+          pageKey="unitsPage"
+        />
       </section>
     </div>
   );

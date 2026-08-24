@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,13 @@ export type PartyPersonOption = {
   id: string;
   name: string;
   documentNumber?: string | null;
+  email?: string | null;
+};
+
+const KIND_LABEL: Record<PartyPersonKind, string> = {
+  OWNER: "propietario",
+  TENANT: "inquilino",
+  GUARANTOR: "garante",
 };
 
 type Props = {
@@ -29,6 +37,8 @@ type Props = {
   required?: boolean;
   emptyLabel?: string;
   disabled?: boolean;
+  /** Muestra enlace al ABM de usuarios (alta completa). */
+  showAbmLink?: boolean;
 };
 
 export function PartyPersonSearchSelect({
@@ -41,6 +51,7 @@ export function PartyPersonSearchSelect({
   required = false,
   emptyLabel,
   disabled,
+  showAbmLink = true,
 }: Props) {
   const [extra, setExtra] = useState<PartyPersonOption[]>([]);
   const [creating, setCreating] = useState(false);
@@ -50,7 +61,7 @@ export function PartyPersonSearchSelect({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const kindLabel = kind === "TENANT" ? "inquilino" : "garante";
+  const kindLabel = KIND_LABEL[kind];
 
   const options = useMemo(() => {
     const map = new Map<string, PartyPersonOption>();
@@ -62,8 +73,10 @@ export function PartyPersonSearchSelect({
   const searchable: SearchableOption[] = options.map((o) => ({
     value: o.id,
     label: o.documentNumber ? `${o.name} · DNI ${o.documentNumber}` : o.name,
-    keywords: o.documentNumber ?? undefined,
+    keywords: [o.documentNumber, o.email].filter(Boolean).join(" ") || undefined,
   }));
+
+  const abmHref = `/usuarios?alta=1&role=${kind}`;
 
   function openCreate(query: string) {
     setDraftName(query);
@@ -112,10 +125,25 @@ export function PartyPersonSearchSelect({
         disabled={disabled || creating}
         emptyLabel={emptyLabel}
         placeholder={`Buscar ${kindLabel}…`}
-        searchPlaceholder="Nombre o DNI…"
+        searchPlaceholder="Nombre, DNI o email…"
         onCreateNew={openCreate}
         createNewLabel={`Agregar ${kindLabel} nuevo…`}
       />
+
+      {showAbmLink ? (
+        <p className="text-xs text-[var(--muted-foreground)]">
+          <Link
+            href={abmHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[var(--primary)] hover:underline"
+          >
+            Alta completa en Usuarios
+          </Link>
+          {" · "}
+          Si no está en la lista, podés crearlo acá o desde el ABM.
+        </p>
+      ) : null}
 
       {creating ? (
         <div className="space-y-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--muted)]/30 p-3">
@@ -152,8 +180,8 @@ export function PartyPersonSearchSelect({
             </div>
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
-            El sistema verifica que el DNI no exista ya como inquilino o
-            garante.
+            El sistema verifica que el DNI no exista ya como propietario,
+            inquilino o garante.
           </p>
           {error ? (
             <p className="text-sm text-[var(--destructive)]">{error}</p>

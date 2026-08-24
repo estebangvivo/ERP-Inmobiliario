@@ -9,7 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import { GenerateBillsForm } from "@/components/erp/billing-forms";
 import { syncOverdueBills } from "@/server/services/billing";
 
@@ -20,7 +26,7 @@ function statusVariant(status: BillStatus) {
   return "secondary" as const;
 }
 
-type SearchParams = Promise<{ q?: string; status?: string }>;
+type SearchParams = Promise<{ q?: string; status?: string; page?: string; pageSize?: string }>;
 
 export default async function CobrosPage({
   searchParams,
@@ -32,6 +38,12 @@ export default async function CobrosPage({
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status as BillStatus | undefined;
+  const pageSize = parseListPageSize(params.pageSize);
+  const listParams = {
+    q: q || undefined,
+    status: status || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   await syncOverdueBills(session.organizationId);
 
@@ -55,12 +67,15 @@ export default async function CobrosPage({
     ],
   };
 
+  const total = await prisma.tenantBill.count({ where });
+  const page = clampListPage(parseListPage(params.page), total, pageSize);
   const bills = await prisma.tenantBill.findMany({
     where,
     include: {
       contract: { include: { property: true } },
     },
     orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }, { dueDate: "asc" }],
+    ...prismaSkipTake(page, pageSize),
   });
 
   return (
@@ -101,7 +116,7 @@ export default async function CobrosPage({
 
       <DataTable
         headers={["Período", "Contrato", "Propiedad", "Total", "Pagado", "Estado", ""]}
-        empty={bills.length === 0}
+        empty={total === 0}
       >
         {bills.map((bill) => (
           <tr key={bill.id} className="hover:bg-[var(--muted)]/40">
@@ -131,6 +146,12 @@ export default async function CobrosPage({
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

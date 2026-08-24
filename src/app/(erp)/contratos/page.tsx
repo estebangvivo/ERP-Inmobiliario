@@ -10,7 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { DataTable, FilterBar, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, FilterBar, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import {
   PersonNameLink,
   PropertyHistoryLink,
@@ -19,7 +25,7 @@ import { IndexRatesForm } from "@/components/erp/index-rates-form";
 import { IndexRatesLoadedButton } from "@/components/erp/index-rates-loaded";
 import { INDEX_PERIOD_OPTIONS, indexRateKey } from "@/lib/index-periods";
 
-type SearchParams = Promise<{ q?: string; status?: string }>;
+type SearchParams = Promise<{ q?: string; status?: string; page?: string; pageSize?: string }>;
 
 export default async function ContratosPage({
   searchParams,
@@ -31,6 +37,12 @@ export default async function ContratosPage({
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status as ContractStatus | undefined;
+  const pageSize = parseListPageSize(params.pageSize);
+  const listParams = {
+    q: q || undefined,
+    status: status || undefined,
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   const scope = contractScopeWhere(session);
   const where: Prisma.ContractWhereInput = {
@@ -52,24 +64,8 @@ export default async function ContratosPage({
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
-  const [contracts, indexRates] = await Promise.all([
-    prisma.contract.findMany({
-      where,
-      select: {
-        id: true,
-        code: true,
-        status: true,
-        startDate: true,
-        endDate: true,
-        initialRent: true,
-        currency: true,
-        property: { select: { id: true, title: true } },
-        parties: {
-          select: { role: true, user: { select: { id: true, name: true } } },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
+  const [total, indexRates] = await Promise.all([
+    prisma.contract.count({ where }),
     staff
       ? prisma.indexRate
           .findMany({
@@ -88,6 +84,26 @@ export default async function ContratosPage({
           })
       : Promise.resolve([]),
   ]);
+
+  const page = clampListPage(parseListPage(params.page), total, pageSize);
+  const contracts = await prisma.contract.findMany({
+    where,
+    select: {
+      id: true,
+      code: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      initialRent: true,
+      currency: true,
+      property: { select: { id: true, title: true } },
+      parties: {
+        select: { role: true, user: { select: { id: true, name: true } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    ...prismaSkipTake(page, pageSize),
+  });
 
   const savedRates: Record<
     string,
@@ -192,7 +208,7 @@ export default async function ContratosPage({
           "Estado",
           "",
         ]}
-        empty={contracts.length === 0}
+        empty={total === 0}
       >
         {contracts.map((c) => {
           const tenant = c.parties.find((p) => p.role === "TENANT")?.user;
@@ -234,6 +250,12 @@ export default async function ContratosPage({
           );
         })}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

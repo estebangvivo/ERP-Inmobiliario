@@ -3,6 +3,13 @@ import { requireStaff } from "@/lib/session";
 import type { CheckStatus } from "@prisma/client";
 import { backfillMissingChecksFromPostedReceipts } from "@/features/treasury/lib/check-portfolio";
 import { formatDateAR } from "@/lib/format-date";
+import {
+  clampListPage,
+  parseListPageSize,
+  prismaSkipTake,
+  type ListPageSize,
+} from "@/lib/list-pagination";
+import type { PaginatedResult } from "@/lib/list-pagination";
 
 export type CheckAllocationTarget = {
   contractId: string;
@@ -45,23 +52,35 @@ function toNumber(value: { toNumber(): number } | number): number {
 export async function listChecks(opts?: {
   status?: CheckStatus | "ALL";
   kind?: "THIRD_PARTY" | "OWN" | "ALL";
-}): Promise<CheckListItem[]> {
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedResult<CheckListItem>> {
   const session = await requireStaff();
   const status = opts?.status ?? "IN_PORTFOLIO";
   const kind = opts?.kind ?? "THIRD_PARTY";
+  const paginate = opts?.page != null || opts?.pageSize != null;
+  const pageSize = parseListPageSize(opts?.pageSize);
 
   // Repara cheques de recibos imputados antes de existir la cartera.
   await prisma.$transaction((tx) =>
     backfillMissingChecksFromPostedReceipts(tx, session.organizationId),
   );
 
+  const where = {
+    organizationId: session.organizationId,
+    ...(status !== "ALL" ? { status } : {}),
+    ...(kind !== "ALL" ? { kind } : {}),
+  };
+
+  const total = await prisma.checkInstrument.count({ where });
+  const page = paginate
+    ? clampListPage(opts?.page ?? 1, total, pageSize)
+    : 1;
+
   const rows = await prisma.checkInstrument.findMany({
-    where: {
-      organizationId: session.organizationId,
-      ...(status !== "ALL" ? { status } : {}),
-      ...(kind !== "ALL" ? { kind } : {}),
-    },
+    where,
     orderBy: [{ dueDate: "asc" }, { number: "asc" }],
+    ...(paginate ? prismaSkipTake(page, pageSize) : {}),
     include: {
       receipt: {
         select: {
@@ -96,7 +115,7 @@ export async function listChecks(opts?: {
     },
   });
 
-  return rows.map((c) => {
+  const items = rows.map((c) => {
     const seen = new Set<string>();
     const allocationTargets: CheckAllocationTarget[] = [];
     const sourceLines = [
@@ -143,6 +162,13 @@ export async function listChecks(opts?: {
       createdAt: c.createdAt,
     };
   });
+
+  return {
+    items,
+    total,
+    page,
+    pageSize: (paginate ? pageSize : Math.max(total, 1)) as ListPageSize,
+  };
 }
 
 /** Cheques disponibles para usar en una orden de pago. */
@@ -159,7 +185,7 @@ export async function listPortfolioChecksForPayment(): Promise<
     label: string;
   }[]
 > {
-  const checks = await listChecks({ status: "IN_PORTFOLIO" });
+  const checks = (await listChecks({ status: "IN_PORTFOLIO" })).items;
   return checks.map((c) => ({
     id: c.id,
     number: c.number,

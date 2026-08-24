@@ -399,7 +399,7 @@ async function main() {
       commissionValue: 5,
       commissionTenantPct: 0,
       commissionOwnerPct: 100,
-      lateFeeDailyRatePct: 0.05,
+      lateFeeDailyRatePct: 1.2,
       includesOrdinaryExp: true,
       includesExtraordExp: false,
       parties: {

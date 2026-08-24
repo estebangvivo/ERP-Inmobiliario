@@ -8,18 +8,33 @@ import {
 import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DataTable, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import { WorkOrderForm } from "@/components/erp/work-order-forms";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 
-export default async function MantenimientoPage() {
+export default async function MantenimientoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
   const session = await requireModule("mantenimiento");
   const staff = isStaffRole(session.organizationRole);
+  const params = await searchParams;
+  const pageSize = parseListPageSize(params.pageSize);
+  const listParams = {
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   const propScope = propertyScopeWhere(session);
   const woScope = workOrderScopeWhere(session);
 
-  const [properties, suppliers, workOrders] = await Promise.all([
+  const [properties, suppliers, total] = await Promise.all([
     prisma.property.findMany({
       where: propScope,
       orderBy: { title: "asc" },
@@ -39,16 +54,20 @@ export default async function MantenimientoPage() {
           orderBy: { user: { name: "asc" } },
         })
       : Promise.resolve([]),
-    prisma.workOrder.findMany({
-      where: woScope,
-      include: {
-        property: true,
-        assignee: true,
-        _count: { select: { invoices: true } },
-      },
-      orderBy: { requestedAt: "desc" },
-    }),
+    prisma.workOrder.count({ where: woScope }),
   ]);
+
+  const page = clampListPage(parseListPage(params.page), total, pageSize);
+  const workOrders = await prisma.workOrder.findMany({
+    where: woScope,
+    include: {
+      property: true,
+      assignee: true,
+      _count: { select: { invoices: true } },
+    },
+    orderBy: { requestedAt: "desc" },
+    ...prismaSkipTake(page, pageSize),
+  });
 
   return (
     <div className="space-y-6">
@@ -71,7 +90,7 @@ export default async function MantenimientoPage() {
 
       <DataTable
         headers={["Código", "Título", "Propiedad", "Proveedor", "Cargo", "Estado", "Facturas", ""]}
-        empty={workOrders.length === 0}
+        empty={total === 0}
       >
         {workOrders.map((wo) => (
           <tr key={wo.id}>
@@ -94,6 +113,12 @@ export default async function MantenimientoPage() {
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

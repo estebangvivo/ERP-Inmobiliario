@@ -22,7 +22,7 @@ export async function listOrgPeople(
       },
     },
     include: {
-      user: { select: { id: true, name: true, documentNumber: true } },
+      user: { select: { id: true, name: true, documentNumber: true, email: true } },
     },
     orderBy: { user: { name: "asc" } },
   });

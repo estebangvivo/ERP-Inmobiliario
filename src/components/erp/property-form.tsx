@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import {
   createPropertyAction,
   updatePropertyAction,
@@ -26,7 +27,12 @@ import {
 
 const initial: ActionResult | null = null;
 
-type OwnerOption = { id: string; name: string };
+type OwnerOption = {
+  id: string;
+  name: string;
+  documentNumber?: string | null;
+  email?: string | null;
+};
 type UnitOption = { id: string; label: string };
 
 type PropertyFormProps = {
@@ -93,6 +99,7 @@ export function PropertyForm(props: PropertyFormProps) {
   );
   const showRent = operationType === "RENT" || operationType === "BOTH";
   const showSale = operationType === "SALE" || operationType === "BOTH";
+  const [ownerId, setOwnerId] = useState(p?.ownerId ?? "");
 
   useEffect(() => {
     if (state?.ok) {
@@ -217,12 +224,15 @@ export function PropertyForm(props: PropertyFormProps) {
         ) : null}
         <div className="space-y-2">
           <Label htmlFor="ownerId">Propietario</Label>
-          <Select id="ownerId" name="ownerId" defaultValue={p?.ownerId ?? ""}>
-            <option value="">Sin asignar</option>
-            {props.owners.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </Select>
+          <PartyPersonSearchSelect
+            id="ownerId"
+            name="ownerId"
+            kind="OWNER"
+            value={ownerId}
+            onChange={setOwnerId}
+            options={props.owners}
+            emptyLabel="Sin asignar"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="address">Dirección</Label>

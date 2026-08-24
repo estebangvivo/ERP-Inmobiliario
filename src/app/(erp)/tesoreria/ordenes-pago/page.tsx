@@ -7,13 +7,26 @@ import {
   TREASURY_STATUS_STYLE,
 } from "@/features/treasury/lib/labels";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/erp/page-chrome";
+import { ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import { parseListPage, parseListPageSize } from "@/lib/list-pagination";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdenesPagoPage() {
+type PageProps = {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+};
+
+export default async function OrdenesPagoPage({ searchParams }: PageProps) {
   await requireModule("tesoreria");
-  const orders = await listPaymentOrders();
+  const params = await searchParams;
+  const pageSize = parseListPageSize(params.pageSize);
+  const { items: orders, total, page } = await listPaymentOrders({
+    page: parseListPage(params.page),
+    pageSize,
+  });
+  const listParams = {
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   return (
     <div className="space-y-6">
@@ -27,41 +40,49 @@ export default async function OrdenesPagoPage() {
         }
       />
 
-      {orders.length === 0 ? (
+      {total === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)]">
           Todavía no hay órdenes de pago.
         </p>
       ) : (
-        <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
-          {orders.map((item) => (
-            <li key={item.id}>
-              <Link
-                href={`/tesoreria/ordenes-pago/${item.id}`}
-                className="flex flex-col gap-2 py-4 hover:bg-[var(--muted)]/40 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium">
-                    {item.number}{" "}
-                    <span
-                      className={`ml-2 rounded px-1.5 py-0.5 text-xs ${TREASURY_STATUS_STYLE[item.status]}`}
-                    >
-                      {TREASURY_STATUS_LABEL[item.status]}
-                    </span>
+        <>
+          <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
+            {orders.map((item) => (
+              <li key={item.id}>
+                <Link
+                  href={`/tesoreria/ordenes-pago/${item.id}`}
+                  className="flex flex-col gap-2 py-4 hover:bg-[var(--muted)]/40 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {item.number}{" "}
+                      <span
+                        className={`ml-2 rounded px-1.5 py-0.5 text-xs ${TREASURY_STATUS_STYLE[item.status]}`}
+                      >
+                        {TREASURY_STATUS_LABEL[item.status]}
+                      </span>
+                    </p>
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      {item.partyName}
+                      {item.contractLabels.length
+                        ? ` · ${item.contractLabels.join(", ")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <p className="font-medium tabular-nums">
+                    {formatMoney(item.totalAmount, item.currency)}
                   </p>
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    {item.partyName}
-                    {item.contractLabels.length
-                      ? ` · ${item.contractLabels.join(", ")}`
-                      : ""}
-                  </p>
-                </div>
-                <p className="font-medium tabular-nums">
-                  {formatMoney(item.totalAmount, item.currency)}
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            params={listParams}
+          />
+        </>
       )}
     </div>
   );

@@ -8,18 +8,39 @@ import {
 import { formatMoney } from "@/lib/money";
 import { SERVICE_COST_CATEGORY_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import {
   DeleteServiceCostButton,
   GenerateFromCostsForm,
   ServiceCostForm,
 } from "@/components/erp/service-cost-forms";
 
-export default async function ExpensasPage() {
+export default async function ExpensasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    costsPage?: string;
+    expPage?: string;
+    pageSize?: string;
+  }>;
+}) {
   const session = await requireModule("expensas");
   const staff = isStaffRole(session.organizationRole);
+  const params = await searchParams;
+  const pageSize = parseListPageSize(params.pageSize);
+  const costsWhere = {
+    organizationId: session.organizationId,
+    ledger: "EXPENSES" as const,
+  };
+  const expWhere = { AND: [expenseScopeWhere(session), { ledger: "EXPENSES" as const }] };
 
-  const [complexes, properties, expenses, serviceCosts] = await Promise.all([
+  const [complexes, properties, costsTotal, expTotal] = await Promise.all([
     prisma.complex.findMany({
       where: complexScopeWhere(session),
       orderBy: { name: "asc" },
@@ -30,28 +51,47 @@ export default async function ExpensasPage() {
       orderBy: { title: "asc" },
       select: { id: true, title: true },
     }),
+    prisma.serviceCost.count({ where: costsWhere }),
+    prisma.expense.count({ where: expWhere }),
+  ]);
+
+  const costsPageNum = clampListPage(
+    parseListPage(params.costsPage),
+    costsTotal,
+    pageSize,
+  );
+  const expPageNum = clampListPage(parseListPage(params.expPage), expTotal, pageSize);
+
+  const [serviceCosts, expenses] = await Promise.all([
+    staff
+      ? prisma.serviceCost.findMany({
+          where: costsWhere,
+          include: {
+            complex: { select: { name: true } },
+            property: { select: { title: true } },
+          },
+          orderBy: [
+            { periodYear: "desc" },
+            { periodMonth: "desc" },
+            { createdAt: "desc" },
+          ],
+          ...prismaSkipTake(costsPageNum, pageSize),
+        })
+      : Promise.resolve([]),
     prisma.expense.findMany({
-      where: { AND: [expenseScopeWhere(session), { ledger: "EXPENSES" }] },
+      where: expWhere,
       include: {
         complex: true,
         allocations: { include: { unit: true } },
       },
       orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-    }),
-    prisma.serviceCost.findMany({
-      where: { organizationId: session.organizationId, ledger: "EXPENSES" },
-      include: {
-        complex: { select: { name: true } },
-        property: { select: { title: true } },
-      },
-      orderBy: [
-        { periodYear: "desc" },
-        { periodMonth: "desc" },
-        { createdAt: "desc" },
-      ],
-      take: 100,
+      ...prismaSkipTake(expPageNum, pageSize),
     }),
   ]);
+
+  const listParams = {
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
   return (
     <div className="space-y-8">
@@ -83,7 +123,7 @@ export default async function ExpensasPage() {
               "Monto",
               "",
             ]}
-            empty={serviceCosts.length === 0}
+            empty={costsTotal === 0}
           >
             {serviceCosts.map((c) => (
               <tr key={c.id}>
@@ -114,6 +154,13 @@ export default async function ExpensasPage() {
               </tr>
             ))}
           </DataTable>
+          <ListPagination
+            page={costsPageNum}
+            pageSize={pageSize}
+            total={costsTotal}
+            params={listParams}
+            pageKey="costsPage"
+          />
 
           <div className="pt-2">
             <h3 className="mb-2 text-base font-semibold">Generar expensas</h3>
@@ -138,7 +185,7 @@ export default async function ExpensasPage() {
             "Unidades",
             "Inquilino",
           ]}
-          empty={expenses.length === 0}
+          empty={expTotal === 0}
         >
           {expenses.map((e) => (
             <tr key={e.id}>
@@ -172,6 +219,13 @@ export default async function ExpensasPage() {
             </tr>
           ))}
         </DataTable>
+        <ListPagination
+          page={expPageNum}
+          pageSize={pageSize}
+          total={expTotal}
+          params={listParams}
+          pageKey="expPage"
+        />
       </section>
     </div>
   );

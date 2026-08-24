@@ -1,7 +1,7 @@
 import type { OrganizationRole } from "@prisma/client";
 
 export const USER_LIST_PAGE_SIZES = [10, 20, 50, 100] as const;
-export const USER_LIST_DEFAULT_PAGE_SIZE = 20;
+export const USER_LIST_DEFAULT_PAGE_SIZE = 10;
 export type UserListPageSize = (typeof USER_LIST_PAGE_SIZES)[number];
 
 export const USER_LIST_ROLES: OrganizationRole[] = [

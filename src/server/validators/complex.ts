@@ -14,10 +14,6 @@ export const complexUpdateSchema = complexCreateSchema.extend({
 
 export const unitCreateSchema = z.object({
   complexId: z.string().min(1),
-  code: z.string().min(1),
-  floor: z.string().optional(),
+  propertyId: z.string().min(1, "Elegí una propiedad."),
   ownershipCoefficient: z.coerce.number().positive().max(1),
-  areaM2: z.coerce.number().positive().optional().or(z.literal("")),
-  rooms: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
-  bathrooms: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
 });

@@ -16,6 +16,7 @@ type SearchParams = Promise<{
   status?: string;
   page?: string;
   pageSize?: string;
+  alta?: string;
 }>;
 
 export default async function UsuariosPage({
@@ -30,6 +31,8 @@ export default async function UsuariosPage({
   const status = parseUserListStatus(params.status);
   const pageSize = parseUserListPageSize(params.pageSize);
   const requestedPage = Math.max(1, Number(params.page) || 1);
+  const openAlta = params.alta === "1" || params.alta === "true";
+  const defaultAltaRole = parseUserListRole(params.role);
 
   const { users, total, page } = await listOrganizationUsers(
     session.organizationId,
@@ -45,6 +48,8 @@ export default async function UsuariosPage({
       <UsersAdminPanel
         users={users}
         organizationId={session.organizationId}
+        openAlta={openAlta}
+        defaultAltaRole={defaultAltaRole}
         list={{
           q,
           role: role ?? "",

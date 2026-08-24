@@ -2,6 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import type { TreasuryPaymentMethod, TreasuryDocStatus } from "@prisma/client";
 import { formatPaymentMethodsShort } from "@/features/treasury/lib/payments";
+import {
+  clampListPage,
+  parseListPageSize,
+  prismaSkipTake,
+  type PaginatedResult,
+} from "@/lib/list-pagination";
+
+type TreasuryListOpts = {
+  page?: number;
+  pageSize?: number;
+};
 
 export type TreasuryListItem = {
   id: string;
@@ -21,11 +32,17 @@ function toNumber(value: { toNumber(): number } | number): number {
   return typeof value === "number" ? value : value.toNumber();
 }
 
-export async function listReceipts(): Promise<TreasuryListItem[]> {
+export async function listReceipts(
+  opts?: TreasuryListOpts,
+): Promise<PaginatedResult<TreasuryListItem>> {
   const session = await requireStaff();
+  const pageSize = parseListPageSize(String(opts?.pageSize));
+  const where = { organizationId: session.organizationId };
+  const total = await prisma.receipt.count({ where });
+  const page = clampListPage(opts?.page ?? 1, total, pageSize);
 
   const rows = await prisma.receipt.findMany({
-    where: { organizationId: session.organizationId },
+    where,
     orderBy: [{ issueDate: "desc" }, { number: "desc" }],
     include: {
       tenant: { select: { name: true } },
@@ -37,34 +54,48 @@ export async function listReceipts(): Promise<TreasuryListItem[]> {
         },
       },
     },
+    ...prismaSkipTake(page, pageSize),
   });
 
-  return rows.map((r) => ({
-    id: r.id,
-    number: r.number,
-    issueDate: r.issueDate,
-    status: r.status,
-    paymentMethod: r.paymentMethod,
-    paymentMethodsLabel: formatPaymentMethodsShort(r.payments, r.paymentMethod),
-    partyName: r.tenant?.name ?? r.partyName ?? "—",
-    concept: r.concept,
-    totalAmount: toNumber(r.totalAmount),
-    currency: r.currency,
-    contractLabels: [
-      ...new Set(
-        r.lines
-          .filter((l) => l.contract)
-          .map((l) => `${l.contract!.code} · ${l.property?.title ?? ""}`.trim()),
-      ),
-    ],
-  }));
+  return {
+    total,
+    page,
+    pageSize,
+    items: rows.map((r) => ({
+      id: r.id,
+      number: r.number,
+      issueDate: r.issueDate,
+      status: r.status,
+      paymentMethod: r.paymentMethod,
+      paymentMethodsLabel: formatPaymentMethodsShort(r.payments, r.paymentMethod),
+      partyName: r.tenant?.name ?? r.partyName ?? "—",
+      concept: r.concept,
+      totalAmount: toNumber(r.totalAmount),
+      currency: r.currency,
+      contractLabels: [
+        ...new Set(
+          r.lines
+            .filter((l) => l.contract)
+            .map(
+              (l) => `${l.contract!.code} · ${l.property?.title ?? ""}`.trim(),
+            ),
+        ),
+      ],
+    })),
+  };
 }
 
-export async function listPaymentOrders(): Promise<TreasuryListItem[]> {
+export async function listPaymentOrders(
+  opts?: TreasuryListOpts,
+): Promise<PaginatedResult<TreasuryListItem>> {
   const session = await requireStaff();
+  const pageSize = parseListPageSize(String(opts?.pageSize));
+  const where = { organizationId: session.organizationId };
+  const total = await prisma.paymentOrder.count({ where });
+  const page = clampListPage(opts?.page ?? 1, total, pageSize);
 
   const rows = await prisma.paymentOrder.findMany({
-    where: { organizationId: session.organizationId },
+    where,
     orderBy: [{ issueDate: "desc" }, { number: "desc" }],
     include: {
       supplier: { select: { name: true } },
@@ -76,27 +107,35 @@ export async function listPaymentOrders(): Promise<TreasuryListItem[]> {
         },
       },
     },
+    ...prismaSkipTake(page, pageSize),
   });
 
-  return rows.map((r) => ({
-    id: r.id,
-    number: r.number,
-    issueDate: r.issueDate,
-    status: r.status,
-    paymentMethod: r.paymentMethod,
-    paymentMethodsLabel: formatPaymentMethodsShort(r.payments, r.paymentMethod),
-    partyName: r.supplier?.name ?? r.partyName ?? "—",
-    concept: r.concept,
-    totalAmount: toNumber(r.totalAmount),
-    currency: r.currency,
-    contractLabels: [
-      ...new Set(
-        r.lines
-          .filter((l) => l.contract)
-          .map((l) => `${l.contract!.code} · ${l.property?.title ?? ""}`.trim()),
-      ),
-    ],
-  }));
+  return {
+    total,
+    page,
+    pageSize,
+    items: rows.map((r) => ({
+      id: r.id,
+      number: r.number,
+      issueDate: r.issueDate,
+      status: r.status,
+      paymentMethod: r.paymentMethod,
+      paymentMethodsLabel: formatPaymentMethodsShort(r.payments, r.paymentMethod),
+      partyName: r.supplier?.name ?? r.partyName ?? "—",
+      concept: r.concept,
+      totalAmount: toNumber(r.totalAmount),
+      currency: r.currency,
+      contractLabels: [
+        ...new Set(
+          r.lines
+            .filter((l) => l.contract)
+            .map(
+              (l) => `${l.contract!.code} · ${l.property?.title ?? ""}`.trim(),
+            ),
+        ),
+      ],
+    })),
+  };
 }
 
 export async function getReceiptById(id: string) {

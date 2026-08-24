@@ -348,22 +348,15 @@ export function ContractCreateForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="ownerId">Propietario</Label>
-          <Select
+          <PartyPersonSearchSelect
             id="ownerId"
             name="ownerId"
-            required
+            kind="OWNER"
             value={ownerId}
-            onChange={(e) => setOwnerId(e.target.value)}
-          >
-            <option value="" disabled>
-              Seleccionar…
-            </option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </Select>
+            onChange={setOwnerId}
+            options={owners}
+            required
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="tenantId">Inquilino</Label>
@@ -442,7 +435,7 @@ export function ContractCreateForm({
             name="lateFeeDailyRatePct"
             type="number"
             step="0.0001"
-            defaultValue={0.05}
+            defaultValue={1.2}
           />
         </div>
 

@@ -92,29 +92,116 @@ export async function createUnitAction(
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireStaff();
+  const session = await requireStaff();
   const parsed = unitCreateSchema.safeParse(formDataToObject(formData));
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
   const d = parsed.data;
+
+  const complex = await prisma.complex.findFirst({
+    where: { id: d.complexId, organizationId: session.organizationId },
+    select: { id: true },
+  });
+  if (!complex) {
+    return { ok: false, error: "Edificio no encontrado." };
+  }
+
+  const property = await prisma.property.findFirst({
+    where: {
+      id: d.propertyId,
+      organizationId: session.organizationId,
+      unitId: null,
+      propertyType: { in: ["APARTMENT", "OFFICE", "COMMERCIAL"] },
+    },
+    select: {
+      id: true,
+      title: true,
+      address: true,
+      areaM2: true,
+      rooms: true,
+      bathrooms: true,
+    },
+  });
+  if (!property) {
+    return {
+      ok: false,
+      error: "La propiedad no existe, ya está en un edificio o no es un departamento/local.",
+    };
+  }
+
+  const baseCode = unitCodeFromProperty(property.title, property.address, property.id);
+  let code = baseCode;
+  let suffix = 2;
+  while (
+    await prisma.unit.findUnique({
+      where: { complexId_code: { complexId: d.complexId, code } },
+    })
+  ) {
+    code = `${baseCode.slice(0, 36)}-${suffix}`;
+    suffix += 1;
+  }
+
+  const floor = guessFloorFromText(property.title, property.address);
+
   try {
-    await prisma.unit.create({
-      data: {
-        complexId: d.complexId,
-        code: d.code,
-        floor: d.floor || null,
-        ownershipCoefficient: d.ownershipCoefficient,
-        areaM2: typeof d.areaM2 === "number" ? d.areaM2 : null,
-        rooms: typeof d.rooms === "number" ? d.rooms : null,
-        bathrooms: typeof d.bathrooms === "number" ? d.bathrooms : null,
-      },
+    await prisma.$transaction(async (tx) => {
+      const stillFree = await tx.property.findFirst({
+        where: { id: property.id, unitId: null },
+        select: { id: true },
+      });
+      if (!stillFree) {
+        throw new Error("PROPERTY_TAKEN");
+      }
+
+      const unit = await tx.unit.create({
+        data: {
+          complexId: d.complexId,
+          code,
+          floor,
+          ownershipCoefficient: d.ownershipCoefficient,
+          areaM2: property.areaM2,
+          rooms: property.rooms,
+          bathrooms: property.bathrooms,
+        },
+      });
+
+      await tx.property.update({
+        where: { id: property.id },
+        data: { unitId: unit.id },
+      });
     });
-  } catch {
-    return { ok: false, error: "No se pudo crear la unidad (¿código duplicado?)" };
+  } catch (error) {
+    if (error instanceof Error && error.message === "PROPERTY_TAKEN") {
+      return {
+        ok: false,
+        error: "Esa propiedad ya fue vinculada a otra unidad.",
+      };
+    }
+    return { ok: false, error: "No se pudo crear la unidad." };
   }
 
   revalidatePath(`/complejos/${d.complexId}`);
+  revalidatePath("/gestion/propiedades");
+  revalidatePath(`/gestion/propiedades/${property.id}`);
   return { ok: true };
+}
+
+function unitCodeFromProperty(title: string, address: string, id: string): string {
+  const t = title.trim();
+  if (t.length >= 1 && t.length <= 40) return t;
+  const left = address.split(" - ")[0]?.trim() || address.trim();
+  if (left.length >= 1 && left.length <= 40) return left;
+  return `U-${id.slice(-6)}`;
+}
+
+/** Intenta extraer piso de título/dirección (ej. "3 D", "Piso 2"). */
+function guessFloorFromText(title: string, address: string): string | null {
+  const text = `${title} ${address}`;
+  const m = text.match(/\b(?:piso|planta)\s*(\d+[º°]?|\w+)/i);
+  if (m?.[1]) return m[1]!.replace(/[º°]/, "");
+  const m2 = text.match(/^(\d+)\s*[A-Za-z]/);
+  if (m2?.[1]) return m2[1];
+  return null;
 }

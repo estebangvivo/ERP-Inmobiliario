@@ -6,16 +6,31 @@ import { formatMoney } from "@/lib/money";
 import { SETTLEMENT_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DataTable, PageHeader } from "@/components/erp/page-chrome";
+import { DataTable, ListPagination, PageHeader } from "@/components/erp/page-chrome";
+import {
+  clampListPage,
+  parseListPage,
+  parseListPageSize,
+  prismaSkipTake,
+} from "@/lib/list-pagination";
 import { GenerateSettlementForm } from "@/components/erp/settlement-forms";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 
-export default async function RendicionesPage() {
+export default async function RendicionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
   const session = await requireModule("rendiciones");
   const staff = isStaffRole(session.organizationRole);
   const scope = settlementScopeWhere(session);
+  const params = await searchParams;
+  const pageSize = parseListPageSize(params.pageSize);
+  const listParams = {
+    pageSize: pageSize !== 10 ? String(pageSize) : undefined,
+  };
 
-  const [owners, settlements] = await Promise.all([
+  const [owners, total] = await Promise.all([
     staff
       ? prisma.organizationMember.findMany({
           where: {
@@ -26,16 +41,20 @@ export default async function RendicionesPage() {
               ...excludePlatformSuperadminFromUser(),
             },
           },
-          include: { user: { select: { id: true, name: true } } },
+          include: { user: { select: { id: true, name: true, documentNumber: true, email: true } } },
           orderBy: { user: { name: "asc" } },
         })
       : Promise.resolve([]),
-    prisma.ownerSettlement.findMany({
-      where: scope,
-      include: { owner: true, _count: { select: { lines: true } } },
-      orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-    }),
+    prisma.ownerSettlement.count({ where: scope }),
   ]);
+
+  const page = clampListPage(parseListPage(params.page), total, pageSize);
+  const settlements = await prisma.ownerSettlement.findMany({
+    where: scope,
+    include: { owner: true, _count: { select: { lines: true } } },
+    orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+    ...prismaSkipTake(page, pageSize),
+  });
 
   return (
     <div className="space-y-6">
@@ -57,7 +76,7 @@ export default async function RendicionesPage() {
 
       <DataTable
         headers={["Código", "Propietario", "Período", "Bruto", "Neto", "Estado", ""]}
-        empty={settlements.length === 0}
+        empty={total === 0}
       >
         {settlements.map((s) => (
           <tr key={s.id}>
@@ -93,6 +112,12 @@ export default async function RendicionesPage() {
           </tr>
         ))}
       </DataTable>
+      <ListPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        params={listParams}
+      />
     </div>
   );
 }

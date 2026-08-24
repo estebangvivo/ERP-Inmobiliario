@@ -8,8 +8,26 @@ import {
   complexUpdateSchema,
   unitCreateSchema,
 } from "@/server/validators/complex";
-import { LINKABLE_COMPLEX_PROPERTY_TYPES } from "@/server/validators/property";
+import { PropertyType } from "@prisma/client";
+import {
+  EXCLUDED_COMPLEX_PROPERTY_TYPES,
+} from "@/server/validators/property";
 import type { ActionResult } from "@/server/actions/users";
+
+export type LinkablePropertyRow = {
+  id: string;
+  title: string;
+  address: string;
+  city: string;
+  propertyType: PropertyType;
+  areaM2: string | null;
+  rooms: number | null;
+};
+
+export type LinkedPropertyHint = {
+  title: string;
+  complexName: string;
+};
 
 function formDataToObject(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -89,6 +107,93 @@ export async function updateComplexAction(
   return { ok: true };
 }
 
+const linkablePropertySelect = {
+  id: true,
+  title: true,
+  address: true,
+  city: true,
+  propertyType: true,
+  areaM2: true,
+  rooms: true,
+} as const;
+
+function mapLinkableProperty(p: {
+  id: string;
+  title: string;
+  address: string;
+  city: string;
+  propertyType: PropertyType;
+  areaM2: { toString(): string } | null;
+  rooms: number | null;
+}): LinkablePropertyRow {
+  return {
+    id: p.id,
+    title: p.title,
+    address: p.address,
+    city: p.city,
+    propertyType: p.propertyType,
+    areaM2: p.areaM2?.toString() ?? null,
+    rooms: p.rooms,
+  };
+}
+
+/** Búsqueda en servidor: todas las propiedades sin edificio (excepto terrenos). */
+export async function searchLinkablePropertiesAction(
+  query: string,
+): Promise<{ items: LinkablePropertyRow[]; linkedHints: LinkedPropertyHint[] }> {
+  const session = await requireStaff();
+  const q = query.trim();
+  if (q.length < 2) {
+    return { items: [], linkedHints: [] };
+  }
+
+  const textFilter = {
+    OR: [
+      { title: { contains: q, mode: "insensitive" as const } },
+      { address: { contains: q, mode: "insensitive" as const } },
+      { city: { contains: q, mode: "insensitive" as const } },
+    ],
+  };
+
+  const [items, linked] = await Promise.all([
+    prisma.property.findMany({
+      where: {
+        organizationId: session.organizationId,
+        unitId: null,
+        propertyType: { notIn: EXCLUDED_COMPLEX_PROPERTY_TYPES },
+        ...textFilter,
+      },
+      select: linkablePropertySelect,
+      orderBy: [{ city: "asc" }, { title: "asc" }],
+      take: 50,
+    }),
+    prisma.property.findMany({
+      where: {
+        organizationId: session.organizationId,
+        unitId: { not: null },
+        propertyType: { notIn: EXCLUDED_COMPLEX_PROPERTY_TYPES },
+        ...textFilter,
+      },
+      select: {
+        title: true,
+        unit: { select: { complex: { select: { name: true } } } },
+      },
+      orderBy: { title: "asc" },
+      take: 8,
+    }),
+  ]);
+
+  return {
+    items: items.map(mapLinkableProperty),
+    linkedHints: linked
+      .filter((p) => p.unit?.complex?.name)
+      .map((p) => ({
+        title: p.title,
+        complexName: p.unit!.complex!.name,
+      })),
+  };
+}
+
 export async function createUnitAction(
   _prev: ActionResult | null,
   formData: FormData,
@@ -114,7 +219,7 @@ export async function createUnitAction(
       id: d.propertyId,
       organizationId: session.organizationId,
       unitId: null,
-      propertyType: { in: LINKABLE_COMPLEX_PROPERTY_TYPES },
+      propertyType: { notIn: EXCLUDED_COMPLEX_PROPERTY_TYPES },
     },
     select: {
       id: true,

@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
-import { LINKABLE_COMPLEX_PROPERTY_TYPES } from "@/server/validators/property";
 
 type Params = Promise<{ id: string }>;
 
@@ -33,38 +32,19 @@ export default async function ComplejoDetailPage({
     pageSize: pageSize !== 10 ? String(pageSize) : undefined,
   };
 
-  const [complex, linkableProperties] = await Promise.all([
-    prisma.complex.findFirst({
-      where: { id, organizationId: session.organizationId },
-      include: {
-        units: {
-          include: { property: true },
-          orderBy: { code: "asc" },
-        },
-        expenses: {
-          take: 3,
-          orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-        },
+  const complex = await prisma.complex.findFirst({
+    where: { id, organizationId: session.organizationId },
+    include: {
+      units: {
+        include: { property: true },
+        orderBy: { code: "asc" },
       },
-    }),
-    prisma.property.findMany({
-      where: {
-        organizationId: session.organizationId,
-        unitId: null,
-        propertyType: { in: LINKABLE_COMPLEX_PROPERTY_TYPES },
+      expenses: {
+        take: 3,
+        orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
       },
-      select: {
-        id: true,
-        title: true,
-        address: true,
-        city: true,
-        propertyType: true,
-        areaM2: true,
-        rooms: true,
-      },
-      orderBy: [{ city: "asc" }, { title: "asc" }],
-    }),
-  ]);
+    },
+  });
   if (!complex) notFound();
 
   const unitsPage = clampListPage(
@@ -128,18 +108,7 @@ export default async function ComplejoDetailPage({
 
       <section className="space-y-3">
         <h3 className="text-lg font-semibold">Unidades</h3>
-        <UnitForm
-          complexId={complex.id}
-          properties={linkableProperties.map((p) => ({
-            id: p.id,
-            title: p.title,
-            address: p.address,
-            city: p.city,
-            propertyType: p.propertyType,
-            areaM2: p.areaM2?.toString() ?? null,
-            rooms: p.rooms,
-          }))}
-        />
+        <UnitForm complexId={complex.id} />
         <DataTable
           headers={["Código", "Piso", "Coeficiente", "m²", "Ambientes", "Propiedad"]}
           empty={complex.units.length === 0}

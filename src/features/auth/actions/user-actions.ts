@@ -24,6 +24,16 @@ import {
   USER_LIST_DEFAULT_PAGE_SIZE,
   type UserListStatus,
 } from "@/features/auth/lib/user-list";
+import {
+  dniAlreadyLoadedMessage,
+  lookupOrgMemberByDni,
+} from "@/server/lib/org-dni";
+
+const PARTY_ROLES_REQUIRING_DNI: OrganizationRole[] = [
+  "OWNER",
+  "TENANT",
+  "GUARANTOR",
+];
 
 export type UserActionResult =
   | { ok: true; userId?: string }
@@ -37,6 +47,8 @@ export type OrganizationUserRow = {
   role: OrganizationRole;
   allowedModules: string[];
   isActive: boolean;
+  documentNumber: string | null;
+  phone: string | null;
 };
 
 export type ListOrganizationUsersOptions = {
@@ -59,7 +71,13 @@ function mapMember(m: {
   userId: string;
   role: OrganizationRole;
   allowedModules: string[];
-  user: { name: string; email: string; isActive: boolean };
+  user: {
+    name: string;
+    email: string;
+    isActive: boolean;
+    documentNumber: string | null;
+    phone: string | null;
+  };
 }): OrganizationUserRow {
   return {
     membershipId: m.id,
@@ -69,6 +87,8 @@ function mapMember(m: {
     role: m.role,
     allowedModules: m.allowedModules,
     isActive: m.user.isActive,
+    documentNumber: m.user.documentNumber,
+    phone: m.user.phone,
   };
 }
 
@@ -117,6 +137,7 @@ export async function listOrganizationUsers(
           OR: [
             { name: { contains: q, mode: "insensitive" } },
             { email: { contains: q, mode: "insensitive" } },
+            { documentNumber: { contains: q, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -166,6 +187,7 @@ export async function createOrganizationUser(input: {
   role: OrganizationRole;
   allowedModules?: AppModuleKey[];
   phone?: string;
+  documentNumber?: string;
 }): Promise<UserActionResult> {
   try {
     const session = await requireAuthSession();
@@ -188,6 +210,27 @@ export async function createOrganizationUser(input: {
     if (!pwdCheck.ok) return { ok: false, error: pwdCheck.error };
     if (name.length < 2) return { ok: false, error: "Nombre requerido." };
 
+    const requiresDni = PARTY_ROLES_REQUIRING_DNI.includes(input.role);
+    const rawDni = input.documentNumber?.trim() ?? "";
+    let dni: string | null = null;
+    if (requiresDni || rawDni) {
+      if (!rawDni) {
+        return {
+          ok: false,
+          error: "El DNI es obligatorio para propietario, inquilino o garante.",
+        };
+      }
+      const lookup = await lookupOrgMemberByDni(orgId, rawDni);
+      if (!lookup.ok) return { ok: false, error: lookup.error };
+      if (lookup.match) {
+        return {
+          ok: false,
+          error: dniAlreadyLoadedMessage(lookup.match, lookup.dni),
+        };
+      }
+      dni = lookup.dni;
+    }
+
     const modules = (input.allowedModules ?? []).filter((m) =>
       ORG_MODULE_KEYS.includes(m),
     );
@@ -200,7 +243,19 @@ export async function createOrganizationUser(input: {
           email,
           name,
           phone: input.phone?.trim() || null,
+          documentType: dni ? "DNI" : null,
+          documentNumber: dni,
           passwordHash: await hashPassword(input.password),
+        },
+      });
+    } else if (dni && !user.documentNumber) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name,
+          phone: input.phone?.trim() || user.phone,
+          documentType: "DNI",
+          documentNumber: dni,
         },
       });
     }
@@ -240,6 +295,8 @@ export async function updateOrganizationUser(input: {
   allowedModules?: AppModuleKey[];
   isActive?: boolean;
   password?: string;
+  documentNumber?: string;
+  phone?: string;
 }): Promise<UserActionResult> {
   try {
     const session = await requireAuthSession();
@@ -266,10 +323,41 @@ export async function updateOrganizationUser(input: {
     );
     if (blocked) return blocked;
 
+    const nextRole = input.role ?? membership.role;
+    const requiresDni = PARTY_ROLES_REQUIRING_DNI.includes(nextRole);
+    const rawDni =
+      input.documentNumber !== undefined
+        ? input.documentNumber.trim()
+        : membership.user.documentNumber ?? "";
+
+    let dni: string | null = membership.user.documentNumber;
+    if (requiresDni || (input.documentNumber !== undefined && rawDni)) {
+      if (!rawDni) {
+        return {
+          ok: false,
+          error: "El DNI es obligatorio para propietario, inquilino o garante.",
+        };
+      }
+      const lookup = await lookupOrgMemberByDni(orgId, rawDni, input.userId);
+      if (!lookup.ok) return { ok: false, error: lookup.error };
+      if (lookup.match) {
+        return {
+          ok: false,
+          error: dniAlreadyLoadedMessage(lookup.match, lookup.dni),
+        };
+      }
+      dni = lookup.dni;
+    } else if (input.documentNumber !== undefined && !rawDni) {
+      dni = null;
+    }
+
     const userData: {
       name?: string;
       isActive?: boolean;
       passwordHash?: string;
+      documentType?: string | null;
+      documentNumber?: string | null;
+      phone?: string | null;
     } = {};
     if (input.name) userData.name = input.name.trim();
     if (typeof input.isActive === "boolean") userData.isActive = input.isActive;
@@ -277,6 +365,13 @@ export async function updateOrganizationUser(input: {
       const pwdCheck = validatePasswordStrength(input.password);
       if (!pwdCheck.ok) return { ok: false, error: pwdCheck.error };
       userData.passwordHash = await hashPassword(input.password);
+    }
+    if (input.documentNumber !== undefined || requiresDni) {
+      userData.documentType = dni ? "DNI" : null;
+      userData.documentNumber = dni;
+    }
+    if (input.phone !== undefined) {
+      userData.phone = input.phone.trim() || null;
     }
 
     if (Object.keys(userData).length > 0) {

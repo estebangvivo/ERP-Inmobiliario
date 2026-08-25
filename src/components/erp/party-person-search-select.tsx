@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,15 @@ import {
   SearchableSelect,
   type SearchableOption,
 } from "@/components/ui/searchable-select";
+import { isValidDni, normalizeDni } from "@/lib/dni";
 import {
+  checkPersonDniAction,
   createPartyPersonAction,
   getPartyPersonAction,
   updatePartyPersonAction,
   type PartyPersonKind,
 } from "@/server/actions/party-people";
+import type { OrgDniMatch } from "@/server/lib/org-dni";
 
 export type PartyPersonOption = {
   id: string;
@@ -65,6 +68,8 @@ export function PartyPersonSearchSelect({
   const [dni, setDni] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [dniMatch, setDniMatch] = useState<OrgDniMatch | null>(null);
+  const [checkingDni, setCheckingDni] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const kindLabel = KIND_LABEL[kind];
@@ -84,6 +89,40 @@ export function PartyPersonSearchSelect({
 
   const abmHref = `/usuarios?alta=1&role=${kind}`;
   const panelOpen = draftMode !== null;
+  const createBlockedByDni = draftMode === "create" && !!dniMatch;
+
+  useEffect(() => {
+    if (!panelOpen) {
+      setDniMatch(null);
+      setCheckingDni(false);
+      return;
+    }
+
+    const normalized = normalizeDni(dni);
+    if (!isValidDni(normalized)) {
+      setDniMatch(null);
+      setCheckingDni(false);
+      return;
+    }
+
+    setCheckingDni(true);
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        const result = await checkPersonDniAction(
+          normalized,
+          draftMode === "edit" ? (editPersonId ?? undefined) : undefined,
+        );
+        setCheckingDni(false);
+        if (!result.ok) {
+          setDniMatch(null);
+          return;
+        }
+        setDniMatch(result.match);
+      });
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [dni, panelOpen, draftMode, editPersonId]);
 
   function upsertExtra(person: PartyPersonOption) {
     setExtra((prev) => {
@@ -99,6 +138,7 @@ export function PartyPersonSearchSelect({
     setDni("");
     setPhone("");
     setError(null);
+    setDniMatch(null);
   }
 
   function openEdit() {
@@ -110,6 +150,7 @@ export function PartyPersonSearchSelect({
     setDni(current?.documentNumber ?? "");
     setPhone("");
     setError(null);
+    setDniMatch(null);
 
     startTransition(async () => {
       const result = await getPartyPersonAction(value);
@@ -127,10 +168,29 @@ export function PartyPersonSearchSelect({
     setDraftMode(null);
     setEditPersonId(null);
     setError(null);
+    setDniMatch(null);
+  }
+
+  function useExistingMatch() {
+    if (!dniMatch) return;
+    const person: PartyPersonOption = {
+      id: dniMatch.userId,
+      name: dniMatch.name,
+      documentNumber: dniMatch.documentNumber,
+    };
+    upsertExtra(person);
+    onChange(person.id, person);
+    closeDraft();
   }
 
   function submitCreate() {
     setError(null);
+    if (dniMatch) {
+      setError(
+        `El DNI ${dniMatch.documentNumber} ya está cargado como ${dniMatch.roleLabel.toLowerCase()}: ${dniMatch.name}. Buscalo en la lista en lugar de cargarlo de cero.`,
+      );
+      return;
+    }
     startTransition(async () => {
       const result = await createPartyPersonAction({
         kind,
@@ -156,6 +216,12 @@ export function PartyPersonSearchSelect({
   function submitEdit() {
     if (!editPersonId) return;
     setError(null);
+    if (dniMatch) {
+      setError(
+        `El DNI ${dniMatch.documentNumber} ya está cargado como ${dniMatch.roleLabel.toLowerCase()}: ${dniMatch.name}.`,
+      );
+      return;
+    }
     startTransition(async () => {
       const result = await updatePartyPersonAction({
         personId: editPersonId,
@@ -226,8 +292,8 @@ export function PartyPersonSearchSelect({
             Alta completa en Usuarios
           </Link>
           {" · "}
-          Si no está en la lista, podés crearlo acá o desde el ABM. Con el lápiz
-          editás los datos de la persona seleccionada.
+          Si no está en la lista, podés crearlo acá (con DNI obligatorio) o desde
+          el ABM.
         </p>
       ) : null}
 
@@ -237,25 +303,19 @@ export function PartyPersonSearchSelect({
             {draftMode === "edit" ? `Editar ${kindLabel}` : `Nuevo ${kindLabel}`}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor={`${name}-draft-name`}>Nombre</Label>
-              <Input
-                id={`${name}-draft-name`}
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
             <div className="space-y-1">
               <Label htmlFor={`${name}-draft-dni`}>DNI</Label>
               <Input
                 id={`${name}-draft-dni`}
                 value={dni}
-                onChange={(e) => setDni(e.target.value)}
+                onChange={(e) => {
+                  setDni(e.target.value);
+                  setError(null);
+                }}
                 inputMode="numeric"
                 placeholder="Sin puntos"
                 required
+                autoFocus={draftMode === "create"}
               />
             </div>
             <div className="space-y-1">
@@ -266,11 +326,52 @@ export function PartyPersonSearchSelect({
                 onChange={(e) => setPhone(e.target.value)}
               />
             </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor={`${name}-draft-name`}>Nombre</Label>
+              <Input
+                id={`${name}-draft-name`}
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                required
+                autoFocus={draftMode === "edit"}
+              />
+            </div>
           </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            El sistema verifica que el DNI no exista ya como propietario,
-            inquilino o garante.
-          </p>
+
+          {checkingDni ? (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Verificando DNI…
+            </p>
+          ) : null}
+
+          {dniMatch ? (
+            <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              <p>
+                El DNI <strong>{dniMatch.documentNumber}</strong> ya está cargado
+                como <strong>{dniMatch.roleLabel.toLowerCase()}</strong>:{" "}
+                <strong>{dniMatch.name}</strong>.
+              </p>
+              <p className="text-xs">
+                Buscalo en la lista en lugar de cargarlo de cero.
+              </p>
+              {draftMode === "create" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={useExistingMatch}
+                >
+                  Usar esta persona
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              El DNI es obligatorio. Si ya existe en el sistema, no se puede
+              crear de nuevo.
+            </p>
+          )}
+
           {error ? (
             <p className="text-sm text-[var(--destructive)]">{error}</p>
           ) : null}
@@ -278,7 +379,7 @@ export function PartyPersonSearchSelect({
             <Button
               type="button"
               size="sm"
-              disabled={pending}
+              disabled={pending || createBlockedByDni || checkingDni}
               onClick={draftMode === "edit" ? submitEdit : submitCreate}
             >
               {pending

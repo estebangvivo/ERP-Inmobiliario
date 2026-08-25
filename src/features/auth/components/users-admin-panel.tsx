@@ -132,6 +132,7 @@ export function UsersAdminPanel({
         role: String(fd.get("role") ?? "AGENT") as OrganizationRole,
         allowedModules: modules,
         phone: String(fd.get("phone") ?? "") || undefined,
+        documentNumber: String(fd.get("documentNumber") ?? "") || undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -159,6 +160,8 @@ export function UsersAdminPanel({
         allowedModules: modules,
         isActive: fd.get("isActive") === "on",
         password: String(fd.get("password") ?? "") || undefined,
+        phone: String(fd.get("phone") ?? ""),
+        documentNumber: String(fd.get("documentNumber") ?? ""),
       });
       if (!result.ok) {
         setError(result.error);
@@ -252,6 +255,17 @@ export function UsersAdminPanel({
               required={!editing}
               disabled={!!editing}
             />
+            <Field
+              label="DNI"
+              name="documentNumber"
+              defaultValue={editing?.documentNumber ?? ""}
+              placeholder="Obligatorio para propietario / inquilino / garante"
+            />
+            <Field
+              label="Teléfono"
+              name="phone"
+              defaultValue={editing?.phone ?? ""}
+            />
             <div className="space-y-2">
               <Label htmlFor="role">Rol</Label>
               <Select
@@ -274,6 +288,10 @@ export function UsersAdminPanel({
               required={!editing}
             />
           </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Si el DNI ya existe en la empresa, el sistema avisa para que busques
+            a esa persona en lugar de cargarla de nuevo.
+          </p>
 
           <div className="space-y-2">
             <Label>Módulos permitidos</Label>
@@ -442,6 +460,7 @@ function Field({
   defaultValue,
   required,
   disabled,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -449,6 +468,7 @@ function Field({
   defaultValue?: string;
   required?: boolean;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -460,6 +480,7 @@ function Field({
         defaultValue={defaultValue}
         required={required}
         disabled={disabled}
+        placeholder={placeholder}
       />
     </div>
   );

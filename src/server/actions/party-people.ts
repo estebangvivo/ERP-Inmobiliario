@@ -7,6 +7,11 @@ import { requireStaff } from "@/lib/session";
 import { isValidDni, normalizeDni } from "@/lib/dni";
 import { ROLE_DEFAULT_MODULES } from "@/features/auth/lib/modules";
 import { hashPassword } from "@/features/auth/lib/password";
+import {
+  dniAlreadyLoadedMessage,
+  lookupOrgMemberByDni,
+  type OrgDniMatch,
+} from "@/server/lib/org-dni";
 
 export type PartyPersonKind = "OWNER" | "TENANT" | "GUARANTOR";
 
@@ -23,9 +28,32 @@ export type CreatePartyPersonResult =
     }
   | { ok: false; error: string };
 
+export type CheckPersonDniResult =
+  | { ok: true; dni: string; match: null }
+  | { ok: true; dni: string; match: OrgDniMatch }
+  | { ok: false; error: string };
+
+/** Chequeo en vivo: ¿este DNI ya está en la organización? */
+export async function checkPersonDniAction(
+  rawDni: string,
+  excludeUserId?: string,
+): Promise<CheckPersonDniResult> {
+  try {
+    const session = await requireStaff();
+    return lookupOrgMemberByDni(
+      session.organizationId,
+      rawDni,
+      excludeUserId,
+    );
+  } catch (error) {
+    console.error("checkPersonDniAction", error);
+    return { ok: false, error: "No se pudo verificar el DNI." };
+  }
+}
+
 /**
  * Alta rápida de propietario, inquilino o garante desde selectores de búsqueda.
- * Exige DNI y bloquea si ya existe ese documento como parte en la organización.
+ * Exige DNI y bloquea si ya existe ese documento en la organización.
  */
 export async function createPartyPersonAction(input: {
   kind: PartyPersonKind;
@@ -38,43 +66,21 @@ export async function createPartyPersonAction(input: {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const dni = normalizeDni(input.dni);
     const phone = input.phone?.trim() || null;
 
     if (name.length < 2) {
       return { ok: false, error: "Ingresá el nombre completo." };
     }
-    if (!isValidDni(dni)) {
+
+    const lookup = await lookupOrgMemberByDni(orgId, input.dni);
+    if (!lookup.ok) return { ok: false, error: lookup.error };
+    if (lookup.match) {
       return {
         ok: false,
-        error: "DNI inválido. Usá entre 7 y 11 dígitos.",
+        error: dniAlreadyLoadedMessage(lookup.match, lookup.dni),
       };
     }
-
-    const membersWithDoc = await prisma.organizationMember.findMany({
-      where: {
-        organizationId: orgId,
-        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
-        user: { documentNumber: { not: null } },
-      },
-      include: {
-        user: { select: { id: true, name: true, documentNumber: true } },
-      },
-    });
-
-    const clash = membersWithDoc.find(
-      (m) => normalizeDni(m.user.documentNumber ?? "") === dni,
-    );
-    if (clash) {
-      const as =
-        clash.role in PARTY_KIND_LABEL
-          ? PARTY_KIND_LABEL[clash.role as PartyPersonKind]
-          : "persona";
-      return {
-        ok: false,
-        error: `Ya existe el DNI ${dni} como ${as}: ${clash.user.name}.`,
-      };
-    }
+    const dni = lookup.dni;
 
     let email = input.email?.trim().toLowerCase() || "";
     if (email) {
@@ -131,7 +137,7 @@ export async function createPartyPersonAction(input: {
           ok: false,
           error: `Esa persona ya está cargada como ${
             PARTY_KIND_LABEL[existingMember.role as PartyPersonKind]
-          }.`,
+          }. Buscala en la lista en lugar de cargarla de cero.`,
         };
       }
       await prisma.organizationMember.update({
@@ -239,17 +245,10 @@ export async function updatePartyPersonAction(input: {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const dni = normalizeDni(input.dni);
     const phone = input.phone?.trim() || null;
 
     if (name.length < 2) {
       return { ok: false, error: "Ingresá el nombre completo." };
-    }
-    if (!isValidDni(dni)) {
-      return {
-        ok: false,
-        error: "DNI inválido. Usá entre 7 y 11 dígitos.",
-      };
     }
 
     const member = await prisma.organizationMember.findFirst({
@@ -264,31 +263,15 @@ export async function updatePartyPersonAction(input: {
       return { ok: false, error: "Persona no encontrada en la organización." };
     }
 
-    const membersWithDoc = await prisma.organizationMember.findMany({
-      where: {
-        organizationId: orgId,
-        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
-        userId: { not: input.personId },
-        user: { documentNumber: { not: null } },
-      },
-      include: {
-        user: { select: { name: true, documentNumber: true } },
-      },
-    });
-
-    const clash = membersWithDoc.find(
-      (m) => normalizeDni(m.user.documentNumber ?? "") === dni,
-    );
-    if (clash) {
-      const as =
-        clash.role in PARTY_KIND_LABEL
-          ? PARTY_KIND_LABEL[clash.role as PartyPersonKind]
-          : "persona";
+    const lookup = await lookupOrgMemberByDni(orgId, input.dni, input.personId);
+    if (!lookup.ok) return { ok: false, error: lookup.error };
+    if (lookup.match) {
       return {
         ok: false,
-        error: `Ya existe el DNI ${dni} como ${as}: ${clash.user.name}.`,
+        error: dniAlreadyLoadedMessage(lookup.match, lookup.dni),
       };
     }
+    const dni = lookup.dni;
 
     const user = await prisma.user.update({
       where: { id: input.personId },

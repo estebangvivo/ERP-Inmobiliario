@@ -178,7 +178,7 @@ export function AgendaVisitForm({
         <h3 className="font-semibold">Nueva visita</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
           Elegí cualquier propiedad activa (con o sin portal). Se usan los
-          horarios de agenda configurados (slots de 1 hora).
+          horarios y la duración de turno configurados en Visitas.
         </p>
       </div>
 

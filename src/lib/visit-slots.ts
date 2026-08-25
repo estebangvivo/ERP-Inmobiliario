@@ -3,7 +3,7 @@ import {
   resolveEnabledHolidayMonthDays,
 } from "@/lib/ar-holidays";
 
-/** Slots de visita configurables; default lun–vie 8:00–16:00 (1h), TZ Argentina. */
+/** Slots de visita configurables; default lun–vie 8:00–16:00, TZ Argentina. */
 
 export const VISIT_TZ = "America/Argentina/Buenos_Aires";
 export const VISIT_DAYS_AHEAD = 30;
@@ -11,11 +11,22 @@ export const VISIT_DAYS_AHEAD = 30;
 /** Offset fijo ART (UTC-3). Suficiente para agenda de visitas. */
 const ART_OFFSET_MS = -3 * 60 * 60 * 1000;
 
+export const VISIT_SLOT_MINUTES_OPTIONS = [60, 30, 15] as const;
+export type VisitSlotMinutes = (typeof VISIT_SLOT_MINUTES_OPTIONS)[number];
+
+export const VISIT_SLOT_MINUTES_LABELS: Record<VisitSlotMinutes, string> = {
+  60: "1 hora",
+  30: "30 minutos",
+  15: "15 minutos",
+};
+
 /** weekdays: 1=lun … 7=dom. hourEnd exclusivo. */
 export type VisitScheduleConfig = {
   weekdays: number[];
   hourStart: number;
   hourEnd: number;
+  /** 60 | 30 | 15 */
+  slotMinutes: VisitSlotMinutes;
   closedDates: string[];
   /** MM-DD persistidos (vacío = todos; ver ar-holidays). */
   enabledHolidays: string[];
@@ -25,6 +36,7 @@ export const DEFAULT_VISIT_SCHEDULE: VisitScheduleConfig = {
   weekdays: [1, 2, 3, 4, 5],
   hourStart: 8,
   hourEnd: 16,
+  slotMinutes: 60,
   closedDates: [],
   enabledHolidays: [],
 };
@@ -34,7 +46,13 @@ export type VisitSlot = {
   endsAt: Date;
   /** YYYY-MM-DD en ART */
   dateKey: string;
-  /** HH:00 */
+  /** HH:mm */
+  timeLabel: string;
+};
+
+export type VisitSlotStart = {
+  hour: number;
+  minute: number;
   timeLabel: string;
 };
 
@@ -50,7 +68,7 @@ function artParts(date: Date) {
   };
 }
 
-/** Interpreta YYYY-MM-DD + hour en ART → Date UTC. */
+/** Interpreta YYYY-MM-DD + hour/minute en ART → Date UTC. */
 export function artLocalToUtc(
   year: number,
   month: number,
@@ -99,6 +117,36 @@ export function jsWeekdayToIso(jsWeekday: number): number {
   return jsWeekday === 0 ? 7 : jsWeekday;
 }
 
+export function normalizeSlotMinutes(value: unknown): VisitSlotMinutes {
+  if (value === 15 || value === 30 || value === 60) return value;
+  if (value === "15" || value === "30" || value === "60") {
+    return Number(value) as VisitSlotMinutes;
+  }
+  return 60;
+}
+
+/** Inicios de turno entre hourStart (incl.) y hourEnd (excl.). */
+export function slotStartsForRange(
+  hourStart: number,
+  hourEnd: number,
+  slotMinutes: VisitSlotMinutes,
+): VisitSlotStart[] {
+  const starts: VisitSlotStart[] = [];
+  const from = hourStart * 60;
+  const to = hourEnd * 60;
+  for (let m = from; m + slotMinutes <= to; m += slotMinutes) {
+    const hour = Math.floor(m / 60);
+    const minute = m % 60;
+    starts.push({
+      hour,
+      minute,
+      timeLabel: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    });
+  }
+  return starts;
+}
+
+/** @deprecated Preferir slotStartsForRange con duración. */
 export function slotHoursForRange(hourStart: number, hourEnd: number): number[] {
   const hours: number[] = [];
   for (let h = hourStart; h < hourEnd; h++) hours.push(h);
@@ -113,6 +161,9 @@ export function normalizeVisitSchedule(
     DEFAULT_VISIT_SCHEDULE.weekdays;
   const hourStart = partial?.hourStart ?? DEFAULT_VISIT_SCHEDULE.hourStart;
   const hourEnd = partial?.hourEnd ?? DEFAULT_VISIT_SCHEDULE.hourEnd;
+  const slotMinutes = normalizeSlotMinutes(
+    partial?.slotMinutes ?? DEFAULT_VISIT_SCHEDULE.slotMinutes,
+  );
   return {
     weekdays:
       weekdays.length > 0
@@ -120,6 +171,7 @@ export function normalizeVisitSchedule(
         : [1, 2, 3, 4, 5],
     hourStart: Math.min(Math.max(hourStart, 0), 23),
     hourEnd: Math.min(Math.max(hourEnd, 1), 24),
+    slotMinutes,
     closedDates: [...(partial?.closedDates ?? [])],
     enabledHolidays: [...(partial?.enabledHolidays ?? [])],
   };
@@ -129,6 +181,7 @@ export function scheduleFromOrganization(org: {
   visitWeekdays: number[];
   visitHourStart: number;
   visitHourEnd: number;
+  visitSlotMinutes?: number | null;
   visitClosedDates: string[];
   visitEnabledHolidays: string[];
 }): VisitScheduleConfig {
@@ -136,6 +189,7 @@ export function scheduleFromOrganization(org: {
     weekdays: org.visitWeekdays,
     hourStart: org.visitHourStart,
     hourEnd: org.visitHourEnd,
+    slotMinutes: normalizeSlotMinutes(org.visitSlotMinutes),
     closedDates: org.visitClosedDates,
     enabledHolidays: org.visitEnabledHolidays,
   });
@@ -163,8 +217,12 @@ export function generateVisitSlots(
   configInput?: Partial<VisitScheduleConfig> | null,
 ): VisitSlot[] {
   const config = normalizeVisitSchedule(configInput);
-  const hours = slotHoursForRange(config.hourStart, config.hourEnd);
-  if (hours.length === 0) return [];
+  const starts = slotStartsForRange(
+    config.hourStart,
+    config.hourEnd,
+    config.slotMinutes,
+  );
+  if (starts.length === 0) return [];
 
   const start = artParts(from);
   const years = new Set<number>();
@@ -174,6 +232,7 @@ export function generateVisitSlots(
   const closed = closedDateKeys(config, [...years]);
   const weekdaySet = new Set(config.weekdays);
   const slots: VisitSlot[] = [];
+  const durationMs = config.slotMinutes * 60 * 1000;
 
   for (let d = 0; d < daysAhead; d++) {
     const day = addArtDays(start.year, start.month, start.day, d);
@@ -183,15 +242,20 @@ export function generateVisitSlots(
     const dateKey = `${day.year}-${String(day.month).padStart(2, "0")}-${String(day.day).padStart(2, "0")}`;
     if (closed.has(dateKey)) continue;
 
-    for (const hour of hours) {
-      const startsAt = artLocalToUtc(day.year, day.month, day.day, hour, 0);
-      const endsAt = artLocalToUtc(day.year, day.month, day.day, hour + 1, 0);
+    for (const s of starts) {
+      const startsAt = artLocalToUtc(
+        day.year,
+        day.month,
+        day.day,
+        s.hour,
+        s.minute,
+      );
       if (startsAt <= from) continue;
       slots.push({
         startsAt,
-        endsAt,
+        endsAt: new Date(startsAt.getTime() + durationMs),
         dateKey,
-        timeLabel: `${String(hour).padStart(2, "0")}:00`,
+        timeLabel: s.timeLabel,
       });
     }
   }
@@ -207,13 +271,20 @@ export function isValidVisitSlot(
   if (startsAt <= now) return false;
   const config = normalizeVisitSchedule(configInput);
   const p = artParts(startsAt);
-  if (p.minute !== 0) return false;
+
+  if (p.minute % config.slotMinutes !== 0) return false;
 
   const isoWeekday = jsWeekdayToIso(p.weekday);
   if (!config.weekdays.includes(isoWeekday)) return false;
 
-  const hours = slotHoursForRange(config.hourStart, config.hourEnd);
-  if (!hours.includes(p.hour)) return false;
+  const starts = slotStartsForRange(
+    config.hourStart,
+    config.hourEnd,
+    config.slotMinutes,
+  );
+  if (!starts.some((s) => s.hour === p.hour && s.minute === p.minute)) {
+    return false;
+  }
 
   const dateKey = formatArtDateKey(startsAt);
   const closed = closedDateKeys(config, [p.year, p.year + 1]);
@@ -232,5 +303,15 @@ export function formatScheduleSummary(config: VisitScheduleConfig): string {
     : config.weekdays.map((d) => dayNames[d]).join(", ");
   const start = `${String(config.hourStart).padStart(2, "0")}:00`;
   const end = `${String(config.hourEnd).padStart(2, "0")}:00`;
-  return `${days} ${start}–${end}`;
+  const slot = VISIT_SLOT_MINUTES_LABELS[config.slotMinutes];
+  return `${days} ${start}–${end} · ${slot}`;
+}
+
+export function lastSlotStartLabel(config: VisitScheduleConfig): string {
+  const starts = slotStartsForRange(
+    config.hourStart,
+    config.hourEnd,
+    config.slotMinutes,
+  );
+  return starts[starts.length - 1]?.timeLabel ?? "—";
 }

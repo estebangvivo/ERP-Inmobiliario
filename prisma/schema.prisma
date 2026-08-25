@@ -608,8 +608,10 @@ model Organization {
   /// 1=lun … 7=dom
   visitWeekdays            Int[]                   @default([1, 2, 3, 4, 5])
   visitHourStart           Int                     @default(8)
-  /// Exclusivo: último slot empieza en end-1
+  /// Exclusivo: último slot termina a esta hora
   visitHourEnd             Int                     @default(16)
+  /// Duración de cada turno en minutos: 60, 30 o 15
+  visitSlotMinutes         Int                     @default(60)
   /// YYYY-MM-DD cierres extra
   visitClosedDates         String[]                @default([])
   /// MM-DD inamovibles activos; vacío = todos

@@ -110,7 +110,7 @@ export function VisitBookingForm({
       <div>
         <h3 className="text-lg font-semibold">Agendar visita</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Sobre “{propertyTitle}”. Elegí un día y horario disponible (turnos de 1 hora).
+          Sobre “{propertyTitle}”. Elegí un día y horario disponible.
         </p>
       </div>
 

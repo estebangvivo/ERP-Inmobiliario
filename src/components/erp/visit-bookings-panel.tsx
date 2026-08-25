@@ -15,7 +15,7 @@ import {
   formatArtDateKey,
   formatArtDisplay,
   formatArtTimeLabel,
-  slotHoursForRange,
+  slotStartsForRange,
   type VisitScheduleConfig,
 } from "@/lib/visit-slots";
 
@@ -95,9 +95,14 @@ export function VisitBookingsPanel({
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [pending, startTransition] = useTransition();
 
-  const hours = useMemo(
-    () => slotHoursForRange(schedule.hourStart, schedule.hourEnd),
-    [schedule.hourStart, schedule.hourEnd],
+  const slotRows = useMemo(
+    () =>
+      slotStartsForRange(
+        schedule.hourStart,
+        schedule.hourEnd,
+        schedule.slotMinutes,
+      ),
+    [schedule.hourStart, schedule.hourEnd, schedule.slotMinutes],
   );
 
   const days = useMemo(
@@ -138,8 +143,8 @@ export function VisitBookingsPanel({
     for (const b of activeBookings) {
       const starts = new Date(b.startsAt);
       const dateKey = formatArtDateKey(starts);
-      const hour = formatArtTimeLabel(starts).slice(0, 2);
-      const key = `${dateKey}|${hour}`;
+      const time = formatArtTimeLabel(starts);
+      const key = `${dateKey}|${time}`;
       const list = map.get(key) ?? [];
       list.push(b);
       map.set(key, list);
@@ -217,13 +222,13 @@ export function VisitBookingsPanel({
               </tr>
             </thead>
             <tbody>
-              {hours.map((hour) => (
-                <tr key={hour} className="align-top">
+              {slotRows.map((slot) => (
+                <tr key={slot.timeLabel} className="align-top">
                   <td className="border-b border-[var(--border)] px-2 py-2 font-medium text-[var(--muted-foreground)]">
-                    {String(hour).padStart(2, "0")}:00
+                    {slot.timeLabel}
                   </td>
                   {days.map((dk) => {
-                    const key = `${dk}|${String(hour).padStart(2, "0")}`;
+                    const key = `${dk}|${slot.timeLabel}`;
                     const cell = byCell.get(key) ?? [];
                     return (
                       <td

@@ -25,6 +25,7 @@ const ORG_SCHEDULE_SELECT = {
   visitWeekdays: true,
   visitHourStart: true,
   visitHourEnd: true,
+  visitSlotMinutes: true,
   visitClosedDates: true,
   visitEnabledHolidays: true,
   slug: true,
@@ -116,14 +117,15 @@ export async function getAvailableVisitDays(
     where: {
       propertyId,
       status: "RESERVED",
-      startsAt: { gte: from, lte: to },
+      startsAt: { lt: to },
+      endsAt: { gt: from },
     },
-    select: { startsAt: true },
+    select: { startsAt: true, endsAt: true },
   });
-  const takenKeys = new Set(taken.map((t) => t.startsAt.toISOString()));
 
   const free = candidates.filter(
-    (s) => !takenKeys.has(s.startsAt.toISOString()),
+    (s) =>
+      !taken.some((t) => t.startsAt < s.endsAt && t.endsAt > s.startsAt),
   );
 
   const byDay = new Map<string, VisitSlot[]>();
@@ -193,13 +195,16 @@ export async function bookPropertyVisit(input: {
     };
   }
 
-  const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+  const endsAt = new Date(
+    startsAt.getTime() + schedule.slotMinutes * 60 * 1000,
+  );
 
   const existing = await prisma.propertyVisitBooking.findFirst({
     where: {
       propertyId: property.id,
-      startsAt,
       status: "RESERVED",
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
     },
   });
   if (existing) {
@@ -424,6 +429,7 @@ const scheduleUpdateSchema = z.object({
   weekdays: z.array(z.number().int().min(1).max(7)).min(1),
   hourStart: z.number().int().min(0).max(23),
   hourEnd: z.number().int().min(1).max(24),
+  slotMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]),
   closedDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   enabledHolidays: z.array(z.string().regex(/^\d{2}-\d{2}$/)),
 });
@@ -452,6 +458,7 @@ export async function updateVisitScheduleAction(
     weekdays: parsed.data.weekdays,
     hourStart: parsed.data.hourStart,
     hourEnd: parsed.data.hourEnd,
+    slotMinutes: parsed.data.slotMinutes,
     closedDates: [...new Set(parsed.data.closedDates)].sort(),
     enabledHolidays: persistEnabledHolidays(parsed.data.enabledHolidays),
   });
@@ -462,6 +469,7 @@ export async function updateVisitScheduleAction(
       visitWeekdays: schedule.weekdays,
       visitHourStart: schedule.hourStart,
       visitHourEnd: schedule.hourEnd,
+      visitSlotMinutes: schedule.slotMinutes,
       visitClosedDates: schedule.closedDates,
       visitEnabledHolidays: schedule.enabledHolidays,
     },
@@ -472,6 +480,7 @@ export async function updateVisitScheduleAction(
     select: { slug: true },
   });
   revalidatePath("/visitas");
+  revalidatePath("/agenda");
   if (org?.slug) {
     revalidatePath(publicPropertiesPath(org.slug));
     revalidatePath(`${publicPropertiesPath(org.slug)}/propiedades`);

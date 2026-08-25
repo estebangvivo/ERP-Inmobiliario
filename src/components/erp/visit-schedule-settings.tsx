@@ -3,6 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AR_INAMOVIBLES } from "@/lib/ar-holidays";
+import {
+  lastSlotStartLabel,
+  VISIT_SLOT_MINUTES_LABELS,
+  VISIT_SLOT_MINUTES_OPTIONS,
+  type VisitSlotMinutes,
+} from "@/lib/visit-slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,11 +55,26 @@ export function VisitScheduleSettings({
   const [weekdays, setWeekdays] = useState(initial.schedule.weekdays);
   const [hourStart, setHourStart] = useState(initial.schedule.hourStart);
   const [hourEnd, setHourEnd] = useState(initial.schedule.hourEnd);
+  const [slotMinutes, setSlotMinutes] = useState<VisitSlotMinutes>(
+    initial.schedule.slotMinutes,
+  );
   const [closedDates, setClosedDates] = useState(initial.schedule.closedDates);
   const [enabledHolidays, setEnabledHolidays] = useState(
     initial.enabledHolidayMonthDays,
   );
   const [extraDate, setExtraDate] = useState("");
+
+  const lastSlot = useMemo(
+    () =>
+      lastSlotStartLabel({
+        ...initial.schedule,
+        weekdays,
+        hourStart,
+        hourEnd,
+        slotMinutes,
+      }),
+    [initial.schedule, weekdays, hourStart, hourEnd, slotMinutes],
+  );
 
   const uniqueHolidayRows = useMemo(() => {
     return AR_INAMOVIBLES.map((h) => ({
@@ -99,6 +120,7 @@ export function VisitScheduleSettings({
         weekdays,
         hourStart,
         hourEnd,
+        slotMinutes,
         closedDates,
         enabledHolidays,
       });
@@ -198,10 +220,34 @@ export function VisitScheduleSettings({
                 )}
               </Select>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Último turno:{" "}
-                {String(Math.max(hourEnd - 1, hourStart)).padStart(2, "0")}:00
+                Último turno: {lastSlot}
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="visit-slot-minutes">Duración de cada turno</Label>
+            <Select
+              id="visit-slot-minutes"
+              value={String(slotMinutes)}
+              onChange={(e) =>
+                setSlotMinutes(Number(e.target.value) as VisitSlotMinutes)
+              }
+            >
+              {VISIT_SLOT_MINUTES_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {VISIT_SLOT_MINUTES_LABELS[m]}
+                  {m === 60
+                    ? " (1 turno por hora)"
+                    : m === 30
+                      ? " (2 turnos por hora)"
+                      : " (4 turnos por hora)"}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Aplica a Visitas, Agenda y al portal público.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -22,7 +22,9 @@ import { hasModule } from "@/features/auth/lib/modules";
 import { syncOverdueBills } from "@/server/services/billing";
 import { listOwnersPendingSettlement } from "@/server/services/monthly-job";
 import { getStaffDaySnapshot } from "@/server/queries/ops-snapshot";
+import { getAgentDailyBrief } from "@/server/queries/agent-daily-brief";
 import { PortalHome, StaffOpsBoard } from "@/components/erp/portal-home";
+import { AgentDailyAssistant } from "@/components/erp/agent-daily-assistant";
 
 const DUE_SOON_DAYS = 7;
 
@@ -208,6 +210,17 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const agentBrief =
+    role === "AGENT"
+      ? await getAgentDailyBrief(
+          session.organizationId,
+          session.user.name,
+        ).catch((error) => {
+          console.error("dashboard agent brief", error);
+          return null;
+        })
+      : null;
+
   const collectedByCurrency = paymentsThisMonth.reduce<Record<string, number>>(
     (acc, p) => {
       acc[p.currency] = (acc[p.currency] ?? 0) + Number(p.amount);
@@ -221,7 +234,9 @@ export default async function DashboardPage() {
       ? `Tu resumen como inquilino · ${month}/${year}`
       : role === "OWNER"
         ? `Tu resumen como propietario · ${month}/${year}`
-        : `Resumen operativo · ${month}/${year}`;
+        : role === "AGENT"
+          ? `Asistente diario · ${month}/${year}`
+          : `Resumen operativo · ${month}/${year}`;
 
   const propertiesLabel =
     role === "TENANT"
@@ -262,6 +277,10 @@ export default async function DashboardPage() {
           {ROLE_LABELS[role]}
         </p>
       </div>
+
+      {agentBrief ? (
+        <AgentDailyAssistant brief={agentBrief} userId={session.user.id} />
+      ) : null}
 
       {staff && daySnapshot ? (
         <StaffOpsBoard

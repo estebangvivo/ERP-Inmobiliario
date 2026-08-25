@@ -356,6 +356,7 @@ export async function updateVisitBookingStatusAction(
     data: { status },
   });
   revalidatePath("/visitas");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 
@@ -391,6 +392,7 @@ export async function assignVisitBookingAction(
     data: { assigneeId },
   });
   revalidatePath("/visitas");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 

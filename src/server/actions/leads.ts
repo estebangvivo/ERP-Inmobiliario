@@ -97,4 +97,5 @@ export async function updateLeadStatusAction(
 ) {
   await prisma.lead.update({ where: { id }, data: { status } });
   revalidatePath("/leads");
+  revalidatePath("/dashboard");
 }

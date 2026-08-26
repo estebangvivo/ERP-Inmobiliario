@@ -108,14 +108,22 @@ export default async function ContratoDetailPage({ params }: { params: Params })
           <CardHeader>
             <CardTitle className="text-base">Partes</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm">
+          <CardContent className="space-y-2 text-sm">
             {contract.parties.map((p) => (
-              <p key={p.id}>
-                <span className="text-[var(--muted-foreground)]">
-                  {PARTY_ROLE_LABELS[p.role]}:{" "}
-                </span>
-                <PersonNameLink id={p.user.id} name={p.user.name} />
-              </p>
+              <div key={p.id} className="space-y-1">
+                <p>
+                  <span className="text-[var(--muted-foreground)]">
+                    {PARTY_ROLE_LABELS[p.role]}:{" "}
+                  </span>
+                  <PersonNameLink id={p.user.id} name={p.user.name} />
+                </p>
+                {p.role === "GUARANTOR" && p.duplicateGuarantorAck ? (
+                  <p className="rounded-md border border-amber-200/80 bg-amber-500/10 px-2 py-1 text-xs text-amber-950 dark:border-amber-900/50 dark:text-amber-100">
+                    Se cargó sabiendo que ya era garante en otro contrato
+                    activo.
+                  </p>
+                ) : null}
+              </div>
             ))}
           </CardContent>
         </Card>
@@ -216,6 +224,9 @@ export default async function ContratoDetailPage({ params }: { params: Params })
         <ContractGuarantorsForm
           contractId={contract.id}
           initialIds={guarantorParties.map((p) => p.userId)}
+          initialAcknowledgedIds={guarantorParties
+            .filter((p) => p.duplicateGuarantorAck)
+            .map((p) => p.userId)}
           guarantors={guarantorOptions}
         />
       ) : null}

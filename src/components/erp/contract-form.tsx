@@ -7,12 +7,14 @@ import {
   ContractStatus,
   Currency,
 } from "@prisma/client";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
+import { useGuarantorDuplicateCheck } from "@/components/erp/guarantor-duplicate-modal";
 import {
   appendAttachmentDrafts,
   ContractCreateAttachmentsFields,
@@ -49,17 +51,43 @@ function GuarantorFields({
   count,
   ids,
   options,
+  acknowledgedIds,
+  excludeContractId,
   onCountChange,
   onIdChange,
+  onAcknowledgedChange,
 }: {
   count: number;
   ids: string[];
   options: Person[];
+  acknowledgedIds: Set<string>;
+  excludeContractId?: string | null;
   onCountChange: (count: number) => void;
   onIdChange: (index: number, value: string) => void;
+  onAcknowledgedChange: (userId: string, acknowledged: boolean) => void;
 }) {
+  const { requestSelect, modal, checking } =
+    useGuarantorDuplicateCheck(excludeContractId);
+
+  function handleIdChange(index: number, value: string) {
+    const previous = ids[index] ?? "";
+    if (!value) {
+      if (previous) onAcknowledgedChange(previous, false);
+      onIdChange(index, "");
+      return;
+    }
+    if (value === previous) return;
+
+    requestSelect(value, (acked) => {
+      if (previous) onAcknowledgedChange(previous, false);
+      onIdChange(index, value);
+      onAcknowledgedChange(value, acked);
+    });
+  }
+
   return (
     <div className="space-y-2 sm:col-span-2">
+      {modal}
       <Label htmlFor="guarantorCount">Cantidad de garantes</Label>
       <Select
         id="guarantorCount"
@@ -84,14 +112,35 @@ function GuarantorFields({
                 name="guarantorId"
                 kind="GUARANTOR"
                 value={id}
-                onChange={(value) => onIdChange(index, value)}
+                onChange={(value) => handleIdChange(index, value)}
                 options={options}
                 emptyLabel="Seleccionar…"
                 required
               />
+              {id && acknowledgedIds.has(id) ? (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200/80 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:text-amber-100">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    Se cargó sabiendo que ya era garante en otro contrato
+                    activo.
+                  </span>
+                </div>
+              ) : null}
+              {id && acknowledgedIds.has(id) ? (
+                <input
+                  type="hidden"
+                  name="guarantorDuplicateAck"
+                  value={id}
+                />
+              ) : null}
             </div>
           ))}
         </div>
+      ) : null}
+      {checking ? (
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Revisando si el garante ya figura en otros contratos…
+        </p>
       ) : null}
     </div>
   );
@@ -276,6 +325,9 @@ export function ContractCreateForm({
   const [tenantId, setTenantId] = useState("");
   const [guarantorCount, setGuarantorCount] = useState(2);
   const [guarantorIds, setGuarantorIds] = useState<string[]>(["", ""]);
+  const [guarantorAckIds, setGuarantorAckIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [attachRows, setAttachRows] = useState<AttachmentDraftRow[]>([
     { key: 0, kind: "CONTRACT_DOC", files: [] },
   ]);
@@ -293,9 +345,21 @@ export function ContractCreateForm({
     setGuarantorIds((prev) => {
       const next = prev.slice(0, guarantorCount);
       while (next.length < guarantorCount) next.push("");
+      setGuarantorAckIds(
+        (acks) => new Set([...acks].filter((id) => next.includes(id))),
+      );
       return next;
     });
   }, [guarantorCount]);
+
+  function setGuarantorAck(userId: string, acknowledged: boolean) {
+    setGuarantorAckIds((prev) => {
+      const next = new Set(prev);
+      if (acknowledged) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
 
   function onPropertyChange(id: string) {
     setPropertyId(id);
@@ -374,12 +438,14 @@ export function ContractCreateForm({
           count={guarantorCount}
           ids={guarantorIds}
           options={guarantors}
+          acknowledgedIds={guarantorAckIds}
           onCountChange={setGuarantorCount}
           onIdChange={(index, value) =>
             setGuarantorIds((prev) =>
               prev.map((v, i) => (i === index ? value : v)),
             )
           }
+          onAcknowledgedChange={setGuarantorAck}
         />
         <ContractCreateAttachmentsFields
           rows={attachRows}
@@ -638,10 +704,12 @@ export function ContractEditForm({
 export function ContractGuarantorsForm({
   contractId,
   initialIds,
+  initialAcknowledgedIds = [],
   guarantors,
 }: {
   contractId: string;
   initialIds: string[];
+  initialAcknowledgedIds?: string[];
   guarantors: Person[];
 }) {
   const router = useRouter();
@@ -655,18 +723,27 @@ export function ContractGuarantorsForm({
   const [guarantorIds, setGuarantorIds] = useState<string[]>(
     initialIds.slice(0, 5),
   );
+  const [guarantorAckIds, setGuarantorAckIds] = useState<Set<string>>(
+    () => new Set(initialAcknowledgedIds),
+  );
 
-  const initialKey = initialIds.join(",");
+  const initialKey = `${initialIds.join(",")}|${initialAcknowledgedIds.join(",")}`;
   useEffect(() => {
-    const ids = initialKey ? initialKey.split(",") : [];
+    const [idsPart, ackPart] = initialKey.split("|");
+    const ids = idsPart ? idsPart.split(",").filter(Boolean) : [];
+    const acks = ackPart ? ackPart.split(",").filter(Boolean) : [];
     setGuarantorCount(Math.min(5, ids.length));
     setGuarantorIds(ids.slice(0, 5));
+    setGuarantorAckIds(new Set(acks));
   }, [initialKey]);
 
   useEffect(() => {
     setGuarantorIds((prev) => {
       const next = prev.slice(0, guarantorCount);
       while (next.length < guarantorCount) next.push("");
+      setGuarantorAckIds(
+        (acks) => new Set([...acks].filter((id) => next.includes(id))),
+      );
       return next;
     });
   }, [guarantorCount]);
@@ -674,6 +751,15 @@ export function ContractGuarantorsForm({
   useEffect(() => {
     if (state?.ok) router.refresh();
   }, [state, router]);
+
+  function setGuarantorAck(userId: string, acknowledged: boolean) {
+    setGuarantorAckIds((prev) => {
+      const next = new Set(prev);
+      if (acknowledged) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
 
   return (
     <form
@@ -691,12 +777,15 @@ export function ContractGuarantorsForm({
         count={guarantorCount}
         ids={guarantorIds}
         options={guarantors}
+        acknowledgedIds={guarantorAckIds}
+        excludeContractId={contractId}
         onCountChange={setGuarantorCount}
         onIdChange={(index, value) =>
           setGuarantorIds((prev) =>
             prev.map((v, i) => (i === index ? value : v)),
           )
         }
+        onAcknowledgedChange={setGuarantorAck}
       />
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)]">{state.error}</p>

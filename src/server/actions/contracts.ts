@@ -29,6 +29,15 @@ function parseGuarantorIds(formData: FormData): string[] {
   return [...new Set(ids)];
 }
 
+function parseGuarantorDuplicateAcks(formData: FormData): Set<string> {
+  return new Set(
+    formData
+      .getAll("guarantorDuplicateAck")
+      .map((v) => String(v).trim())
+      .filter(Boolean),
+  );
+}
+
 async function nextContractCode(organizationId: string) {
   const year = new Date().getFullYear();
   const count = await prisma.contract.count({
@@ -116,6 +125,7 @@ export async function createContractAction(
   const session = await requireStaff();
   const raw = formDataToObject(formData);
   const guarantorIds = parseGuarantorIds(formData);
+  const guarantorAcks = parseGuarantorDuplicateAcks(formData);
   const parsed = contractCreateSchema.safeParse({
     ...raw,
     guarantorIds,
@@ -182,6 +192,7 @@ export async function createContractAction(
           ...d.guarantorIds.map((userId) => ({
             userId,
             role: "GUARANTOR" as const,
+            duplicateGuarantorAck: guarantorAcks.has(userId),
           })),
         ],
       },
@@ -304,6 +315,7 @@ export async function updateContractGuarantorsAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const session = await requireStaff();
+  const guarantorAcks = parseGuarantorDuplicateAcks(formData);
   const parsed = contractGuarantorsSchema.safeParse({
     id: String(formData.get("id") ?? ""),
     guarantorIds: parseGuarantorIds(formData),
@@ -317,7 +329,14 @@ export async function updateContractGuarantorsAction(
     where: { id, organizationId: session.organizationId },
     select: {
       id: true,
-      parties: { select: { id: true, userId: true, role: true } },
+      parties: {
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          duplicateGuarantorAck: true,
+        },
+      },
     },
   });
   if (!contract) {
@@ -344,6 +363,7 @@ export async function updateContractGuarantorsAction(
   const nextIds = new Set(guarantorIds);
   const toRemove = current.filter((p) => !nextIds.has(p.userId));
   const toAdd = guarantorIds.filter((userId) => !currentIds.has(userId));
+  const toKeep = current.filter((p) => nextIds.has(p.userId));
 
   await prisma.$transaction([
     ...toRemove.map((p) =>
@@ -351,7 +371,21 @@ export async function updateContractGuarantorsAction(
     ),
     ...toAdd.map((userId) =>
       prisma.contractParty.create({
-        data: { contractId: contract.id, userId, role: "GUARANTOR" },
+        data: {
+          contractId: contract.id,
+          userId,
+          role: "GUARANTOR",
+          duplicateGuarantorAck: guarantorAcks.has(userId),
+        },
+      }),
+    ),
+    ...toKeep.map((p) =>
+      prisma.contractParty.update({
+        where: { id: p.id },
+        data: {
+          duplicateGuarantorAck:
+            guarantorAcks.has(p.userId) || p.duplicateGuarantorAck,
+        },
       }),
     ),
   ]);

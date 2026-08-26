@@ -107,6 +107,8 @@ model ContractParty {
   userId     String
   role       PartyRole
   sharePct   Decimal?  @db.Decimal(5, 2)
+  /// true si al cargar el garante se confirmó que ya figura en otro contrato activo
+  duplicateGuarantorAck Boolean @default(false)
   contract   Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
   user       User      @relation(fields: [userId], references: [id])
 

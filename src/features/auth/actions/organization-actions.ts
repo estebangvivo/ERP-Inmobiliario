@@ -97,7 +97,7 @@ export async function switchOrganization(
     await setLocalSessionCookie(token);
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { lastActivityAt: new Date() },
+      data: { lastActivityAt: new Date(), lastSeenAt: new Date() },
     });
     // No revalidatePath global: con Turbopack puede colgar la server action.
     // La UI hace window.location (recarga completa).

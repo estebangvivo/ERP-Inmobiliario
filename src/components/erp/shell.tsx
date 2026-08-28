@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { OrganizationRole } from "@prisma/client";
 import { ErpHeader } from "@/components/erp/header";
 import { ErpSidebar } from "@/components/erp/sidebar";
+import { PresenceHeartbeat } from "@/features/auth/components/presence-heartbeat";
 import type { AppModuleKey } from "@/features/auth/lib/modules";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,7 @@ export function ErpShell({
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
+      <PresenceHeartbeat />
       <button
         type="button"
         aria-label="Cerrar menú"

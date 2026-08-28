@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CostLedger, ServiceCostCategory } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import {
+  SearchableSelect,
+  type SearchableOption,
+} from "@/components/ui/searchable-select";
 import { SERVICE_COST_CATEGORY_LABELS } from "@/lib/labels";
 import {
   createServiceCostAction,
@@ -43,16 +47,29 @@ export function ServiceCostForm({
   const router = useRouter();
   const now = new Date();
   const [scope, setScope] = useState<"complex" | "property">("complex");
+  const [propertyId, setPropertyId] = useState("");
   const [state, formAction, pending] = useActionState(
     createServiceCostAction,
     initial,
   );
   const categories =
     ledger === "SERVICES" ? SERVICE_CATEGORIES : EXPENSE_CATEGORIES;
+  const propertyOptions = useMemo<SearchableOption[]>(
+    () =>
+      properties.map((p) => ({
+        value: p.id,
+        label: p.title,
+      })),
+    [properties],
+  );
 
   useEffect(() => {
     if (state?.ok) router.refresh();
   }, [state, router]);
+
+  useEffect(() => {
+    if (scope !== "property") setPropertyId("");
+  }, [scope]);
 
   return (
     <form
@@ -91,16 +108,17 @@ export function ServiceCostForm({
       ) : (
         <div className="space-y-1 lg:col-span-2">
           <Label htmlFor="propertyId">Propiedad</Label>
-          <Select id="propertyId" name="propertyId" required defaultValue="">
-            <option value="" disabled>
-              Seleccionar…
-            </option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            id="propertyId"
+            name="propertyId"
+            value={propertyId}
+            onChange={setPropertyId}
+            options={propertyOptions}
+            emptyLabel="Seleccionar…"
+            placeholder="Seleccionar propiedad…"
+            searchPlaceholder="Buscar propiedad…"
+            required
+          />
         </div>
       )}
       <div className="space-y-1">
@@ -185,15 +203,28 @@ export function GenerateFromCostsForm({
   const [generateScope, setGenerateScope] = useState<
     "complex" | "property" | "all_pending"
   >("complex");
+  const [propertyId, setPropertyId] = useState("");
   const [state, formAction, pending] = useActionState(
     generateFromServiceCostsAction,
     initial,
   );
   const noun = ledger === "SERVICES" ? "servicios" : "expensas";
+  const propertyOptions = useMemo<SearchableOption[]>(
+    () =>
+      properties.map((p) => ({
+        value: p.id,
+        label: p.title,
+      })),
+    [properties],
+  );
 
   useEffect(() => {
     if (state?.ok) router.refresh();
   }, [state, router]);
+
+  useEffect(() => {
+    if (generateScope !== "property") setPropertyId("");
+  }, [generateScope]);
 
   const submitLabel =
     generateScope === "all_pending"
@@ -245,21 +276,17 @@ export function GenerateFromCostsForm({
       {generateScope === "property" ? (
         <div className="space-y-1 lg:col-span-2">
           <Label htmlFor="genPropertyId">Propiedad</Label>
-          <Select
+          <SearchableSelect
             id="genPropertyId"
             name="propertyId"
+            value={propertyId}
+            onChange={setPropertyId}
+            options={propertyOptions}
+            emptyLabel="Seleccionar…"
+            placeholder="Seleccionar propiedad…"
+            searchPlaceholder="Buscar propiedad…"
             required
-            defaultValue=""
-          >
-            <option value="" disabled>
-              Seleccionar…
-            </option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
       ) : null}
       <div className="space-y-1">

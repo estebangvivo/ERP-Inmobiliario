@@ -109,7 +109,7 @@ async function touchIdleCheck(
   try {
     await prisma.user.update({
       where: { id: userId },
-      data: { lastActivityAt: new Date() },
+      data: { lastActivityAt: new Date(), lastSeenAt: new Date() },
     });
   } catch {
     /* ignore */

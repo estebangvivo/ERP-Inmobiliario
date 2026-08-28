@@ -5,6 +5,8 @@ import type { BillingPlan, BillingStatus, OrganizationRole } from "@prisma/clien
 import { prisma } from "@/lib/prisma";
 import { requireAdminPanelSession } from "@/lib/auth";
 import { normalizeBillingPlanId } from "@/features/billing/lib/plans";
+import { ROLE_DEFAULT_MODULES } from "@/features/auth/lib/modules";
+import { isUserOnline } from "@/features/auth/lib/presence";
 
 export type AdminOrgOverview = {
   id: string;
@@ -19,11 +21,14 @@ export type AdminOrgOverview = {
 
 export type AdminOrganizationMemberOverview = {
   membershipId: string;
+  userId: string;
   name: string;
   email: string;
   role: OrganizationRole;
   isActive: boolean;
   allowedModules: string[];
+  lastSeenAt: string | null;
+  isOnline: boolean;
 };
 
 export type AdminOrganizationOverview = {
@@ -62,6 +67,75 @@ export async function listAdminOrganizationsOverview(): Promise<
     memberCount: o._count.members,
     createdAt: o.createdAt.toISOString(),
   }));
+}
+
+/** Empresas con miembros y estado de conexión (presencia). */
+export async function listAdminOrganizationsPresenceOverview(): Promise<
+  AdminOrganizationOverview[]
+> {
+  await requireAdminPanelSession();
+
+  const orgs = await prisma.organization.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              isActive: true,
+              lastSeenAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  const now = Date.now();
+
+  return orgs.map((org) => {
+    const members: AdminOrganizationMemberOverview[] = org.members
+      .map((m) => {
+        const lastSeenAt = m.user.lastSeenAt?.toISOString() ?? null;
+        const isOnline = isUserOnline(m.user.lastSeenAt, now);
+        return {
+          membershipId: m.id,
+          userId: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          role: m.role,
+          isActive: m.user.isActive,
+          allowedModules:
+            m.allowedModules.length > 0
+              ? m.allowedModules
+              : [...ROLE_DEFAULT_MODULES[m.role]],
+          lastSeenAt,
+          isOnline,
+        };
+      })
+      .sort((a, b) => {
+        const aOn = a.isOnline && a.isActive ? 1 : 0;
+        const bOn = b.isOnline && b.isActive ? 1 : 0;
+        if (bOn !== aOn) return bOn - aOn;
+        return a.email.localeCompare(b.email, "es");
+      });
+
+    return {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      billingStatus: org.billingStatus,
+      billingPlan: org.billingPlan,
+      paidUntil: org.paidUntil?.toISOString() ?? null,
+      memberCount: members.length,
+      onlineCount: members.filter((m) => m.isOnline && m.isActive).length,
+      members,
+    };
+  });
 }
 
 export async function updateOrganizationBillingBySuperadmin(input: {

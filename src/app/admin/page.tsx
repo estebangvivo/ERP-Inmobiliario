@@ -1,4 +1,7 @@
-import { listAdminOrganizationsOverview } from "@/features/auth/actions/admin-panel-actions";
+import {
+  listAdminOrganizationsOverview,
+  listAdminOrganizationsPresenceOverview,
+} from "@/features/auth/actions/admin-panel-actions";
 import { listOrganizationUsers } from "@/features/auth/actions/user-actions";
 import { AdminPanel } from "@/features/auth/components/admin-panel";
 import { listAdminBillingPayments } from "@/features/billing/actions/admin-billing-actions";
@@ -20,6 +23,7 @@ type AdminPageProps = {
 };
 
 const VALID_TABS = [
+  "connected",
   "users",
   "companies",
   "payments",
@@ -36,6 +40,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = (await searchParams) ?? {};
 
   const organizations = await listAdminOrganizationsOverview();
+  const presenceOverview = await listAdminOrganizationsPresenceOverview();
   const manageableOrgs = organizations.map((o) => ({
     id: o.id,
     name: o.name,
@@ -102,6 +107,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       />
       <AdminPanel
         organizations={organizations}
+        presenceOverview={presenceOverview}
         manageableOrgs={manageableOrgs}
         users={users}
         selectedOrgId={selectedOrgId}

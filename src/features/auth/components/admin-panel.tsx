@@ -13,6 +13,7 @@ import {
   Landmark,
   Wallet,
   Settings2,
+  Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,11 @@ import {
 import {
   updateOrganizationBillingBySuperadmin,
   type AdminOrgOverview,
+  type AdminOrganizationOverview,
 } from "@/features/auth/actions/admin-panel-actions";
+import {
+  AdminSuperadminOrgsPanel,
+} from "@/features/auth/components/admin-superadmin-orgs-panel";
 import {
   type OrganizationUserRow,
 } from "@/features/auth/actions/user-actions";
@@ -52,6 +57,7 @@ import { publicPropertiesPath } from "@/lib/public-org";
 import { cn } from "@/lib/utils";
 
 type TabId =
+  | "connected"
   | "users"
   | "companies"
   | "payments"
@@ -66,6 +72,7 @@ type ManageableOrg = { id: string; name: string; slug: string };
 
 type Props = {
   organizations: AdminOrgOverview[];
+  presenceOverview: AdminOrganizationOverview[];
   manageableOrgs: ManageableOrg[];
   users: OrganizationUserRow[];
   selectedOrgId: string;
@@ -98,6 +105,7 @@ const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
 
 export function AdminPanel({
   organizations,
+  presenceOverview,
   manageableOrgs,
   users,
   selectedOrgId: initialSelectedOrgId,
@@ -110,7 +118,7 @@ export function AdminPanel({
   initialTab,
 }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<TabId>(initialTab ?? "users");
+  const [tab, setTab] = useState<TabId>(initialTab ?? "connected");
   const [selectedOrgId, setSelectedOrgId] = useState(
     () => initialSelectedOrgId || manageableOrgs[0]?.id || "",
   );
@@ -125,7 +133,11 @@ export function AdminPanel({
     [featureRequests],
   );
 
+  const totalOnline = presenceOverview.reduce((s, o) => s + o.onlineCount, 0);
+  const totalMembers = presenceOverview.reduce((s, o) => s + o.memberCount, 0);
+
   const tabs: { id: TabId; label: string; icon: typeof Users }[] = [
+    { id: "connected", label: "Usuarios conectados", icon: Circle },
     { id: "users", label: "Alta y permisos", icon: Users },
     { id: "companies", label: "Empresas", icon: Building2 },
     { id: "payments", label: "Pagos", icon: Banknote },
@@ -266,6 +278,37 @@ export function AdminPanel({
       {error ? (
         <p className="text-sm text-[var(--destructive)]">{error}</p>
       ) : null}
+
+      {tab === "connected" && (
+        <section className="space-y-6">
+          <div className="flex flex-wrap gap-4 text-sm text-[var(--muted-foreground)]">
+            <p>
+              <span className="font-medium text-[var(--foreground)]">
+                {presenceOverview.length}
+              </span>{" "}
+              empresas (plataforma)
+            </p>
+            <p>
+              <span className="font-medium text-[var(--foreground)]">
+                {totalMembers}
+              </span>{" "}
+              usuarios
+            </p>
+            <p className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="font-medium text-[var(--foreground)]">
+                {totalOnline}
+              </span>{" "}
+              conectados ahora
+            </p>
+          </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            “Habilitado” es la cuenta; “Conectado ahora” indica presencia en
+            los últimos 2 minutos.
+          </p>
+          <AdminSuperadminOrgsPanel overview={presenceOverview} />
+        </section>
+      )}
 
       {tab === "users" && (
         <section className="space-y-4">

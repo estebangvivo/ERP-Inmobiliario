@@ -16,6 +16,7 @@ import {
 } from "@/features/billing/lib/plans";
 import { ROLE_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
+import { formatPresenceLabel } from "@/features/auth/lib/presence";
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Activa" },
@@ -164,7 +165,7 @@ export function AdminSuperadminOrgsPanel({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm text-[var(--muted-foreground)]">
-                  {org.onlineCount}/{org.memberCount} en línea
+                  {org.onlineCount}/{org.memberCount} conectados
                 </p>
                 {!editing ? (
                   <>
@@ -256,12 +257,13 @@ export function AdminSuperadminOrgsPanel({
             )}
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
                   <tr>
                     <th className="px-4 py-2 font-medium">Usuario</th>
                     <th className="px-4 py-2 font-medium">Rol</th>
-                    <th className="px-4 py-2 font-medium">Estado</th>
+                    <th className="px-4 py-2 font-medium">Cuenta</th>
+                    <th className="px-4 py-2 font-medium">Conexión</th>
                     <th className="px-4 py-2 font-medium">Módulos</th>
                   </tr>
                 </thead>
@@ -279,12 +281,30 @@ export function AdminSuperadminOrgsPanel({
                       </td>
                       <td className="px-4 py-3">
                         {m.isActive ? (
-                          <span className="text-emerald-700">Activo</span>
+                          <span className="text-[var(--muted-foreground)]">
+                            Habilitado
+                          </span>
                         ) : (
                           <span className="text-[var(--destructive)]">
-                            Inactivo
+                            Deshabilitado
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              m.isOnline && m.isActive
+                                ? "bg-emerald-500"
+                                : "bg-[var(--muted-foreground)]/40",
+                            )}
+                          />
+                          {formatPresenceLabel(
+                            m.lastSeenAt,
+                            m.isOnline && m.isActive,
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted-foreground)]">
                         {m.allowedModules.length}

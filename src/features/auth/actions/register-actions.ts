@@ -85,6 +85,7 @@ export async function registerWithPassword(input: {
         phone,
         passwordHash: await hashPassword(password),
         lastActivityAt: new Date(),
+        lastSeenAt: new Date(),
       },
     });
 

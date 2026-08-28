@@ -466,6 +466,7 @@ model User {
   updatedAt               DateTime               @updatedAt
   authId                  String?                @unique
   lastActivityAt          DateTime?
+  lastSeenAt              DateTime?
   contractParties         ContractParty[]
   leadsAssigned           Lead[]
   settlements             OwnerSettlement[]

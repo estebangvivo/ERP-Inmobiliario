@@ -64,7 +64,7 @@ async function authenticate(emailRaw: string, password: string) {
     });
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastActivityAt: new Date() },
+      data: { lastActivityAt: new Date(), lastSeenAt: new Date() },
     });
     return {
       ok: true as const,
@@ -89,7 +89,7 @@ async function authenticate(emailRaw: string, password: string) {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { lastActivityAt: new Date() },
+    data: { lastActivityAt: new Date(), lastSeenAt: new Date() },
   });
 
   return {

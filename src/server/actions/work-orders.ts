@@ -4,6 +4,7 @@ import { CostBearer, WorkOrderStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { issuePaymentOrderForSupplierInvoice } from "@/features/treasury/lib/issue-docs-from-billing";
+import { parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { isStaffRole, requireModule, requireStaff } from "@/lib/session";
 import { propertyScopeWhere } from "@/lib/tenant-scope";
@@ -134,12 +135,17 @@ export async function createSupplierInvoiceAction(
     return { ok: false, error: "Completá OT, proveedor, monto y fecha" };
   }
 
+  const parsedInvoiceDate = parseDateInput(invoiceDate);
+  if (!parsedInvoiceDate) {
+    return { ok: false, error: "Fecha de factura inválida." };
+  }
+
   await prisma.supplierInvoice.create({
     data: {
       workOrderId,
       supplierId,
       amount,
-      invoiceDate: new Date(invoiceDate),
+      invoiceDate: parsedInvoiceDate,
       invoiceNumber: invoiceNumber || null,
       costBearer,
       notes: notes || null,

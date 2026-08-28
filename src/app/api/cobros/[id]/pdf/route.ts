@@ -7,6 +7,11 @@ import { getOrganizationSession } from "@/lib/auth";
 import { billScopeWhere } from "@/lib/tenant-scope";
 import { hasModule } from "@/features/auth/lib/modules";
 import { RentReceiptPdfDocument } from "@/components/pdf/rent-receipt-pdf";
+import {
+  rentBillReceiptPrefix,
+  serviceBillReceiptPrefix,
+} from "@/features/billing/lib/tenant-bill-kind";
+import { getBillContractServiceLinesForDisplay } from "@/server/services/contract-services-billing";
 
 type Params = Promise<{ id: string }>;
 
@@ -48,12 +53,23 @@ export async function GET(
     bill.contract.parties.find((p) => p.role === "TENANT")?.user.name ??
     "Inquilino";
 
-  const receiptCode = `REC-${bill.periodYear}${String(bill.periodMonth).padStart(2, "0")}-${bill.contract.code}`;
+  const isServices = bill.kind === "SERVICES";
+  const prefix = isServices ? serviceBillReceiptPrefix() : rentBillReceiptPrefix();
+  const receiptCode = `${prefix}-${bill.periodYear}${String(bill.periodMonth).padStart(2, "0")}-${bill.contract.code}`;
+  const serviceLines = isServices
+    ? (await getBillContractServiceLinesForDisplay(bill.id)).map((line) => ({
+        concept: line.concept,
+        amount: String(line.amount),
+      }))
+    : undefined;
 
   const buffer = await renderToBuffer(
     RentReceiptPdfDocument({
       data: {
         receiptCode,
+        documentTitle: isServices
+          ? "Liquidación de servicios"
+          : "Recibo / Estado de cuenta — Alquiler",
         contractCode: bill.contract.code,
         propertyTitle: bill.contract.property.title,
         propertyAddress: `${bill.contract.property.address}, ${bill.contract.property.city}`,
@@ -63,6 +79,7 @@ export async function GET(
         dueDate: formatDateOnly(bill.dueDate),
         currency: bill.currency,
         rentAmount: bill.rentAmount.toString(),
+        contractServicesAmount: bill.contractServicesAmount.toString(),
         commissionAmount: bill.commissionAmount.toString(),
         expensesAmount: bill.expensesAmount.toString(),
         lateFeeAmount: bill.lateFeeAmount.toString(),
@@ -70,6 +87,7 @@ export async function GET(
         totalAmount: bill.totalAmount.toString(),
         paidAmount: bill.paidAmount.toString(),
         status: BILL_STATUS_LABELS[bill.status],
+        serviceLines,
         payments: bill.payments.map((p) => ({
           paidAt: formatDateOnly(p.paidAt),
           method: PAYMENT_METHOD_LABELS[p.method],

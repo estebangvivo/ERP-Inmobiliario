@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { BillingPlan, BillingStatus, OrganizationRole } from "@prisma/client";
+import { parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPanelSession } from "@/lib/auth";
 import { normalizeBillingPlanId } from "@/features/billing/lib/plans";
@@ -151,12 +152,20 @@ export async function updateOrganizationBillingBySuperadmin(input: {
       ? normalizeBillingPlanId(input.billingPlan)
       : null;
 
+    let paidUntil: Date | null = null;
+    if (input.paidUntil?.trim()) {
+      paidUntil = parseDateInput(input.paidUntil.trim());
+      if (!paidUntil) {
+        return { ok: false, error: "Fecha de vencimiento inválida." };
+      }
+    }
+
     await prisma.organization.update({
       where: { id: input.organizationId },
       data: {
         billingStatus: input.billingStatus,
         billingPlan: plan as BillingPlan | undefined,
-        paidUntil: input.paidUntil ? new Date(input.paidUntil) : null,
+        paidUntil,
       },
     });
 

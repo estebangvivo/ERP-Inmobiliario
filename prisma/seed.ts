@@ -424,15 +424,17 @@ async function main() {
 
   await prisma.tenantBill.upsert({
     where: {
-      contractId_periodYear_periodMonth: {
+      contractId_periodYear_periodMonth_kind: {
         contractId: contract.id,
         periodYear: 2026,
         periodMonth: 8,
+        kind: "RENT",
       },
     },
     update: {},
     create: {
       contractId: contract.id,
+      kind: "RENT",
       periodYear: 2026,
       periodMonth: 8,
       dueDate: new Date("2026-08-10"),

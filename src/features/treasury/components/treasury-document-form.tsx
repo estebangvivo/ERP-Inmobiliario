@@ -15,6 +15,7 @@ import type { TreasuryContractOption } from "@/features/treasury/queries/list-co
 import type { TreasuryPaymentInput } from "@/features/treasury/lib/payments";
 import { DateInput } from "@/components/ui/date-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { toDateInputValue } from "@/lib/dates";
 import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import { formatMoney, PAYMENT_METHOD_LABEL } from "@/features/treasury/lib/labels";
 import {
@@ -142,9 +143,7 @@ export function TreasuryDocumentForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [issueDate, setIssueDate] = useState(
-    () => new Date().toISOString().slice(0, 10),
-  );
+  const [issueDate, setIssueDate] = useState(() => toDateInputValue(new Date()));
   const [partyId, setPartyId] = useState(() =>
     defaultPartyId !== undefined
       ? defaultPartyId
@@ -827,11 +826,10 @@ export function TreasuryDocumentForm({
                     updatePayment(payment.key, { checkBank: e.target.value })
                   }
                 />
-                <Input
-                  type="date"
+                <DateInput
                   value={payment.checkDueDate ?? ""}
-                  onChange={(e) =>
-                    updatePayment(payment.key, { checkDueDate: e.target.value })
+                  onChange={(iso) =>
+                    updatePayment(payment.key, { checkDueDate: iso })
                   }
                 />
                 <p className="text-xs text-[var(--muted-foreground)] self-center">

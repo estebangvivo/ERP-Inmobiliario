@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { VisitBookingStatus } from "@prisma/client";
 import { listInamoviblesForYears, persistEnabledHolidays } from "@/lib/ar-holidays";
+import { formatDateOnly } from "@/lib/dates";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
@@ -136,13 +137,7 @@ export async function getAvailableVisitDays(
   }
 
   return [...byDay.entries()].map(([dateKey, slots]) => {
-    const sample = slots[0]!.startsAt;
-    const label = new Intl.DateTimeFormat("es-AR", {
-      timeZone: "America/Argentina/Buenos_Aires",
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    }).format(sample);
+    const label = formatDateOnly(dateKey);
     return {
       dateKey,
       label,

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { SaleDealStage } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -104,7 +105,7 @@ export function CreateSaleDealForm({
       </div>
       <div className="space-y-1">
         <Label htmlFor="deedDate">Fecha de boleto</Label>
-        <Input id="deedDate" name="deedDate" type="date" />
+        <DateInput id="deedDate" name="deedDate" />
       </div>
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="checkbox" name="reservationPaid" className="h-4 w-4" />
@@ -228,10 +229,9 @@ export function SaleDealEditForm({
       </div>
       <div className="space-y-1">
         <Label htmlFor="deedDate">Fecha de boleto</Label>
-        <Input
+        <DateInput
           id="deedDate"
           name="deedDate"
-          type="date"
           defaultValue={deal.deedDate}
         />
       </div>

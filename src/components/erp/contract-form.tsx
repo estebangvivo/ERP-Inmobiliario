@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -32,6 +33,7 @@ import {
   COMMISSION_MODES,
   type CommissionModeValue,
 } from "@/features/contracts/lib/commission";
+import { ContractServicesFields } from "@/components/erp/contract-services-fields";
 
 const initial: ActionResult | null = null;
 
@@ -453,11 +455,11 @@ export function ContractCreateForm({
         />
         <div className="space-y-2">
           <Label htmlFor="startDate">Inicio</Label>
-          <Input id="startDate" name="startDate" type="date" required />
+          <DateInput id="startDate" name="startDate" required />
         </div>
         <div className="space-y-2">
           <Label htmlFor="endDate">Fin</Label>
-          <Input id="endDate" name="endDate" type="date" required />
+          <DateInput id="endDate" name="endDate" required />
         </div>
         <div className="space-y-2">
           <Label htmlFor="initialRent">Alquiler inicial</Label>
@@ -490,8 +492,10 @@ export function ContractCreateForm({
             id="depositAmount"
             name="depositAmount"
             type="number"
-            step="0.01"
+            step="any"
+            min={0}
             defaultValue={0}
+            placeholder="0 si no hay depósito"
           />
         </div>
         <div className="space-y-2">
@@ -564,6 +568,7 @@ export function ContractCreateForm({
           <input type="checkbox" name="includesExtraordExp" className="h-4 w-4" />
           Incluye expensas extraordinarias
         </label>
+        <ContractServicesFields />
       </div>
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)]">{state.error}</p>
@@ -635,10 +640,9 @@ export function ContractEditForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="endDate">Fin</Label>
-          <Input
+          <DateInput
             id="endDate"
             name="endDate"
-            type="date"
             defaultValue={contract.endDate}
             required
           />

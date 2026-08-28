@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
 import { billScopeWhere } from "@/lib/tenant-scope";
 import { formatMoney } from "@/lib/money";
+import { TENANT_BILL_KIND_LABELS } from "@/features/billing/lib/tenant-bill-kind";
 import { BILL_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,12 @@ export default async function CobrosPage({
     include: {
       contract: { include: { property: true } },
     },
-    orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }, { dueDate: "asc" }],
+    orderBy: [
+      { periodYear: "desc" },
+      { periodMonth: "desc" },
+      { kind: "asc" },
+      { dueDate: "asc" },
+    ],
     ...prismaSkipTake(page, pageSize),
   });
 
@@ -82,7 +88,7 @@ export default async function CobrosPage({
     <div className="space-y-6">
       <PageHeader
         title="Cobros"
-        description="Cuotas de alquiler, expensas y registro de pagos."
+        description="Cuotas de alquiler, servicios, expensas y registro de pagos."
         actions={
           staff ? (
             <div className="flex flex-wrap gap-2">
@@ -115,13 +121,18 @@ export default async function CobrosPage({
       </FilterBar>
 
       <DataTable
-        headers={["Período", "Contrato", "Propiedad", "Total", "Pagado", "Estado", ""]}
+        headers={["Período", "Tipo", "Contrato", "Propiedad", "Total", "Pagado", "Estado", ""]}
         empty={total === 0}
       >
         {bills.map((bill) => (
           <tr key={bill.id} className="hover:bg-[var(--muted)]/40">
             <td className="px-4 py-3 font-medium">
               {bill.periodMonth}/{bill.periodYear}
+            </td>
+            <td className="px-4 py-3">
+              <Badge variant={bill.kind === "SERVICES" ? "warning" : "secondary"}>
+                {TENANT_BILL_KIND_LABELS[bill.kind]}
+              </Badge>
             </td>
             <td className="px-4 py-3">{bill.contract.code}</td>
             <td className="px-4 py-3 text-[var(--muted-foreground)]">

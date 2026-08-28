@@ -16,8 +16,11 @@ import {
   Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatDateAR } from "@/lib/format-date";
+import { toDateInputValue } from "@/lib/dates";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/erp/page-chrome";
@@ -396,9 +399,7 @@ export function AdminPanel({
                 </td>
                 <td className="px-4 py-3">{org.memberCount}</td>
                 <td className="px-4 py-3 text-sm text-[var(--muted-foreground)]">
-                  {org.paidUntil
-                    ? new Date(org.paidUntil).toLocaleDateString("es-AR")
-                    : "—"}
+                  {org.paidUntil ? formatDateAR(org.paidUntil) : "—"}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap justify-end gap-2">
@@ -523,15 +524,12 @@ export function AdminPanel({
           </div>
           <div className="space-y-1">
             <Label>Vence (paidUntil)</Label>
-            <Input
-              type="date"
+            <DateInput
               name="paidUntil"
               key={`pu-${billingOrgId}`}
               defaultValue={
                 selectedBillingOrg?.paidUntil
-                  ? new Date(selectedBillingOrg.paidUntil)
-                      .toISOString()
-                      .slice(0, 10)
+                  ? toDateInputValue(selectedBillingOrg.paidUntil)
                   : ""
               }
             />

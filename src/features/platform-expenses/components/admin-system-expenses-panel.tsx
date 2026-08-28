@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { formatDateAR } from "@/lib/format-date";
+import { toDateInputValue } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import {
   PLATFORM_EXPENSE_CATEGORIES,
@@ -35,7 +37,7 @@ type FormState = {
 };
 
 function emptyForm(): FormState {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateInputValue(new Date());
   return {
     date: today,
     category: "HOSTING",
@@ -238,20 +240,16 @@ export function AdminSystemExpensesPanel({
       <div className="grid gap-3 rounded-lg border border-border p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-sm">
           <span className="mb-1 block text-muted-foreground">Desde</span>
-          <Input
-            type="date"
+          <DateInput
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className={fieldClass}
+            onChange={setFrom}
           />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-muted-foreground">Hasta</span>
-          <Input
-            type="date"
+          <DateInput
             value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className={fieldClass}
+            onChange={setTo}
           />
         </label>
         <label className="block text-sm">
@@ -294,11 +292,9 @@ export function AdminSystemExpensesPanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-1 block text-muted-foreground">Fecha</span>
-              <Input
-                type="date"
+              <DateInput
                 value={form.date}
-                onChange={(e) => setField("date", e.target.value)}
-                className={fieldClass}
+                onChange={(iso) => setField("date", iso)}
                 required
               />
             </label>

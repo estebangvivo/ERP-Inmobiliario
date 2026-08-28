@@ -10,8 +10,8 @@ import {
   type VisitBookingRow,
   type VisitStaffOption,
 } from "@/server/actions/visit-bookings";
+import { formatDateOnly } from "@/lib/dates";
 import {
-  artLocalToUtc,
   formatArtDateKey,
   formatArtDisplay,
   formatArtTimeLabel,
@@ -72,14 +72,7 @@ function weekDayKeys(anchor: Date, weekdays: number[]): string[] {
 }
 
 function dayLabel(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const utc = artLocalToUtc(y!, m!, d!, 12, 0);
-  return new Intl.DateTimeFormat("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  }).format(utc);
+  return formatDateOnly(dateKey);
 }
 
 export function VisitBookingsPanel({

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { WorkOrderStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -168,7 +169,7 @@ export function SupplierInvoiceForm({
       </div>
       <div className="space-y-1">
         <Label htmlFor="invoiceDate">Fecha factura</Label>
-        <Input id="invoiceDate" name="invoiceDate" type="date" required />
+        <DateInput id="invoiceDate" name="invoiceDate" required />
       </div>
       <div className="space-y-1">
         <Label htmlFor="invoiceNumber">Nº factura</Label>

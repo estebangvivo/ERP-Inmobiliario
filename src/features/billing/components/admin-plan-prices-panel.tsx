@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import {
   saveAdminPlanPrices,
@@ -202,13 +203,11 @@ export function AdminPlanPricesPanel({
                   />
                 </td>
                 <td className="px-3 py-3">
-                  <Input
-                    type="date"
+                  <DateInput
                     value={r.discountUntil}
-                    onChange={(e) =>
-                      updateRow(r.id, { discountUntil: e.target.value })
+                    onChange={(iso) =>
+                      updateRow(r.id, { discountUntil: iso })
                     }
-                    className={fieldClass}
                   />
                 </td>
                 <td className="px-3 py-3">

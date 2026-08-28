@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AgendaVisitForm } from "@/components/erp/agenda-visit-form";
+import { formatDateOnly } from "@/lib/dates";
 import type { VisitBookableProperty } from "@/server/actions/visit-bookings";
 
 export type AgendaVisitItem = {
@@ -209,13 +210,7 @@ export function AgendaMonthPanel({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">
-                {new Intl.DateTimeFormat("es-AR", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(new Date(`${selectedKey}T12:00:00.000Z`))}
+                {formatDateOnly(selectedKey)}
               </p>
               <p className="text-xs text-[var(--muted-foreground)]">
                 {selectedVisits.length === 0

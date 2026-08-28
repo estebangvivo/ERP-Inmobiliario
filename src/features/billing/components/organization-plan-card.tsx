@@ -5,6 +5,7 @@ import {
   normalizeBillingPlanId,
   planMaxUsers,
 } from "@/features/billing/lib/plans";
+import { formatDateAR } from "@/lib/format-date";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Activo",
@@ -20,11 +21,7 @@ type OrganizationPlanCardProps = {
 };
 
 function formatPaidUntil(paidUntil: Date | string | null): string {
-  if (!paidUntil) return "—";
-  const date =
-    paidUntil instanceof Date ? paidUntil : new Date(paidUntil);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-AR");
+  return formatDateAR(paidUntil);
 }
 
 function formatSeatsLabel(planId: ReturnType<typeof normalizeBillingPlanId>): string | null {

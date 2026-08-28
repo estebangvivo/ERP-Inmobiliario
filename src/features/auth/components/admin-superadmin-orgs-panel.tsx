@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BillingPlan, BillingStatus, OrganizationRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
+import { formatDateAR } from "@/lib/format-date";
+import { toDateInputValue } from "@/lib/dates";
 import {
   updateOrganizationBillingBySuperadmin,
   type AdminOrganizationOverview,
@@ -38,12 +41,7 @@ const fieldClass =
 
 function formatPaidUntil(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-AR");
-}
-
-function toDateInputValue(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
+  return formatDateAR(iso);
 }
 
 function planLabel(plan: string | null): string {
@@ -246,10 +244,9 @@ export function AdminSuperadminOrgsPanel({
                   <span className="mb-1 block text-[var(--muted-foreground)]">
                     Vigente hasta
                   </span>
-                  <Input
-                    type="date"
+                  <DateInput
                     value={paidUntil}
-                    onChange={(e) => setPaidUntil(e.target.value)}
+                    onChange={setPaidUntil}
                     className="w-full"
                   />
                 </label>

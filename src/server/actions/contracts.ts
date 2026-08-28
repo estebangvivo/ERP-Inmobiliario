@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import {
@@ -16,6 +17,10 @@ import {
 } from "@/server/services/billing";
 import type { ActionResult } from "@/server/actions/users";
 import { saveContractAttachments } from "@/server/actions/contract-attachments";
+import {
+  createContractServices,
+  parseContractServicesFromForm,
+} from "@/server/actions/contract-services";
 
 function formDataToObject(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -141,7 +146,12 @@ export async function createContractAction(
   }
 
   const d = parsed.data;
-  if (new Date(d.endDate) <= new Date(d.startDate)) {
+  const startDate = parseDateInput(d.startDate);
+  const endDate = parseDateInput(d.endDate);
+  if (!startDate || !endDate) {
+    return { ok: false, error: "Las fechas de inicio y fin son inválidas." };
+  }
+  if (endDate <= startDate) {
     return { ok: false, error: "La fecha de fin debe ser posterior al inicio" };
   }
   if (d.guarantorIds.includes(d.tenantId)) {
@@ -166,11 +176,12 @@ export async function createContractAction(
       code,
       propertyId: d.propertyId,
       status: "ACTIVE",
-      startDate: new Date(d.startDate),
-      endDate: new Date(d.endDate),
+      startDate,
+      endDate,
       initialRent: d.initialRent,
       currency: d.currency,
       depositAmount: d.depositAmount,
+      depositHeld: d.depositAmount > 0,
       agencyCommissionPct:
         d.commissionMode === "PERCENT_RENT" ? d.commissionValue : 0,
       commissionMode: d.commissionMode,
@@ -201,7 +212,7 @@ export async function createContractAction(
           {
             indexType: d.indexType,
             periodMonths: d.periodMonths,
-            effectiveFrom: new Date(d.startDate),
+            effectiveFrom: startDate,
             notes: `Ajuste cada ${d.periodMonths} meses`,
           },
         ],
@@ -225,6 +236,9 @@ export async function createContractAction(
     attachmentFiles,
     attachmentKinds,
   );
+
+  const contractServices = await parseContractServicesFromForm(formData);
+  await createContractServices(contract.id, contractServices);
 
   const bills = await generateTenantBillsForContract(contract.id, {
     dueDay: 10,
@@ -276,6 +290,10 @@ export async function updateContractAction(
   }
 
   const d = parsed.data;
+  const endDate = parseDateInput(d.endDate);
+  if (!endDate) {
+    return { ok: false, error: "La fecha de fin es inválida." };
+  }
   const existing = await prisma.contract.findFirst({
     where: { id: d.id, organizationId: session.organizationId },
     select: { id: true, propertyId: true, status: true },
@@ -288,7 +306,7 @@ export async function updateContractAction(
     where: { id: d.id },
     data: {
       status: d.status,
-      endDate: new Date(d.endDate),
+      endDate,
       agencyCommissionPct:
         d.commissionMode === "PERCENT_RENT" ? d.commissionValue : 0,
       commissionMode: d.commissionMode,
@@ -408,8 +426,11 @@ export async function updateDepositAction(
 ): Promise<ActionResult> {
   const session = await requireStaff();
   const contractId = String(formData.get("contractId") ?? "");
-  const depositAmount = Number(formData.get("depositAmount"));
-  const depositHeld = formData.get("depositHeld") === "true";
+  const rawDeposit = formData.get("depositAmount");
+  const depositAmount =
+    rawDeposit === "" || rawDeposit == null ? 0 : Number(rawDeposit);
+  const depositHeld =
+    depositAmount > 0 && formData.get("depositHeld") === "true";
   const note = String(formData.get("note") ?? "").trim();
 
   if (!contractId || !(depositAmount >= 0) || Number.isNaN(depositAmount)) {
@@ -436,7 +457,7 @@ export async function updateDepositAction(
 
   revalidatePath(`/contratos/${contractId}`);
   revalidatePath("/contratos");
-  return { ok: true, message: depositHeld ? "Depósito en custodia." : "Depósito marcado como devuelto." };
+  return { ok: true, message: depositAmount > 0 && depositHeld ? "Depósito en custodia." : "Depósito actualizado." };
 }
 
 export async function applyDepositToBalanceAction(
@@ -519,7 +540,10 @@ export async function applyContractAdjustmentAction(
   }
 
   const policy = contract.adjustments[0];
-  const effectiveFrom = new Date(effectiveFromRaw);
+  const effectiveFrom = parseDateInput(effectiveFromRaw);
+  if (!effectiveFrom) {
+    return { ok: false, error: "Fecha de vigencia inválida." };
+  }
   const periodYear = effectiveFrom.getUTCFullYear();
   const periodMonth = effectiveFrom.getUTCMonth() + 1;
   // Las tasas se cargan el mes anterior a la vigencia (ej. junio → julio).

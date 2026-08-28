@@ -84,6 +84,7 @@ export async function listTenantsWithDebt(
 
 export type BillDebtDetail = {
   id: string;
+  kind: "RENT" | "SERVICES";
   periodYear: number;
   periodMonth: number;
   dueDate: Date;
@@ -96,6 +97,7 @@ export type BillDebtDetail = {
   extraordinaryExpenses: number;
   servicesAmount: number;
   servicesExtraordinaryAmount: number;
+  contractServicesAmount: number;
   expensesAmount: number;
   commissionAmount: number;
   lateFeeAmount: number;
@@ -156,7 +158,11 @@ export async function getTenantDebtDetail(
     let extraordinary = 0;
     let services = 0;
     let servicesExtraordinary = 0;
-    if (bill.contract.property.unitId) {
+    let contractServices = 0;
+
+    if (bill.kind === "SERVICES") {
+      contractServices = Number(bill.contractServicesAmount);
+    } else if (bill.contract.property.unitId) {
       const breakdown = await getUnitExpenseBreakdown(
         bill.contract.property.unitId,
         bill.periodYear,
@@ -191,6 +197,7 @@ export async function getTenantDebtDetail(
 
     details.push({
       id: bill.id,
+      kind: bill.kind,
       periodYear: bill.periodYear,
       periodMonth: bill.periodMonth,
       dueDate: bill.dueDate,
@@ -203,6 +210,7 @@ export async function getTenantDebtDetail(
       extraordinaryExpenses: extraordinary,
       servicesAmount: services,
       servicesExtraordinaryAmount: servicesExtraordinary,
+      contractServicesAmount: contractServices,
       expensesAmount: Number(bill.expensesAmount),
       commissionAmount: Number(bill.commissionAmount),
       lateFeeAmount: Number(bill.lateFeeAmount),

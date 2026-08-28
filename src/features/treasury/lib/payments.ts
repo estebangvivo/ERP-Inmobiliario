@@ -1,6 +1,7 @@
 import type { TreasuryPaymentMethod } from "@prisma/client";
 import { PAYMENT_METHOD_LABEL, formatMoney } from "@/features/treasury/lib/labels";
 import { normalizeCheckNumber } from "@/features/treasury/lib/check-number";
+import { parseDateInput } from "@/lib/dates";
 
 export type TreasuryPaymentInput = {
   method: TreasuryPaymentMethod;
@@ -145,9 +146,9 @@ export function paymentCreateData(
             checkNumber: isOwn ? checkNumber : p.checkNumber?.trim() || null,
             checkBank: p.checkBank?.trim() || null,
             checkIssueDate: p.checkIssueDate
-              ? new Date(p.checkIssueDate)
+              ? parseDateInput(p.checkIssueDate)
               : null,
-            checkDueDate: p.checkDueDate ? new Date(p.checkDueDate) : null,
+            checkDueDate: p.checkDueDate ? parseDateInput(p.checkDueDate) : null,
             checkAccount: p.checkAccount?.trim() || null,
           };
         }
@@ -160,9 +161,9 @@ export function paymentCreateData(
           checkNumber,
           checkBank: p.checkBank?.trim() || null,
           checkIssueDate: p.checkIssueDate
-            ? new Date(p.checkIssueDate)
+            ? parseDateInput(p.checkIssueDate)
             : null,
-          checkDueDate: p.checkDueDate ? new Date(p.checkDueDate) : null,
+          checkDueDate: p.checkDueDate ? parseDateInput(p.checkDueDate) : null,
           checkAccount: p.checkAccount?.trim() || null,
         };
       }

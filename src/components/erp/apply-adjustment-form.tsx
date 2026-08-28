@@ -3,8 +3,10 @@
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toDateInputValue } from "@/lib/dates";
 import { Textarea } from "@/components/ui/textarea";
 import { applyContractAdjustmentAction } from "@/server/actions/contracts";
 import type { ActionResult } from "@/server/actions/users";
@@ -28,7 +30,7 @@ export function ApplyAdjustmentForm({
     if (state?.ok) router.refresh();
   }, [state, router]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateInputValue(new Date());
 
   return (
     <form
@@ -59,10 +61,9 @@ export function ApplyAdjustmentForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="effectiveFrom">Vigente desde</Label>
-          <Input
+          <DateInput
             id="effectiveFrom"
             name="effectiveFrom"
-            type="date"
             defaultValue={today}
             required
           />

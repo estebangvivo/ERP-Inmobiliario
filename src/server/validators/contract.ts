@@ -35,7 +35,10 @@ export const contractCreateSchema = withPayerSum(
       endDate: z.string().min(1),
       initialRent: z.coerce.number().positive(),
       currency: z.nativeEnum(Currency).default(Currency.ARS),
-      depositAmount: z.coerce.number().nonnegative().default(0),
+      depositAmount: z.preprocess(
+        (v) => (v === "" || v == null || v === undefined ? 0 : v),
+        z.coerce.number().nonnegative(),
+      ).default(0),
       commissionMode: z.enum(COMMISSION_MODES).default("PERCENT_RENT"),
       commissionValue: z.coerce.number().nonnegative().default(0),
       commissionTenantPct: z.coerce.number().min(0).max(100).default(0),

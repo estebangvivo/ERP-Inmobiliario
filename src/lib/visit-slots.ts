@@ -2,6 +2,7 @@ import {
   enabledHolidayDateKeys,
   resolveEnabledHolidayMonthDays,
 } from "@/lib/ar-holidays";
+import { formatDateTimeAR } from "@/lib/format-date";
 
 /** Slots de visita configurables; default lun–vie 8:00–16:00, TZ Argentina. */
 
@@ -90,15 +91,7 @@ export function formatArtTimeLabel(date: Date): string {
 }
 
 export function formatArtDisplay(date: Date): string {
-  return new Intl.DateTimeFormat("es-AR", {
-    timeZone: VISIT_TZ,
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return formatDateTimeAR(date);
 }
 
 function addArtDays(year: number, month: number, day: number, days: number) {

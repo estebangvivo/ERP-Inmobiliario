@@ -26,6 +26,8 @@ import { getCurrentRent } from "@/server/services/billing";
 import { hasModule } from "@/features/auth/lib/modules";
 import { PersonNameLink } from "@/components/erp/history-sections";
 import { listOrgPeople } from "@/server/queries/org-people";
+import { ContractServicesPanel } from "@/components/erp/contract-services-panel";
+import { TENANT_BILL_KIND_LABELS } from "@/features/billing/lib/tenant-bill-kind";
 
 type Params = Promise<{ id: string }>;
 
@@ -42,9 +44,17 @@ export default async function ContratoDetailPage({ params }: { params: Params })
       parties: { include: { user: true } },
       attachments: { orderBy: { createdAt: "desc" } },
       adjustments: { orderBy: { effectiveFrom: "asc" } },
+      contractServices: {
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { concept: "asc" }],
+      },
       tenantBills: {
-        orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-        take: 6,
+        orderBy: [
+          { periodYear: "desc" },
+          { periodMonth: "desc" },
+          { kind: "asc" },
+        ],
+        take: 12,
       },
     },
   });
@@ -77,11 +87,27 @@ export default async function ContratoDetailPage({ params }: { params: Params })
     (contract.status === "TERMINATED" || contract.status === "EXPIRED") &&
     contract.depositHeld;
 
+  const openBills = await prisma.tenantBill.findMany({
+    where: {
+      contractId: contract.id,
+      kind: "SERVICES",
+      status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+    },
+    orderBy: [{ periodYear: "asc" }, { periodMonth: "asc" }],
+    select: {
+      id: true,
+      periodYear: true,
+      periodMonth: true,
+      dueDate: true,
+      status: true,
+    },
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={contract.code}
-        description={contract.property.title}
+        description={`${contract.property.title} · Vigencia ${formatDateOnly(contract.startDate)} – ${formatDateOnly(contract.endDate)}`}
         actions={
           <Badge variant={contract.status === "ACTIVE" ? "success" : "secondary"}>
             {CONTRACT_STATUS_LABELS[contract.status]}
@@ -174,6 +200,23 @@ export default async function ContratoDetailPage({ params }: { params: Params })
         </Card>
       )}
 
+      {staff ? (
+        <ContractServicesPanel
+          contractId={contract.id}
+          currency={contract.currency}
+          services={contract.contractServices.map((s) => ({
+            id: s.id,
+            category: s.category,
+            concept: s.concept,
+            amount: s.amount.toString(),
+            paidBy: s.paidBy,
+          }))}
+          openBills={openBills}
+          contractStartYear={contract.startDate.getUTCFullYear()}
+          contractStartMonth={contract.startDate.getUTCMonth() + 1}
+        />
+      ) : null}
+
       {contract.tenantBills.length > 0 ? (
         <Card>
           <CardHeader>
@@ -187,8 +230,8 @@ export default async function ContratoDetailPage({ params }: { params: Params })
               >
                 <div>
                   <p className="font-medium">
-                    {b.periodMonth}/{b.periodYear} ·{" "}
-                    {BILL_STATUS_LABELS[b.status]}
+                    {TENANT_BILL_KIND_LABELS[b.kind]} {b.periodMonth}/
+                    {b.periodYear} · {BILL_STATUS_LABELS[b.status]}
                   </p>
                   <p className="text-xs text-[var(--muted-foreground)]">
                     Vence {formatDateOnly(b.dueDate)} · Pagado{" "}

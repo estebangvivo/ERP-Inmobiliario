@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { SaleDealStage } from "@prisma/client";
+import { parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import type { ActionResult } from "@/server/actions/users";
@@ -99,6 +100,11 @@ export async function createSaleDealAction(
     return { ok: false, error: "Propiedad de venta no encontrada." };
   }
 
+  const parsedDeedDate = deedDate ? parseDateInput(deedDate) : null;
+  if (deedDate && !parsedDeedDate) {
+    return { ok: false, error: "Fecha de boleto inválida." };
+  }
+
   const deal = await prisma.saleDeal.create({
     data: {
       organizationId: session.organizationId,
@@ -116,7 +122,7 @@ export async function createSaleDealAction(
         commissionPct && commissionPct > 0 && offerAmount && offerAmount > 0
           ? Math.round(((offerAmount * commissionPct) / 100) * 100) / 100
           : null,
-      deedDate: deedDate ? new Date(deedDate) : null,
+      deedDate: parsedDeedDate,
       currency: property.currency,
       notes: notes || null,
       leadId: leadId || null,
@@ -198,6 +204,11 @@ export async function updateSaleDealAction(
   });
   if (!deal) return { ok: false, error: "Oportunidad no encontrada." };
 
+  const parsedDeedDate = deedDate ? parseDateInput(deedDate) : null;
+  if (deedDate && !parsedDeedDate) {
+    return { ok: false, error: "Fecha de boleto inválida." };
+  }
+
   await prisma.saleDeal.update({
     where: { id },
     data: {
@@ -214,7 +225,7 @@ export async function updateSaleDealAction(
         commissionPct && commissionPct > 0 && offerAmount && offerAmount > 0
           ? Math.round(((offerAmount * commissionPct) / 100) * 100) / 100
           : null,
-      deedDate: deedDate ? new Date(deedDate) : null,
+      deedDate: parsedDeedDate,
       notes: notes || null,
       reservedAt:
         stage === "RESERVED" ? deal.reservedAt ?? new Date() : deal.reservedAt,

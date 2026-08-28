@@ -10,9 +10,11 @@ import {
   type VisitSlotMinutes,
 } from "@/lib/visit-slots";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { formatDateOnly } from "@/lib/dates";
 import {
   updateVisitScheduleAction,
   type VisitScheduleSettingsPayload,
@@ -31,14 +33,7 @@ const WEEKDAYS: Array<{ value: number; label: string }> = [
 const HOUR_OPTIONS = Array.from({ length: 15 }, (_, i) => i + 7); // 7–21
 
 function formatClosedLabel(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  if (!y || !m || !d) return dateKey;
-  return new Intl.DateTimeFormat("es-AR", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(Date.UTC(y, m - 1, d, 15)));
+  return formatDateOnly(dateKey);
 }
 
 export function VisitScheduleSettings({
@@ -289,10 +284,9 @@ export function VisitScheduleSettings({
               Puentes, vacaciones u otros feriados no inamovibles.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Input
-                type="date"
+              <DateInput
                 value={extraDate}
-                onChange={(e) => setExtraDate(e.target.value)}
+                onChange={setExtraDate}
                 className="max-w-[200px]"
               />
               <Button type="button" variant="outline" onClick={addClosedDate}>

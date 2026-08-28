@@ -69,6 +69,7 @@ const styles = StyleSheet.create({
 
 export type RentReceiptPdfData = {
   receiptCode: string;
+  documentTitle: string;
   contractCode: string;
   propertyTitle: string;
   propertyAddress: string;
@@ -78,6 +79,7 @@ export type RentReceiptPdfData = {
   dueDate: string;
   currency: string;
   rentAmount: string;
+  contractServicesAmount: string;
   expensesAmount: string;
   lateFeeAmount: string;
   otherAmount: string;
@@ -85,6 +87,7 @@ export type RentReceiptPdfData = {
   totalAmount: string;
   paidAmount: string;
   status: string;
+  serviceLines?: { concept: string; amount: string }[];
   payments: {
     paidAt: string;
     method: string;
@@ -103,13 +106,14 @@ function money(amount: string, currency: string) {
 
 export function RentReceiptPdfDocument({ data }: { data: RentReceiptPdfData }) {
   const balance = Number(data.totalAmount) - Number(data.paidAmount);
+  const isServices = Boolean(data.serviceLines?.length);
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.brand}>SimpleInmo</Text>
-          <Text style={styles.title}>Recibo / Estado de cuenta</Text>
+          <Text style={styles.title}>{data.documentTitle}</Text>
           <Text style={styles.muted}>{data.receiptCode}</Text>
           <Text style={styles.muted}>
             Período {data.periodMonth}/{data.periodYear} · Vence {data.dueDate}
@@ -130,20 +134,31 @@ export function RentReceiptPdfDocument({ data }: { data: RentReceiptPdfData }) {
         </View>
 
         <Text style={styles.label}>Conceptos</Text>
-        <View style={styles.row}>
-          <Text>Alquiler</Text>
-          <Text>{money(data.rentAmount, data.currency)}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text>Expensas</Text>
-          <Text>{money(data.expensesAmount, data.currency)}</Text>
-        </View>
-        {Number(data.commissionAmount) > 0 ? (
-          <View style={styles.row}>
-            <Text>Honorarios inmobiliarios</Text>
-            <Text>{money(data.commissionAmount, data.currency)}</Text>
-          </View>
-        ) : null}
+        {isServices ? (
+          data.serviceLines!.map((line) => (
+            <View key={line.concept} style={styles.row}>
+              <Text>{line.concept}</Text>
+              <Text>{money(line.amount, data.currency)}</Text>
+            </View>
+          ))
+        ) : (
+          <>
+            <View style={styles.row}>
+              <Text>Alquiler</Text>
+              <Text>{money(data.rentAmount, data.currency)}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text>Expensas</Text>
+              <Text>{money(data.expensesAmount, data.currency)}</Text>
+            </View>
+            {Number(data.commissionAmount) > 0 ? (
+              <View style={styles.row}>
+                <Text>Honorarios inmobiliarios</Text>
+                <Text>{money(data.commissionAmount, data.currency)}</Text>
+              </View>
+            ) : null}
+          </>
+        )}
         <View style={styles.row}>
           <Text>Intereses por mora</Text>
           <Text>{money(data.lateFeeAmount, data.currency)}</Text>

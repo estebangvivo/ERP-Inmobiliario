@@ -9,6 +9,7 @@ import {
   approveBillingPayment,
   rejectBillingPayment,
 } from "@/features/billing/actions/admin-billing-actions";
+import { formatDateTimeAR } from "@/lib/format-date";
 
 type BillingPaymentRow = {
   id: string;
@@ -32,7 +33,7 @@ type BillingPaymentRow = {
 };
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR");
+  return formatDateTimeAR(iso);
 }
 
 function formatMoney(currency: string, value: number) {

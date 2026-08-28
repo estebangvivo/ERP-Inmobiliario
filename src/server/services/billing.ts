@@ -7,6 +7,12 @@ import {
   computeContractTotalCommission,
   resolveCommissionMode,
 } from "@/features/contracts/lib/commission";
+import {
+  computeBillTotalAmount,
+  generateTenantServiceBill,
+} from "@/server/services/contract-services-billing";
+import { computeBillStatus as computeBillStatusFromUtils } from "@/server/services/bill-utils";
+import { tenantBillPeriodKey } from "@/features/billing/lib/tenant-bill-kind";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -127,6 +133,7 @@ export async function syncTenantBillExpenses(billId: string) {
   });
 
   if (bill.status === "PAID" || bill.status === "CANCELLED") return bill;
+  if (bill.kind !== "RENT") return bill;
 
   let expensesAmount = 0;
   if (bill.contract.property.unitId) {
@@ -139,13 +146,14 @@ export async function syncTenantBillExpenses(billId: string) {
     );
   }
 
-  const totalAmount = round2(
-    Number(bill.rentAmount) +
-      expensesAmount +
-      Number(bill.commissionAmount) +
-      Number(bill.lateFeeAmount) +
-      Number(bill.otherAmount),
-  );
+  const totalAmount = computeBillTotalAmount({
+    rentAmount: Number(bill.rentAmount),
+    expensesAmount,
+    contractServicesAmount: 0,
+    commissionAmount: Number(bill.commissionAmount),
+    lateFeeAmount: Number(bill.lateFeeAmount),
+    otherAmount: Number(bill.otherAmount),
+  });
   const status = computeBillStatus(
     totalAmount,
     Number(bill.paidAmount),
@@ -154,7 +162,7 @@ export async function syncTenantBillExpenses(billId: string) {
 
   return prisma.tenantBill.update({
     where: { id: billId },
-    data: { expensesAmount, totalAmount, status },
+    data: { expensesAmount, contractServicesAmount: 0, totalAmount, status },
   });
 }
 
@@ -173,6 +181,7 @@ export async function syncOpenBillsForExpensePeriod(input: {
 
   const bills = await prisma.tenantBill.findMany({
     where: {
+      kind: "RENT",
       periodYear: input.periodYear,
       periodMonth: input.periodMonth,
       status: { in: OPEN_BILL_STATUSES },
@@ -204,13 +213,12 @@ export async function generateTenantBill(input: {
   }
 
   const existing = await prisma.tenantBill.findUnique({
-    where: {
-      contractId_periodYear_periodMonth: {
-        contractId: input.contractId,
-        periodYear: input.periodYear,
-        periodMonth: input.periodMonth,
-      },
-    },
+    where: tenantBillPeriodKey({
+      contractId: input.contractId,
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      kind: "RENT",
+    }),
   });
   if (existing) {
     if (
@@ -249,17 +257,26 @@ export async function generateTenantBill(input: {
     Date.UTC(input.periodYear, input.periodMonth - 1, dueDay),
   );
 
-  const totalAmount = round2(rentAmount + expensesAmount + commissionAmount);
-  const status = computeBillStatus(totalAmount, 0, dueDate);
+  const totalAmount = computeBillTotalAmount({
+    rentAmount,
+    expensesAmount,
+    contractServicesAmount: 0,
+    commissionAmount,
+    lateFeeAmount: 0,
+    otherAmount: 0,
+  });
+  const status = computeBillStatusFromUtils(totalAmount, 0, dueDate);
 
   return prisma.tenantBill.create({
     data: {
       contractId: input.contractId,
+      kind: "RENT",
       periodYear: input.periodYear,
       periodMonth: input.periodMonth,
       dueDate,
       rentAmount,
       expensesAmount,
+      contractServicesAmount: 0,
       lateFeeAmount: 0,
       otherAmount: 0,
       commissionAmount,
@@ -297,6 +314,13 @@ export async function generateBillsForPeriod(
         dueDay,
       }),
     );
+    const serviceBill = await generateTenantServiceBill({
+      contractId: c.id,
+      periodYear: year,
+      periodMonth: month,
+      dueDay,
+    });
+    if (serviceBill) results.push(serviceBill);
   }
   return results;
 }
@@ -338,14 +362,20 @@ export async function generateTenantBillsForContract(
 
   const results = [];
   while (year < endYear || (year === endYear && month <= endMonth)) {
-    results.push(
-      await generateTenantBill({
-        contractId,
-        periodYear: year,
-        periodMonth: month,
-        dueDay,
-      }),
-    );
+    const rentBill = await generateTenantBill({
+      contractId,
+      periodYear: year,
+      periodMonth: month,
+      dueDay,
+    });
+    results.push(rentBill);
+    const serviceBill = await generateTenantServiceBill({
+      contractId,
+      periodYear: year,
+      periodMonth: month,
+      dueDate: rentBill.dueDate,
+    });
+    if (serviceBill) results.push(serviceBill);
     month += 1;
     if (month > 12) {
       month = 1;
@@ -403,13 +433,12 @@ export async function generateContractTotalCommissionInstallments(
     const dueDate = new Date(Date.UTC(year, month - 1, dueDay));
 
     const existing = await prisma.tenantBill.findUnique({
-      where: {
-        contractId_periodYear_periodMonth: {
-          contractId,
-          periodYear: year,
-          periodMonth: month,
-        },
-      },
+      where: tenantBillPeriodKey({
+        contractId,
+        periodYear: year,
+        periodMonth: month,
+        kind: "RENT",
+      }),
     });
 
     if (existing) {
@@ -422,13 +451,14 @@ export async function generateContractTotalCommissionInstallments(
       const commissionAmount = round2(
         Number(existing.commissionAmount) + amount,
       );
-      const totalAmount = round2(
-        Number(existing.rentAmount) +
-          Number(existing.expensesAmount) +
-          commissionAmount +
-          Number(existing.lateFeeAmount) +
-          Number(existing.otherAmount),
-      );
+      const totalAmount = computeBillTotalAmount({
+        rentAmount: Number(existing.rentAmount),
+        expensesAmount: Number(existing.expensesAmount),
+        contractServicesAmount: 0,
+        commissionAmount,
+        lateFeeAmount: Number(existing.lateFeeAmount),
+        otherAmount: Number(existing.otherAmount),
+      });
       const noteLine = `Honorarios ${percent}% s/ total contrato (${gross}) · cuota ${i + 1}/${installments}`;
       results.push(
         await prisma.tenantBill.update({
@@ -455,11 +485,13 @@ export async function generateContractTotalCommissionInstallments(
       await prisma.tenantBill.create({
         data: {
           contractId,
+          kind: "RENT",
           periodYear: year,
           periodMonth: month,
           dueDate,
           rentAmount: 0,
           expensesAmount: 0,
+          contractServicesAmount: 0,
           lateFeeAmount: 0,
           otherAmount: 0,
           commissionAmount: amount,
@@ -481,11 +513,7 @@ export function computeBillStatus(
   paid: number,
   dueDate: Date,
 ): BillStatus {
-  if (paid <= 0) {
-    return daysOverdue(dueDate) > 0 ? "OVERDUE" : "PENDING";
-  }
-  if (paid + 0.001 >= total) return "PAID";
-  return daysOverdue(dueDate) > 0 ? "OVERDUE" : "PARTIAL";
+  return computeBillStatusFromUtils(total, paid, dueDate);
 }
 
 export async function applyLateFee(billId: string) {
@@ -708,6 +736,7 @@ export async function updateOpenBillsRentFrom(
   const bills = await prisma.tenantBill.findMany({
     where: {
       contractId,
+      kind: "RENT",
       status: { in: OPEN_BILL_STATUSES },
       OR: [
         { periodYear: { gt: fromYear } },
@@ -733,13 +762,14 @@ export async function updateOpenBillsRentFrom(
       const split = splitCommissionAmount(commissionTotal, contract);
       commissionAmount = split.tenant;
     }
-    const totalAmount = round2(
-      rent +
-        Number(bill.expensesAmount) +
-        commissionAmount +
-        Number(bill.lateFeeAmount) +
-        Number(bill.otherAmount),
-    );
+    const totalAmount = computeBillTotalAmount({
+      rentAmount: rent,
+      expensesAmount: Number(bill.expensesAmount),
+      contractServicesAmount: 0,
+      commissionAmount,
+      lateFeeAmount: Number(bill.lateFeeAmount),
+      otherAmount: Number(bill.otherAmount),
+    });
     const status = computeBillStatus(
       totalAmount,
       Number(bill.paidAmount),
@@ -750,6 +780,7 @@ export async function updateOpenBillsRentFrom(
       data: {
         rentAmount: rent,
         commissionAmount,
+        contractServicesAmount: 0,
         totalAmount,
         status,
       },

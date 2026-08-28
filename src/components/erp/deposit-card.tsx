@@ -38,19 +38,26 @@ export function DepositCard({
     if (state?.ok) router.refresh();
   }, [state, router]);
 
+  const amount = Number(depositAmount);
+  const hasDeposit = Number.isFinite(amount) && amount > 0;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-base">Depósito / garantía</CardTitle>
-        <Badge variant={depositHeld ? "warning" : "secondary"}>
-          {depositHeld ? "En custodia" : "Devuelto / aplicado"}
+        <Badge variant={hasDeposit && depositHeld ? "warning" : "secondary"}>
+          {!hasDeposit
+            ? "Sin depósito"
+            : depositHeld
+              ? "En custodia"
+              : "Devuelto / aplicado"}
         </Badge>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-2xl font-semibold">
           {formatMoney(depositAmount, currency)}
         </p>
-        {warnOnClose && depositHeld ? (
+        {warnOnClose && depositHeld && hasDeposit ? (
           <p className="text-sm text-amber-700">
             El contrato está cerrado y el depósito sigue en custodia. Devolvelo o
             aplicálo al saldo.
@@ -65,10 +72,10 @@ export function DepositCard({
               id="depositAmount"
               name="depositAmount"
               type="number"
-              step="0.01"
+              step="any"
               min={0}
               defaultValue={depositAmount}
-              required
+              placeholder="0 si no hay depósito"
             />
           </div>
           <div className="space-y-1">
@@ -91,7 +98,7 @@ export function DepositCard({
             <Button type="submit" disabled={pending}>
               {pending ? "Guardando…" : "Guardar depósito"}
             </Button>
-            {depositHeld && Number(depositAmount) > 0 ? (
+            {depositHeld && hasDeposit ? (
               <Button
                 type="button"
                 variant="outline"

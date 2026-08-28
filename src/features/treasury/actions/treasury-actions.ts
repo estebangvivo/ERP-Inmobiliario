@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import type { TreasuryPaymentMethod } from "@prisma/client";
@@ -169,9 +170,11 @@ function legacyCheckFromPayments(payments: TreasuryPaymentInput[]) {
       normalizeCheckNumber(check.checkNumber, isElectronic) || null,
     checkBank: check.checkBank?.trim() || null,
     checkIssueDate: check.checkIssueDate
-      ? new Date(check.checkIssueDate)
+      ? parseDateInput(check.checkIssueDate)
       : null,
-    checkDueDate: check.checkDueDate ? new Date(check.checkDueDate) : null,
+    checkDueDate: check.checkDueDate
+      ? parseDateInput(check.checkDueDate)
+      : null,
     checkAccount: check.checkAccount?.trim() || null,
   };
 }
@@ -274,6 +277,11 @@ export async function createReceipt(
     const appsError = validateApplicationsSum(billApps, totalAmount, "cuotas");
     if (appsError) return { ok: false, error: appsError };
 
+    const issueDate = parseDateInput(input.issueDate);
+    if (!issueDate) {
+      return { ok: false, error: "Fecha del recibo inválida." };
+    }
+
     const currency =
       input.currency?.trim() || (await getOrganizationCurrency());
     const primaryMethod = primaryPaymentMethod(payments);
@@ -292,7 +300,7 @@ export async function createReceipt(
           tenantId: input.tenantId || null,
           partyName: input.partyName?.trim() || null,
           number,
-          issueDate: new Date(input.issueDate),
+          issueDate,
           status: "DRAFT",
           paymentMethod: primaryMethod,
           concept: input.concept?.trim() || null,
@@ -403,6 +411,11 @@ export async function createPaymentOrder(
       validateApplicationsSum(settlementApps, totalAmount, "rendiciones");
     if (appsError) return { ok: false, error: appsError };
 
+    const issueDate = parseDateInput(input.issueDate);
+    if (!issueDate) {
+      return { ok: false, error: "Fecha de la orden inválida." };
+    }
+
     const currency =
       input.currency?.trim() || (await getOrganizationCurrency());
     const primaryMethod = primaryPaymentMethod(payments);
@@ -469,7 +482,7 @@ export async function createPaymentOrder(
           supplierId: input.supplierId || null,
           partyName: input.partyName?.trim() || null,
           number,
-          issueDate: new Date(input.issueDate),
+          issueDate,
           status: "DRAFT",
           paymentMethod: primaryMethod,
           concept: input.concept?.trim() || null,

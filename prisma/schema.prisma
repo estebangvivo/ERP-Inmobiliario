@@ -60,6 +60,7 @@ model Contract {
   adjustments         ContractAdjustment[]
   parties             ContractParty[]
   attachments         ContractAttachment[]
+  contractServices    ContractService[]
   tenantBills         TenantBill[]
   workOrders          WorkOrder[]
   receiptLines        ReceiptLine[]
@@ -84,6 +85,30 @@ model ContractAttachment {
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@index([contractId, createdAt])
+}
+
+enum ContractServicePaidBy {
+  TENANT
+  OWNER
+}
+
+/// Servicio mensual recurrente del contrato (luz, agua, gas, etc.), distinto del alquiler.
+model ContractService {
+  id            String                @id @default(cuid())
+  contractId    String
+  category      ServiceCostCategory
+  concept       String
+  amount        Decimal               @db.Decimal(14, 2)
+  currency      Currency              @default(ARS)
+  paidBy        ContractServicePaidBy @default(TENANT)
+  sortOrder     Int                   @default(0)
+  active        Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  contract      Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  billLines     TenantBillContractServiceLine[]
+
+  @@index([contractId, active])
 }
 
 model ContractAdjustment {
@@ -405,14 +430,22 @@ model SupplierInvoice {
   @@index([workOrderId])
 }
 
+enum TenantBillKind {
+  RENT
+  SERVICES
+}
+
 model TenantBill {
   id                 String               @id @default(cuid())
   contractId         String
+  kind               TenantBillKind       @default(RENT)
   periodYear         Int
   periodMonth        Int
   dueDate            DateTime             @db.Date
   rentAmount         Decimal              @db.Decimal(14, 2)
   expensesAmount     Decimal              @default(0) @db.Decimal(14, 2)
+  /// Solo en cuotas SERVICES: total servicios a cargo del inquilino.
+  contractServicesAmount Decimal          @default(0) @db.Decimal(14, 2)
   lateFeeAmount      Decimal              @default(0) @db.Decimal(14, 2)
   otherAmount        Decimal              @default(0) @db.Decimal(14, 2)
   totalAmount        Decimal              @db.Decimal(14, 2)
@@ -426,9 +459,28 @@ model TenantBill {
   settlementLineItems SettlementLineItem[]
   contract           Contract             @relation(fields: [contractId], references: [id])
   receiptBillApps    ReceiptBillApplication[]
+  contractServiceLines TenantBillContractServiceLine[]
 
-  @@unique([contractId, periodYear, periodMonth])
+  @@unique([contractId, periodYear, periodMonth, kind])
   @@index([status, dueDate])
+  @@index([contractId, kind])
+}
+
+/// Línea de servicio en una cuota SERVICES (documento independiente del alquiler).
+model TenantBillContractServiceLine {
+  id                String                @id @default(cuid())
+  tenantBillId      String
+  contractServiceId String
+  concept           String
+  amount            Decimal               @db.Decimal(14, 2)
+  paidBy            ContractServicePaidBy
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  tenantBill        TenantBill            @relation(fields: [tenantBillId], references: [id], onDelete: Cascade)
+  contractService   ContractService       @relation(fields: [contractServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantBillId, contractServiceId])
+  @@index([contractServiceId])
 }
 
 model Unit {

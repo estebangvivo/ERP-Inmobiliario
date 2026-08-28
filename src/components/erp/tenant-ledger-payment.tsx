@@ -16,6 +16,7 @@ import type { BillDebtDetail } from "@/server/services/tenant-ledger";
 
 type ConceptKey =
   | "rent"
+  | "contractServices"
   | "ordinary"
   | "extraordinary"
   | "services"
@@ -26,6 +27,7 @@ type ConceptKey =
 
 const CONCEPT_LABEL: Record<ConceptKey, string> = {
   rent: "Alquiler",
+  contractServices: "Servicios del contrato",
   ordinary: "Expensas ordinarias",
   extraordinary: "Expensas extraordinarias",
   services: "Servicios",
@@ -37,6 +39,7 @@ const CONCEPT_LABEL: Record<ConceptKey, string> = {
 
 const CONCEPT_ORDER: ConceptKey[] = [
   "rent",
+  "contractServices",
   "ordinary",
   "extraordinary",
   "services",
@@ -57,7 +60,11 @@ function round2(n: number) {
  */
 function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
   const raw: Record<ConceptKey, number> = {
-    rent: Math.max(0, bill.rentAmount),
+    rent: bill.kind === "SERVICES" ? 0 : Math.max(0, bill.rentAmount),
+    contractServices:
+      bill.kind === "SERVICES"
+        ? Math.max(0, bill.contractServicesAmount)
+        : 0,
     ordinary: Math.max(0, bill.ordinaryExpenses),
     extraordinary: Math.max(0, bill.extraordinaryExpenses),
     services: Math.max(0, bill.servicesAmount),
@@ -84,6 +91,7 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
   if (balance <= 0.001) {
     return {
       rent: 0,
+      contractServices: 0,
       ordinary: 0,
       extraordinary: 0,
       services: 0,
@@ -97,6 +105,7 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
   if (sum <= 0.001) {
     return {
       rent: 0,
+      contractServices: 0,
       ordinary: 0,
       extraordinary: 0,
       services: 0,
@@ -129,6 +138,7 @@ function openConceptMap(bill: BillDebtDetail): Record<ConceptKey, number> {
     const factor = balance / sum;
     const result: Record<ConceptKey, number> = {
       rent: 0,
+      contractServices: 0,
       ordinary: 0,
       extraordinary: 0,
       services: 0,

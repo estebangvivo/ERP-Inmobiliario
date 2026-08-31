@@ -19,6 +19,7 @@ import {
   leadScopeWhere,
 } from "@/lib/tenant-scope";
 import { hasModule } from "@/features/auth/lib/modules";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { syncOverdueBills } from "@/server/services/billing";
 import { listOwnersPendingSettlement } from "@/server/services/monthly-job";
 import { getStaffDaySnapshot } from "@/server/queries/ops-snapshot";
@@ -78,7 +79,11 @@ export default async function DashboardPage() {
       paidAmount: { toString(): string } | number;
       totalAmount: { toString(): string } | number;
       currency: "ARS" | "USD" | "EUR";
-      contract: { property: { title: string } };
+      contract: {
+        startDate: Date;
+        endDate: Date;
+        property: { title: string };
+      };
     }>,
     recentLeads: [] as Array<{
       id: string;
@@ -169,6 +174,8 @@ export default async function DashboardPage() {
           currency: true,
           contract: {
             select: {
+              startDate: true,
+              endDate: true,
               property: { select: { title: true } },
             },
           },
@@ -416,8 +423,13 @@ export default async function DashboardPage() {
                             {bill.contract.property.title}
                           </p>
                           <p className="text-[var(--muted-foreground)]">
-                            {bill.periodMonth}/{bill.periodYear} ·{" "}
-                            {BILL_STATUS_LABELS[bill.status]}
+                            {formatInstallmentLabel({
+                              contractStart: bill.contract.startDate,
+                              contractEnd: bill.contract.endDate,
+                              periodYear: bill.periodYear,
+                              periodMonth: bill.periodMonth,
+                            })}{" "}
+                            · {BILL_STATUS_LABELS[bill.status]}
                           </p>
                         </div>
                         <p className="font-semibold">

@@ -10,25 +10,6 @@ import {
 import { formatMoney } from "@/lib/money";
 import { getTenantDebtDetail } from "@/server/services/tenant-ledger";
 
-const MONTHS = [
-  "ene",
-  "feb",
-  "mar",
-  "abr",
-  "may",
-  "jun",
-  "jul",
-  "ago",
-  "sep",
-  "oct",
-  "nov",
-  "dic",
-];
-
-function periodLabel(month: number, year: number): string {
-  return `${MONTHS[month - 1] ?? month} ${year}`;
-}
-
 export async function buildClientDebtsMessage(
   organizationId: string,
   userId: string,
@@ -42,7 +23,7 @@ export async function buildClientDebtsMessage(
   for (const bill of detail.bills.slice(0, 6)) {
     lines.push(
       `• ${bill.contractCode} — ${bill.propertyTitle}`,
-      `  ${periodLabel(bill.periodMonth, bill.periodYear)} · ${formatMoney(bill.balance, bill.currency as Currency)}`,
+      `  ${bill.installmentLabel} · ${formatMoney(bill.balance, bill.currency as Currency)}`,
       `  Vence: ${formatDateOnly(bill.dueDate)} · ${BILL_STATUS_LABELS[bill.status as keyof typeof BILL_STATUS_LABELS] ?? bill.status}`,
       "",
     );

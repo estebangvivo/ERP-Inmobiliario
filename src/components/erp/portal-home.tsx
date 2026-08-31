@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/dates";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { BILL_STATUS_LABELS, CONTRACT_STATUS_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -60,7 +61,13 @@ export async function PortalHome({
           periodYear: true,
           totalAmount: true,
           currency: true,
-          contract: { select: { property: { select: { title: true } } } },
+          contract: {
+            select: {
+              startDate: true,
+              endDate: true,
+              property: { select: { title: true } },
+            },
+          },
         },
         orderBy: { issuedAt: "desc" },
         take: 5,
@@ -146,7 +153,7 @@ export async function PortalHome({
                   {tenantDebt.bills.slice(0, 5).map((b) => (
                     <li key={b.id} className="flex justify-between gap-2 py-2">
                       <span>
-                        {b.propertyTitle} · {b.periodMonth}/{b.periodYear}
+                        {b.propertyTitle} · {b.installmentLabel}
                       </span>
                       <span className="font-medium">
                         {formatMoney(String(b.balance), b.currency)}
@@ -213,8 +220,13 @@ export async function PortalHome({
                   <div>
                     <p className="font-medium">{b.contract.property.title}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      {b.periodMonth}/{b.periodYear} ·{" "}
-                      {formatMoney(b.totalAmount.toString(), b.currency)}
+                      {formatInstallmentLabel({
+                        contractStart: b.contract.startDate,
+                        contractEnd: b.contract.endDate,
+                        periodYear: b.periodYear,
+                        periodMonth: b.periodMonth,
+                      })}{" "}
+                      · {formatMoney(b.totalAmount.toString(), b.currency)}
                     </p>
                   </div>
                   <a href={`/api/cobros/${b.id}/pdf`} target="_blank" rel="noreferrer">

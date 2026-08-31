@@ -768,7 +768,7 @@ export function TenantLedgerPaymentPanel({
                 </label>
                 <div className="min-w-0 flex-1">
                   <CardTitle className="text-base">
-                    {bill.periodMonth}/{bill.periodYear} · {bill.contractCode}
+                    {bill.installmentLabel} · {bill.contractCode}
                   </CardTitle>
                   <p className="text-sm text-[var(--muted-foreground)]">
                     {bill.propertyTitle} · Vence {formatDateOnly(bill.dueDate)}

@@ -76,6 +76,7 @@ export type RentReceiptPdfData = {
   tenantName: string;
   periodMonth: number;
   periodYear: number;
+  periodLabel?: string;
   dueDate: string;
   currency: string;
   rentAmount: string;
@@ -116,7 +117,9 @@ export function RentReceiptPdfDocument({ data }: { data: RentReceiptPdfData }) {
           <Text style={styles.title}>{data.documentTitle}</Text>
           <Text style={styles.muted}>{data.receiptCode}</Text>
           <Text style={styles.muted}>
-            Período {data.periodMonth}/{data.periodYear} · Vence {data.dueDate}
+            {data.periodLabel ??
+              `Período ${data.periodMonth}/${data.periodYear}`}{" "}
+            · Vence {data.dueDate}
           </Text>
         </View>
 

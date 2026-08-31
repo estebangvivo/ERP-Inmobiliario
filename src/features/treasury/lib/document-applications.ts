@@ -1,4 +1,5 @@
 import type { Prisma, PaymentMethod, BillStatus } from "@prisma/client";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { round2 } from "@/features/treasury/lib/cash-labels";
 
 type Tx = Prisma.TransactionClient;
@@ -153,6 +154,9 @@ export async function applyReceiptBillBalances(
         id: app.tenantBillId,
         contract: { organizationId },
       },
+      include: {
+        contract: { select: { startDate: true, endDate: true } },
+      },
     });
     if (!bill) throw new Error("Cuota aplicada no encontrada.");
 
@@ -163,7 +167,12 @@ export async function applyReceiptBillBalances(
       const nextPaid = round2(toNumber(bill.paidAmount) + amount);
       if (nextPaid > total + 0.009) {
         throw new Error(
-          `El cobro supera el saldo de la cuota ${bill.periodMonth}/${bill.periodYear}.`,
+          `El cobro supera el saldo de ${formatInstallmentLabel({
+            contractStart: bill.contract.startDate,
+            contractEnd: bill.contract.endDate,
+            periodYear: bill.periodYear,
+            periodMonth: bill.periodMonth,
+          })}.`,
         );
       }
       const payment = await tx.payment.create({

@@ -41,6 +41,7 @@ export type OpenBillOption = {
   periodMonth: number;
   dueDate: Date | string;
   status: BillStatus;
+  installmentLabel?: string;
 };
 
 type EditState = {
@@ -378,8 +379,9 @@ export function ContractServicesPanel({
                   <option value="">Seleccionar…</option>
                   {openBills.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.periodMonth}/{b.periodYear} · vence{" "}
-                      {formatDateOnly(b.dueDate)} ·{" "}
+                      {b.installmentLabel ??
+                        `${b.periodMonth}/${b.periodYear}`}{" "}
+                      · vence {formatDateOnly(b.dueDate)} ·{" "}
                       {BILL_STATUS_LABELS[b.status]}
                     </option>
                   ))}

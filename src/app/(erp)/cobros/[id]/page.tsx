@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/dates";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { TENANT_BILL_KIND_LABELS } from "@/features/billing/lib/tenant-bill-kind";
 import { BILL_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
@@ -53,7 +54,12 @@ export default async function CobroDetailPage({ params }: { params: Params }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${TENANT_BILL_KIND_LABELS[bill.kind]} ${bill.periodMonth}/${bill.periodYear}`}
+        title={`${TENANT_BILL_KIND_LABELS[bill.kind]} · ${formatInstallmentLabel({
+          contractStart: bill.contract.startDate,
+          contractEnd: bill.contract.endDate,
+          periodYear: bill.periodYear,
+          periodMonth: bill.periodMonth,
+        })}`}
         description={`${bill.contract.code} · ${bill.contract.property.title}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">

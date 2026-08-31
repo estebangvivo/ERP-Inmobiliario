@@ -28,6 +28,7 @@ import { PersonNameLink } from "@/components/erp/history-sections";
 import { listOrgPeople } from "@/server/queries/org-people";
 import { ContractServicesPanel } from "@/components/erp/contract-services-panel";
 import { TENANT_BILL_KIND_LABELS } from "@/features/billing/lib/tenant-bill-kind";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 
 type Params = Promise<{ id: string }>;
 
@@ -211,7 +212,15 @@ export default async function ContratoDetailPage({ params }: { params: Params })
             amount: s.amount.toString(),
             paidBy: s.paidBy,
           }))}
-          openBills={openBills}
+          openBills={openBills.map((b) => ({
+            ...b,
+            installmentLabel: formatInstallmentLabel({
+              contractStart: contract.startDate,
+              contractEnd: contract.endDate,
+              periodYear: b.periodYear,
+              periodMonth: b.periodMonth,
+            }),
+          }))}
           contractStartYear={contract.startDate.getUTCFullYear()}
           contractStartMonth={contract.startDate.getUTCMonth() + 1}
         />
@@ -230,8 +239,14 @@ export default async function ContratoDetailPage({ params }: { params: Params })
               >
                 <div>
                   <p className="font-medium">
-                    {TENANT_BILL_KIND_LABELS[b.kind]} {b.periodMonth}/
-                    {b.periodYear} · {BILL_STATUS_LABELS[b.status]}
+                    {TENANT_BILL_KIND_LABELS[b.kind]}{" "}
+                    {formatInstallmentLabel({
+                      contractStart: contract.startDate,
+                      contractEnd: contract.endDate,
+                      periodYear: b.periodYear,
+                      periodMonth: b.periodMonth,
+                    })}{" "}
+                    · {BILL_STATUS_LABELS[b.status]}
                   </p>
                   <p className="text-xs text-[var(--muted-foreground)]">
                     Vence {formatDateOnly(b.dueDate)} · Pagado{" "}

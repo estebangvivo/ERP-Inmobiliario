@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 
 function toNumber(value: { toNumber(): number } | number): number {
   return typeof value === "number" ? value : value.toNumber();
@@ -128,6 +129,8 @@ export async function listOpenTenantBills(opts?: {
         select: {
           id: true,
           code: true,
+          startDate: true,
+          endDate: true,
           property: { select: { title: true } },
         },
       },
@@ -142,16 +145,22 @@ export async function listOpenTenantBills(opts?: {
       const paid = toNumber(bill.paidAmount);
       const balance = round2(total - paid);
       const currency = bill.currency;
+      const installment = formatInstallmentLabel({
+        contractStart: bill.contract.startDate,
+        contractEnd: bill.contract.endDate,
+        periodYear: bill.periodYear,
+        periodMonth: bill.periodMonth,
+      });
       return {
         id: bill.id,
         contractId: bill.contract.id,
-        number: `${bill.periodMonth}/${bill.periodYear}`,
+        number: installment,
         currency,
         total,
         paid,
         balance,
         contractLabel: `${bill.contract.code} · ${bill.contract.property.title}`,
-        label: `${bill.periodMonth}/${bill.periodYear} · saldo ${balance.toLocaleString("es-AR", {
+        label: `${installment} · saldo ${balance.toLocaleString("es-AR", {
           style: "currency",
           currency,
         })} · ${bill.contract.code}`,

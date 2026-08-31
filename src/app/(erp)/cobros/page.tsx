@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
 import { billScopeWhere } from "@/lib/tenant-scope";
 import { formatMoney } from "@/lib/money";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { TENANT_BILL_KIND_LABELS } from "@/features/billing/lib/tenant-bill-kind";
 import { BILL_STATUS_LABELS } from "@/lib/labels";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +95,14 @@ export default async function CobrosPage({
   const bills = await prisma.tenantBill.findMany({
     where,
     include: {
-      contract: { include: { property: true } },
+      contract: {
+        select: {
+          code: true,
+          startDate: true,
+          endDate: true,
+          property: { select: { title: true } },
+        },
+      },
     },
     orderBy: [
       { periodYear: "desc" },
@@ -146,13 +154,18 @@ export default async function CobrosPage({
       </FilterBar>
 
       <DataTable
-        headers={["Período", "Tipo", "Contrato", "Propiedad", "Total", "Pagado", "Estado", ""]}
+        headers={["Cuota", "Tipo", "Contrato", "Propiedad", "Total", "Pagado", "Estado", ""]}
         empty={total === 0}
       >
         {bills.map((bill) => (
           <tr key={bill.id} className="hover:bg-[var(--muted)]/40">
             <td className="px-4 py-3 font-medium">
-              {bill.periodMonth}/{bill.periodYear}
+              {formatInstallmentLabel({
+                contractStart: bill.contract.startDate,
+                contractEnd: bill.contract.endDate,
+                periodYear: bill.periodYear,
+                periodMonth: bill.periodMonth,
+              })}
             </td>
             <td className="px-4 py-3">
               <Badge variant={bill.kind === "SERVICES" ? "warning" : "secondary"}>

@@ -9,6 +9,7 @@ import {
 } from "@/server/services/billing";
 import { runMonthlyBillingJob } from "@/server/services/monthly-job";
 import { issueReceiptForBillPayments, type BillingCheckDetails } from "@/features/treasury/lib/issue-docs-from-billing";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import type { ActionResult } from "@/server/actions/users";
 
 export type DocActionResult =
@@ -146,7 +147,10 @@ export async function recordPaymentAction(
       },
       include: {
         contract: {
-          include: {
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
             parties: {
               where: { role: "TENANT" },
               take: 1,
@@ -164,6 +168,12 @@ export async function recordPaymentAction(
     }
 
     const tenantId = bill.contract.parties[0]?.userId;
+    const installment = formatInstallmentLabel({
+      contractStart: bill.contract.startDate,
+      contractEnd: bill.contract.endDate,
+      periodYear: bill.periodYear,
+      periodMonth: bill.periodMonth,
+    });
     const result = await issueReceiptForBillPayments({
       tenantId,
       currency: bill.currency,
@@ -177,7 +187,7 @@ export async function recordPaymentAction(
           billId: bill.id,
           contractId: bill.contractId,
           amount: round2(amount),
-          description: `Cuota ${bill.periodMonth}/${bill.periodYear}`,
+          description: installment,
         },
       ],
     });
@@ -271,6 +281,9 @@ export async function applyTenantLedgerPaymentAction(input: {
         },
       },
     },
+    include: {
+      contract: { select: { id: true, startDate: true, endDate: true } },
+    },
     orderBy: [{ dueDate: "asc" }, { periodYear: "asc" }, { periodMonth: "asc" }],
   });
 
@@ -341,11 +354,17 @@ export async function applyTenantLedgerPaymentAction(input: {
       notes: noteParts.join(" · ") || undefined,
       allocations: allocations.map((a) => {
         const bill = billById.get(a.billId)!;
+        const installment = formatInstallmentLabel({
+          contractStart: bill.contract.startDate,
+          contractEnd: bill.contract.endDate,
+          periodYear: bill.periodYear,
+          periodMonth: bill.periodMonth,
+        });
         return {
           billId: a.billId,
           contractId: bill.contractId,
           amount: a.amount,
-          description: `Cuota ${bill.periodMonth}/${bill.periodYear} · ${a.noteExtra}`,
+          description: `${installment} · ${a.noteExtra}`,
         };
       }),
     });

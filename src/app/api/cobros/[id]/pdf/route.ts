@@ -11,6 +11,7 @@ import {
   rentBillReceiptPrefix,
   serviceBillReceiptPrefix,
 } from "@/features/billing/lib/tenant-bill-kind";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { getBillContractServiceLinesForDisplay } from "@/server/services/contract-services-billing";
 
 type Params = Promise<{ id: string }>;
@@ -76,6 +77,12 @@ export async function GET(
         tenantName: tenant,
         periodMonth: bill.periodMonth,
         periodYear: bill.periodYear,
+        periodLabel: formatInstallmentLabel({
+          contractStart: bill.contract.startDate,
+          contractEnd: bill.contract.endDate,
+          periodYear: bill.periodYear,
+          periodMonth: bill.periodMonth,
+        }),
         dueDate: formatDateOnly(bill.dueDate),
         currency: bill.currency,
         rentAmount: bill.rentAmount.toString(),

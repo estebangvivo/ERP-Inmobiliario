@@ -13,6 +13,7 @@ import {
 } from "@/server/services/contract-services-billing";
 import { computeBillStatus as computeBillStatusFromUtils } from "@/server/services/bill-utils";
 import { tenantBillPeriodKey } from "@/features/billing/lib/tenant-bill-kind";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -920,6 +921,8 @@ export async function recordPayment(input: {
           select: {
             organizationId: true,
             code: true,
+            startDate: true,
+            endDate: true,
             property: { select: { title: true } },
           },
         },
@@ -961,9 +964,14 @@ export async function recordPayment(input: {
     });
 
     if (input.postToTreasury !== false) {
-      const period = `${bill.periodMonth}/${bill.periodYear}`;
+      const period = formatInstallmentLabel({
+        contractStart: bill.contract.startDate,
+        contractEnd: bill.contract.endDate,
+        periodYear: bill.periodYear,
+        periodMonth: bill.periodMonth,
+      });
       const desc = [
-        `Cobro cuota ${period}`,
+        `Cobro ${period}`,
         bill.contract.code,
         bill.contract.property.title,
         input.reference ? `Ref. ${input.reference}` : null,

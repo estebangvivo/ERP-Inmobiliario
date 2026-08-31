@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { getUnitExpenseBreakdown } from "@/server/services/billing";
 
 const OPEN = ["PENDING", "PARTIAL", "OVERDUE"] as const;
@@ -87,6 +88,7 @@ export type BillDebtDetail = {
   kind: "RENT" | "SERVICES";
   periodYear: number;
   periodMonth: number;
+  installmentLabel: string;
   dueDate: Date;
   status: string;
   currency: "ARS" | "USD" | "EUR";
@@ -200,6 +202,12 @@ export async function getTenantDebtDetail(
       kind: bill.kind,
       periodYear: bill.periodYear,
       periodMonth: bill.periodMonth,
+      installmentLabel: formatInstallmentLabel({
+        contractStart: bill.contract.startDate,
+        contractEnd: bill.contract.endDate,
+        periodYear: bill.periodYear,
+        periodMonth: bill.periodMonth,
+      }),
       dueDate: bill.dueDate,
       status: bill.status,
       currency: bill.currency,

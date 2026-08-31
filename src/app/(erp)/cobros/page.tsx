@@ -62,6 +62,27 @@ export default async function CobrosPage({
                   property: { title: { contains: q, mode: "insensitive" } },
                 },
               },
+              {
+                contract: {
+                  parties: {
+                    some: {
+                      role: "TENANT",
+                      user: {
+                        OR: [
+                          { name: { contains: q, mode: "insensitive" } },
+                          { email: { contains: q, mode: "insensitive" } },
+                          {
+                            documentNumber: {
+                              contains: q,
+                              mode: "insensitive",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
             ],
           }
         : {},
@@ -110,7 +131,11 @@ export default async function CobrosPage({
       {staff ? <GenerateBillsForm /> : null}
 
       <FilterBar>
-        <Input name="q" placeholder="Contrato o propiedad" defaultValue={q} />
+        <Input
+          name="q"
+          placeholder="Contrato, propiedad, inquilino o DNI"
+          defaultValue={q}
+        />
         <Select name="status" defaultValue={status ?? ""}>
           <option value="">Todos los estados</option>
           {(Object.keys(BILL_STATUS_LABELS) as BillStatus[]).map((s) => (

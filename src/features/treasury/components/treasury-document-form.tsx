@@ -6,8 +6,10 @@ import { Plus, Trash2 } from "lucide-react";
 import {
   createPaymentOrder,
   createReceipt,
+  fetchOpenTenantBillsForReceipt,
   postPaymentOrder,
   postReceipt,
+  type OpenTenantBillOption,
   type TreasuryLineInput,
 } from "@/features/treasury/actions/treasury-actions";
 import type { TreasuryPaymentMethod } from "@prisma/client";
@@ -65,6 +67,7 @@ type TreasuryDocumentFormProps = {
     label: string;
     balance: number;
     currency: string;
+    contractId?: string;
   }[];
   openSettlements?: {
     id: string;
@@ -84,6 +87,16 @@ const METHOD_OPTIONS: TreasuryPaymentMethod[] = [
   "CHECK",
   "OTHER",
 ];
+
+const ALL_OPEN_CONTRACTS = "__ALL__";
+
+function newBillApp(documentId = "", amount = "") {
+  return {
+    key: Math.random().toString(36).slice(2),
+    documentId,
+    amount,
+  };
+}
 
 function emptyLine(contractId = ""): LineState {
   return {
@@ -207,6 +220,21 @@ export function TreasuryDocumentForm({
   const [settlementApps, setSettlementApps] = useState<
     { key: string; documentId: string; amount: string }[]
   >([]);
+  const [openBills, setOpenBills] = useState<OpenTenantBillOption[]>(() =>
+    kind === "receipt"
+      ? openDocuments.map((d) => ({
+          id: d.id,
+          contractId: d.contractId ?? "",
+          label: d.label,
+          balance: d.balance,
+          currency: d.currency,
+        }))
+      : [],
+  );
+  const [loadingBills, setLoadingBills] = useState(false);
+
+  const receiptContractId =
+    kind === "receipt" ? (lines[0]?.contractId ?? "") : "";
 
   const paymentsTotal = useMemo(
     () =>
@@ -247,6 +275,54 @@ export function TreasuryDocumentForm({
     return [pinned, ...byParty];
   }, [kind, partyId, contracts, defaultContractId]);
 
+  useEffect(() => {
+    if (kind !== "receipt") return;
+    if (!partyId || !receiptContractId) {
+      setOpenBills([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingBills(true);
+    void fetchOpenTenantBillsForReceipt({
+      tenantId: partyId,
+      contractId:
+        receiptContractId === ALL_OPEN_CONTRACTS ? undefined : receiptContractId,
+    }).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setOpenBills(result.bills);
+        setBillApps((prev) =>
+          prev.filter((app) => result.bills.some((b) => b.id === app.documentId)),
+        );
+      } else {
+        setOpenBills([]);
+      }
+      setLoadingBills(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, partyId, receiptContractId]);
+
+  function applyAllPendingBills(bills: OpenTenantBillOption[]) {
+    if (bills.length === 0) return;
+    setBillApps(
+      bills.map((bill) => newBillApp(bill.id, String(bill.balance))),
+    );
+    const total = Math.round(
+      bills.reduce((acc, bill) => acc + bill.balance, 0) * 100,
+    ) / 100;
+    setPayments((prev) =>
+      prev.length === 1 ? [{ ...prev[0], amount: total }] : prev,
+    );
+    setLines((prev) =>
+      prev.length === 1 ? [{ ...prev[0], amount: total }] : prev,
+    );
+    if (bills[0]?.currency) setCurrency(bills[0].currency);
+  }
+
   function contractPropertyId(contractId: string) {
     return contracts.find((c) => c.id === contractId)?.propertyId ?? "";
   }
@@ -272,6 +348,8 @@ export function TreasuryDocumentForm({
 
   function onPartyChange(nextPartyId: string) {
     setPartyId(nextPartyId);
+    setBillApps([]);
+    setOpenBills([]);
     const allowed = new Set(
       (kind === "receipt"
         ? contracts.filter((c) => c.tenantId === nextPartyId)
@@ -280,8 +358,34 @@ export function TreasuryDocumentForm({
     );
     setLines((prev) =>
       prev.map((line) => {
-        if (!line.contractId || allowed.has(line.contractId)) return line;
+        if (
+          !line.contractId ||
+          line.contractId === ALL_OPEN_CONTRACTS ||
+          allowed.has(line.contractId)
+        ) {
+          return line.contractId === ALL_OPEN_CONTRACTS && !nextPartyId
+            ? { ...line, contractId: "", propertyId: "" }
+            : line;
+        }
         return { ...line, contractId: "", propertyId: "" };
+      }),
+    );
+  }
+
+  function onReceiptContractChange(contractId: string) {
+    setBillApps([]);
+    setLines((prev) =>
+      prev.map((line, index) => {
+        if (index !== 0) return line;
+        const next = {
+          ...line,
+          contractId,
+          propertyId:
+            contractId && contractId !== ALL_OPEN_CONTRACTS
+              ? contractPropertyId(contractId)
+              : "",
+        };
+        return next;
       }),
     );
   }
@@ -299,8 +403,15 @@ export function TreasuryDocumentForm({
         lines: lines.map((l) => ({
           description: l.description,
           amount: Number(l.amount) || 0,
-          contractId: l.contractId || undefined,
-          propertyId: l.propertyId || contractPropertyId(l.contractId ?? ""),
+          contractId:
+            l.contractId && l.contractId !== ALL_OPEN_CONTRACTS
+              ? l.contractId
+              : undefined,
+          propertyId:
+            l.propertyId ||
+            (l.contractId && l.contractId !== ALL_OPEN_CONTRACTS
+              ? contractPropertyId(l.contractId)
+              : ""),
         })),
         payments: payments
           .filter((p) => Number(p.amount) > 0)
@@ -475,10 +586,17 @@ export function TreasuryDocumentForm({
               <Select
                 value={line.contractId ?? ""}
                 onChange={(e) =>
-                  updateLine(line.key, { contractId: e.target.value })
+                  kind === "receipt" && lines[0]?.key === line.key
+                    ? onReceiptContractChange(e.target.value)
+                    : updateLine(line.key, { contractId: e.target.value })
                 }
               >
                 <option value="">Elegir…</option>
+                {kind === "receipt" && partyId ? (
+                  <option value={ALL_OPEN_CONTRACTS}>
+                    Todos los contratos abiertos
+                  </option>
+                ) : null}
                 {filteredContracts.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.code} · {c.propertyTitle}
@@ -534,61 +652,107 @@ export function TreasuryDocumentForm({
         ) : null}
       </section>
 
-      {kind === "receipt" && openDocuments.length > 0 ? (
+      {kind === "receipt" ? (
         <section className="space-y-3">
-          <h3 className="font-medium">Aplicar a cuotas</h3>
-          {billApps.map((app) => (
-            <div key={app.key} className="grid gap-2 sm:grid-cols-3">
-              <Select
-                value={app.documentId}
-                onChange={(e) =>
-                  setBillApps((prev) =>
-                    prev.map((a) =>
-                      a.key === app.key
-                        ? { ...a, documentId: e.target.value }
-                        : a,
-                    ),
-                  )
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-medium">Aplicar a cuotas</h3>
+            {openBills.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => applyAllPendingBills(openBills)}
+              >
+                Aplicar todas las cuotas pendientes
+              </Button>
+            ) : null}
+          </div>
+          {!partyId ? (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Elegí un inquilino para ver las cuotas pendientes.
+            </p>
+          ) : !receiptContractId ? (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Elegí un contrato o &quot;Todos los contratos abiertos&quot; para
+              ver las cuotas pendientes.
+            </p>
+          ) : loadingBills ? (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Cargando cuotas…
+            </p>
+          ) : openBills.length === 0 ? (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              No hay cuotas pendientes para esta selección.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {openBills.length} cuota{openBills.length === 1 ? "" : "s"}{" "}
+                pendiente{openBills.length === 1 ? "" : "s"}.
+              </p>
+              {billApps.map((app) => (
+                <div key={app.key} className="grid gap-2 sm:grid-cols-3">
+                  <Select
+                    value={app.documentId}
+                    onChange={(e) =>
+                      setBillApps((prev) =>
+                        prev.map((a) =>
+                          a.key === app.key
+                            ? { ...a, documentId: e.target.value }
+                            : a,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Elegir…</option>
+                    {openBills.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={app.amount}
+                    onChange={(e) =>
+                      setBillApps((prev) =>
+                        prev.map((a) =>
+                          a.key === app.key
+                            ? { ...a, amount: e.target.value }
+                            : a,
+                        ),
+                      )
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setBillApps((prev) =>
+                        prev.length > 1
+                          ? prev.filter((a) => a.key !== app.key)
+                          : prev,
+                      )
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setBillApps((prev) => [...prev, newBillApp()])
                 }
               >
-                <option value="">Elegir…</option>
-                {openDocuments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                type="number"
-                step="0.01"
-                value={app.amount}
-                onChange={(e) =>
-                  setBillApps((prev) =>
-                    prev.map((a) =>
-                      a.key === app.key ? { ...a, amount: e.target.value } : a,
-                    ),
-                  )
-                }
-              />
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setBillApps((prev) => [
-                ...prev,
-                {
-                  key: Math.random().toString(36).slice(2),
-                  documentId: "",
-                  amount: "",
-                },
-              ])
-            }
-          >
-            + Aplicación
-          </Button>
+                + Aplicación
+              </Button>
+            </>
+          )}
         </section>
       ) : null}
 

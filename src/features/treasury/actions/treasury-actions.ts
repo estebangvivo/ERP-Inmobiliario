@@ -1032,3 +1032,44 @@ export async function syncPostedDocumentToCash(
     return failFromError(error, "No se pudo registrar el movimiento en caja.");
   }
 }
+
+export type OpenTenantBillOption = {
+  id: string;
+  contractId: string;
+  label: string;
+  balance: number;
+  currency: string;
+};
+
+export async function fetchOpenTenantBillsForReceipt(input: {
+  tenantId: string;
+  contractId?: string;
+}): Promise<
+  { ok: true; bills: OpenTenantBillOption[] } | { ok: false; error: string }
+> {
+  try {
+    await requireStaff();
+    if (!input.tenantId.trim()) {
+      return { ok: false, error: "Elegí un inquilino." };
+    }
+    const { listOpenTenantBills } = await import(
+      "@/features/treasury/queries/account-statements"
+    );
+    const bills = await listOpenTenantBills({
+      tenantId: input.tenantId.trim(),
+      contractId: input.contractId?.trim() || undefined,
+    });
+    return {
+      ok: true,
+      bills: bills.map((b) => ({
+        id: b.id,
+        contractId: b.contractId,
+        label: b.label,
+        balance: b.balance,
+        currency: b.currency,
+      })),
+    };
+  } catch {
+    return { ok: false, error: "No se pudieron cargar las cuotas pendientes." };
+  }
+}

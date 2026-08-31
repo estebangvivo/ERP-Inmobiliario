@@ -116,6 +116,7 @@ export async function listOpenTenantBills(opts?: {
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       contract: {
         organizationId: session.organizationId,
+        status: { in: ["ACTIVE", "RENEWED"] },
         ...(opts?.contractId ? { id: opts.contractId } : {}),
         ...(opts?.tenantId
           ? { parties: { some: { userId: opts.tenantId, role: "TENANT" } } }
@@ -124,7 +125,11 @@ export async function listOpenTenantBills(opts?: {
     },
     include: {
       contract: {
-        select: { code: true, property: { select: { title: true } } },
+        select: {
+          id: true,
+          code: true,
+          property: { select: { title: true } },
+        },
       },
     },
     orderBy: [{ dueDate: "asc" }],
@@ -139,6 +144,7 @@ export async function listOpenTenantBills(opts?: {
       const currency = bill.currency;
       return {
         id: bill.id,
+        contractId: bill.contract.id,
         number: `${bill.periodMonth}/${bill.periodYear}`,
         currency,
         total,

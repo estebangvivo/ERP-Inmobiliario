@@ -68,6 +68,7 @@ export default async function NuevoReciboPage({ searchParams }: PageProps) {
           label: b.label,
           balance: b.balance,
           currency: b.currency,
+          contractId: b.contractId,
         }))}
         defaultDocumentApps={
           prefillBill

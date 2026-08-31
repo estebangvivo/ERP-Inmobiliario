@@ -54,6 +54,20 @@ export default async function ContratosPage({
             OR: [
               { code: { contains: q, mode: "insensitive" } },
               { property: { title: { contains: q, mode: "insensitive" } } },
+              {
+                parties: {
+                  some: {
+                    role: { in: ["TENANT", "OWNER"] },
+                    user: {
+                      OR: [
+                        { name: { contains: q, mode: "insensitive" } },
+                        { email: { contains: q, mode: "insensitive" } },
+                        { documentNumber: { contains: q, mode: "insensitive" } },
+                      ],
+                    },
+                  },
+                },
+              },
             ],
           }
         : {},
@@ -185,7 +199,11 @@ export default async function ContratosPage({
       ) : null}
 
       <FilterBar>
-        <Input name="q" placeholder="Buscar código o propiedad" defaultValue={q} />
+        <Input
+          name="q"
+          placeholder="Buscar código, propiedad, inquilino o propietario"
+          defaultValue={q}
+        />
         <Select name="status" defaultValue={status ?? ""}>
           <option value="">Todos los estados</option>
           {(Object.keys(CONTRACT_STATUS_LABELS) as ContractStatus[]).map((s) => (

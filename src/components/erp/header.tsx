@@ -24,6 +24,7 @@ function titleFromPath(pathname: string): string {
     leads: "Consultas",
     visitas: "Visitas",
     agenda: "Agenda",
+    whatsapp: "WhatsApp",
     ventas: "Ventas",
     turnero: "Turnero",
     ajustes: "Ajustes",

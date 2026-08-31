@@ -47,3 +47,18 @@ export function isValidWhatsAppPhone(raw: string): boolean {
   const n = normalizeWhatsAppPhone(raw);
   return n.length >= 10 && n.length <= 15;
 }
+
+/** Compara teléfonos aunque estén guardados con distinto formato. */
+export function phonesMatch(
+  stored: string | null | undefined,
+  waPhone: string,
+): boolean {
+  if (!stored?.trim()) return false;
+  const a = normalizeWhatsAppPhone(stored);
+  const b = normalizeWhatsAppPhone(waPhone);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.endsWith(b) || b.endsWith(a)) return true;
+  const tail = (n: string) => n.slice(-10);
+  return tail(a).length === 10 && tail(a) === tail(b);
+}

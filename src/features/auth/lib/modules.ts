@@ -12,6 +12,7 @@ export const APP_MODULE_KEYS = [
   "mantenimiento",
   "rendiciones",
   "consultas",
+  "whatsapp",
   "ventas",
   "turnero",
   "usuarios",
@@ -48,6 +49,11 @@ export const APP_MODULES: AppModuleDef[] = [
   },
   { key: "rendiciones", label: "Rendiciones", pathPrefixes: ["/rendiciones"] },
   { key: "consultas", label: "Consultas", pathPrefixes: ["/leads", "/visitas", "/agenda"] },
+  {
+    key: "whatsapp",
+    label: "WhatsApp",
+    pathPrefixes: ["/whatsapp"],
+  },
   { key: "ventas", label: "Ventas", pathPrefixes: ["/ventas"] },
   { key: "turnero", label: "Turnero", pathPrefixes: ["/turnero"] },
   { key: "usuarios", label: "Usuarios", pathPrefixes: ["/usuarios"] },
@@ -74,6 +80,7 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "mantenimiento",
     "rendiciones",
     "consultas",
+    "whatsapp",
     "ventas",
     "turnero",
     "manual",
@@ -135,6 +142,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/leads": "consultas",
   "/visitas": "consultas",
   "/agenda": "consultas",
+  "/whatsapp": "whatsapp",
   "/ventas": "ventas",
   "/turnero": "turnero",
   "/usuarios": "usuarios",
@@ -160,6 +168,7 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/leads")) return "consultas";
   if (pathname.startsWith("/visitas")) return "consultas";
   if (pathname.startsWith("/agenda")) return "consultas";
+  if (pathname.startsWith("/whatsapp")) return "whatsapp";
   if (pathname.startsWith("/ventas")) return "ventas";
   if (pathname.startsWith("/turnero")) return "turnero";
   if (pathname.startsWith("/ajustes")) return "ajustes";

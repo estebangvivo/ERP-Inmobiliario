@@ -252,6 +252,7 @@ model Lead {
   property       Property?      @relation(fields: [propertyId], references: [id])
   visitBookings  PropertyVisitBooking[]
   saleDeals      SaleDeal[]
+  whatsappChats  WhatsAppChatSession[]
 
   @@index([organizationId, status, createdAt])
   @@index([propertyId])
@@ -543,6 +544,8 @@ model User {
   cashSessionsOpened      CashSession[]          @relation("CashSessionOpener")
   cashSessionsClosed      CashSession[]          @relation("CashSessionCloser")
   cashMovementsCreated    CashMovement[]         @relation("CashMovementCreator")
+  whatsappChatsAssigned   WhatsAppChatSession[]  @relation("WhatsAppChatAgent")
+  whatsappMessagesSent    WhatsAppMessage[]      @relation("WhatsAppMessageSender")
   bankMovementsCreated    BankMovement[]         @relation("BankMovementCreator")
 
   @@index([documentNumber])
@@ -611,6 +614,14 @@ model OrganizationMember {
   userId          String
   role            OrganizationRole @default(VIEWER)
   allowedModules  String[]         @default([])
+  /// Atiende chats de WhatsApp (solo rol AGENT).
+  whatsappEnabled      Boolean          @default(false)
+  /// 1=lun … 7=dom (horario ART)
+  whatsappWeekdays     Int[]            @default([1, 2, 3, 4, 5])
+  whatsappHourStart    Int              @default(9)
+  whatsappHourEnd      Int              @default(18)
+  /// Mayor prioridad = primero en round-robin
+  whatsappPriority     Int              @default(0)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   turneroPuestoId String?
@@ -698,6 +709,19 @@ model Organization {
   paymentOrders            PaymentOrder[]
   checkInstruments         CheckInstrument[]
   checkRejectionFees       CheckRejectionFee[]
+  whatsappChatSessions     WhatsAppChatSession[]
+
+  /// ID del número de WhatsApp Cloud API (Meta) asociado a esta inmobiliaria.
+  waPhoneNumberId          String?                 @unique
+  /// Teléfono visible para el equipo (ej. +54 9 11 1234-5678).
+  waDisplayPhone           String?
+  waRoutingMode            WhatsAppRoutingMode     @default(MANUAL)
+  waLastRoutedAgentId      String?
+  /// Token de acceso Meta (Cloud API). Preferir DB sobre .env por inmobiliaria.
+  waAccessToken            String?                 @db.Text
+  /// Token de verificación del webhook (el mismo que cargás en Meta).
+  waVerifyToken            String?
+  waGraphApiVersion        String?                 @default("v21.0")
 
   @@map("organizations")
 }
@@ -1579,4 +1603,76 @@ model BankMovement {
   @@index([organizationId, occurredAt])
   @@index([bankAccountId, occurredAt])
   @@map("bank_movements")
+}
+
+enum WhatsAppRoutingMode {
+  MANUAL
+  ROUND_ROBIN
+  LEAST_BUSY
+}
+
+enum WhatsAppChatStatus {
+  BOT_ACTIVE
+  WAITING_AGENT
+  AGENT_HANDLED
+  CLOSED
+}
+
+enum WhatsAppMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WhatsAppMessageSenderType {
+  CUSTOMER
+  BOT
+  AGENT
+}
+
+/// Sesión de chat WhatsApp (inbox multiagente).
+model WhatsAppChatSession {
+  id              String             @id @default(cuid())
+  organizationId  String
+  waContactPhone  String
+  waContactName   String?
+  status          WhatsAppChatStatus @default(BOT_ACTIVE)
+  /// Paso actual del bot (MAIN_MENU, COLLECT_ZONE, …).
+  botStep         String?
+  /// Datos recolectados por el bot (intención, zona, presupuesto, tipo).
+  botPayload      Json?
+  assignedAgentId String?
+  leadId          String?
+  lastMessageAt   DateTime           @default(now())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedAgent User?             @relation("WhatsAppChatAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  lead          Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  messages      WhatsAppMessage[]
+
+  @@unique([organizationId, waContactPhone])
+  @@index([organizationId, status, lastMessageAt])
+  @@map("whatsapp_chat_sessions")
+}
+
+model WhatsAppMessage {
+  id             String                    @id @default(cuid())
+  sessionId      String
+  organizationId String
+  waMessageId    String?                   @unique
+  direction      WhatsAppMessageDirection
+  senderType     WhatsAppMessageSenderType
+  body           String
+  messageType    String                    @default("text")
+  rawPayload     Json?
+  sentByUserId   String?
+  createdAt      DateTime                  @default(now())
+
+  session    WhatsAppChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sentByUser User?               @relation("WhatsAppMessageSender", fields: [sentByUserId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("whatsapp_messages")
 }

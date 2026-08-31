@@ -158,6 +158,9 @@ export function OperadorSidebarWidget() {
 
   if (!listo || !puesto) return null;
 
+  const hayPendientes = espera.length > 0 || turnoActual !== null;
+  if (!hayPendientes) return null;
+
   const etiqueta = ETIQUETAS_CATEGORIA[puesto.categoria];
 
   return (

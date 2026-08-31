@@ -39,7 +39,7 @@ export async function assignAgentToChatSession(input: {
 
   const updated = await updateSessionStatus(input.sessionId, input.organizationId, {
     status: "AGENT_HANDLED",
-    assignedAgentId: input.agentUserId,
+    assignedAgent: { connect: { id: input.agentUserId } },
     botStep: null,
   });
 
@@ -135,7 +135,7 @@ export async function sendAgentWhatsAppMessage(input: {
   if (session.status === "WAITING_AGENT") {
     await updateSessionStatus(session.id, session.organizationId, {
       status: "AGENT_HANDLED",
-      assignedAgentId: input.agentUserId,
+      assignedAgent: { connect: { id: input.agentUserId } },
     });
   }
 

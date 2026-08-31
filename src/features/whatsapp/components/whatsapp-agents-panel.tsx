@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -92,9 +93,9 @@ export function WhatsAppAgentsPanel({
       <section className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-6 text-sm text-[var(--muted-foreground)]">
         No hay usuarios con rol <strong>Agente</strong> en esta inmobiliaria.
         Creá agentes desde{" "}
-        <a href="/usuarios" className="text-[var(--primary)] hover:underline">
+        <Link href="/usuarios" className="text-[var(--primary)] hover:underline">
           Usuarios
-        </a>
+        </Link>
         .
       </section>
     );

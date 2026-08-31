@@ -8,7 +8,7 @@ import {
   generateBillsForPeriod,
 } from "@/server/services/billing";
 import { runMonthlyBillingJob } from "@/server/services/monthly-job";
-import { issueReceiptForBillPayments } from "@/features/treasury/lib/issue-docs-from-billing";
+import { issueReceiptForBillPayments, type BillingCheckDetails } from "@/features/treasury/lib/issue-docs-from-billing";
 import type { ActionResult } from "@/server/actions/users";
 
 export type DocActionResult =
@@ -133,6 +133,11 @@ export async function recordPaymentAction(
     return { ok: false, error: "Elegí la cuenta bancaria para la transferencia." };
   }
 
+  const checkParsed = parseCheckFromFormData(method, formData);
+  if (checkParsed && !checkParsed.ok) {
+    return { ok: false, error: checkParsed.error };
+  }
+
   try {
     const bill = await prisma.tenantBill.findFirst({
       where: {
@@ -166,6 +171,7 @@ export async function recordPaymentAction(
       bankAccountId: bankAccountId || undefined,
       reference: reference || undefined,
       notes: notes || undefined,
+      check: checkParsed?.ok ? checkParsed.check : undefined,
       allocations: [
         {
           billId: bill.id,
@@ -377,4 +383,38 @@ export async function applyTenantLedgerPaymentAction(input: {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function parseCheckFromFormData(
+  method: string,
+  formData: FormData,
+): { ok: true; check: BillingCheckDetails } | { ok: false; error: string } | null {
+  if (method !== "CHECK") return null;
+
+  const checkNumber = String(formData.get("checkNumber") ?? "").trim();
+  const checkBank = String(formData.get("checkBank") ?? "").trim();
+  const isElectronicRaw = String(formData.get("isElectronicCheck") ?? "");
+  const checkDueDate = String(formData.get("checkDueDate") ?? "").trim();
+  const checkAccount = String(formData.get("checkAccount") ?? "").trim();
+
+  if (!checkNumber || !checkBank) {
+    return { ok: false, error: "Completá número y banco del cheque." };
+  }
+  if (isElectronicRaw !== "true" && isElectronicRaw !== "false") {
+    return {
+      ok: false,
+      error: "Indicá si el cheque es electrónico o físico.",
+    };
+  }
+
+  return {
+    ok: true,
+    check: {
+      checkNumber,
+      checkBank,
+      isElectronicCheck: isElectronicRaw === "true",
+      checkDueDate: checkDueDate || undefined,
+      checkAccount: checkAccount || undefined,
+    },
+  };
 }

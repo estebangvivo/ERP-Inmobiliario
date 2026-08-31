@@ -12,6 +12,8 @@ import {
   runMonthlyCloseAction,
   type DocActionResult,
 } from "@/server/actions/billing";
+import { DateInput } from "@/components/ui/date-input";
+import { checkFormatLabel } from "@/features/treasury/lib/check-number";
 import type { ActionResult } from "@/server/actions/users";
 
 const initial: ActionResult | null = null;
@@ -92,6 +94,11 @@ export function PaymentForm({
     paymentInitial,
   );
   const [method, setMethod] = useState("BANK_TRANSFER");
+  const [isElectronicCheck, setIsElectronicCheck] = useState<string>("");
+
+  useEffect(() => {
+    if (method !== "CHECK") setIsElectronicCheck("");
+  }, [method]);
 
   useEffect(() => {
     if (state?.ok) {
@@ -151,6 +158,45 @@ export function PaymentForm({
         <p className="text-xs text-[var(--muted-foreground)] sm:col-span-2">
           El efectivo se registra en la caja diaria abierta (Tesorería → Caja).
         </p>
+      ) : null}
+      {method === "CHECK" ? (
+        <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="checkNumber">N° cheque</Label>
+            <Input id="checkNumber" name="checkNumber" required />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="checkBank">Banco</Label>
+            <Input id="checkBank" name="checkBank" required />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="checkDueDate">Vencimiento</Label>
+            <DateInput id="checkDueDate" name="checkDueDate" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="isElectronicCheck">Tipo de cheque</Label>
+            <Select
+              id="isElectronicCheck"
+              name="isElectronicCheck"
+              required
+              value={isElectronicCheck}
+              onChange={(e) => setIsElectronicCheck(e.target.value)}
+            >
+              <option value="">Elegir…</option>
+              <option value="false">Cheque físico</option>
+              <option value="true">Cheque electrónico</option>
+            </Select>
+            {isElectronicCheck ? (
+              <p className="text-xs text-[var(--muted-foreground)]">
+                {checkFormatLabel(isElectronicCheck === "true")}
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="checkAccount">Cuenta (opcional)</Label>
+            <Input id="checkAccount" name="checkAccount" />
+          </div>
+        </div>
       ) : null}
       <div className="space-y-1">
         <Label htmlFor="reference">Referencia / comprobante</Label>

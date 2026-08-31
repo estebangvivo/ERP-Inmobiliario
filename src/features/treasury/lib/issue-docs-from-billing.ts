@@ -14,12 +14,21 @@ export function toTreasuryPaymentMethod(
       return "CASH";
     case "BANK_TRANSFER":
       return "TRANSFER";
-    // Cheque/tarjeta requieren datos extra en el formulario de tesorería;
-    // desde cobros/gastos rápidos se registra como "Otro".
+    case "CHECK":
+      return "CHECK";
     default:
       return "OTHER";
   }
 }
+
+export type BillingCheckDetails = {
+  checkNumber: string;
+  checkBank: string;
+  isElectronicCheck: boolean;
+  checkDueDate?: string;
+  checkIssueDate?: string;
+  checkAccount?: string;
+};
 
 export type BillingReceiptAllocation = {
   billId: string;
@@ -37,6 +46,7 @@ export async function issueReceiptForBillPayments(input: {
   bankAccountId?: string;
   reference?: string;
   notes?: string;
+  check?: BillingCheckDetails;
   allocations: BillingReceiptAllocation[];
 }): Promise<TreasuryActionResult> {
   const allocations = input.allocations.filter((a) => a.amount > 0.009);
@@ -71,6 +81,16 @@ export async function issueReceiptForBillPayments(input: {
         amount: Math.round(total * 100) / 100,
         bankAccountId:
           treasuryMethod === "TRANSFER" ? input.bankAccountId : undefined,
+        ...(treasuryMethod === "CHECK" && input.check
+          ? {
+              checkNumber: input.check.checkNumber,
+              checkBank: input.check.checkBank,
+              checkDueDate: input.check.checkDueDate,
+              checkIssueDate: input.check.checkIssueDate,
+              checkAccount: input.check.checkAccount,
+              isElectronicCheck: input.check.isElectronicCheck,
+            }
+          : {}),
       },
     ],
   });

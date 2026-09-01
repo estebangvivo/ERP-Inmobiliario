@@ -16,7 +16,7 @@ import {
   prismaSkipTake,
 } from "@/lib/list-pagination";
 import { WorkOrderForm } from "@/components/erp/work-order-forms";
-import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
+import { listOrgPeople } from "@/server/queries/org-people";
 
 export default async function MantenimientoPage({
   searchParams,
@@ -41,18 +41,7 @@ export default async function MantenimientoPage({
       select: { id: true, title: true },
     }),
     staff
-      ? prisma.organizationMember.findMany({
-          where: {
-            organizationId: session.organizationId,
-            role: "SUPPLIER",
-            user: {
-              isActive: true,
-              ...excludePlatformSuperadminFromUser(),
-            },
-          },
-          include: { user: { select: { id: true, name: true } } },
-          orderBy: { user: { name: "asc" } },
-        })
+      ? listOrgPeople(session.organizationId, ["SUPPLIER"])
       : Promise.resolve([]),
     prisma.workOrder.count({ where: woScope }),
   ]);
@@ -83,7 +72,7 @@ export default async function MantenimientoPage({
       {properties.length > 0 ? (
         <WorkOrderForm
           properties={properties}
-          suppliers={suppliers.map((s) => s.user)}
+          suppliers={suppliers}
           portalMode={!staff}
         />
       ) : null}

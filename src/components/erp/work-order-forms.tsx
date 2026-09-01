@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import { WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import {
   createSupplierInvoiceAction,
@@ -28,10 +29,11 @@ export function WorkOrderForm({
   portalMode = false,
 }: {
   properties: { id: string; title: string }[];
-  suppliers: { id: string; name: string }[];
+  suppliers: { id: string; name: string; documentNumber?: string | null; email?: string | null }[];
   portalMode?: boolean;
 }) {
   const router = useRouter();
+  const [assigneeId, setAssigneeId] = useState("");
   const [state, formAction, pending] = useActionState(createWorkOrderAction, initial);
 
   useEffect(() => {
@@ -62,14 +64,17 @@ export function WorkOrderForm({
       </div>
       {portalMode ? null : (
         <>
-          <div className="space-y-1">
+          <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="assigneeId">Proveedor</Label>
-            <Select id="assigneeId" name="assigneeId" defaultValue="">
-              <option value="">Sin asignar</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </Select>
+            <PartyPersonSearchSelect
+              kind="SUPPLIER"
+              name="assigneeId"
+              id="assigneeId"
+              value={assigneeId}
+              onChange={(value) => setAssigneeId(value)}
+              options={suppliers}
+              emptyLabel="Sin asignar"
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="costBearer">Cargo</Label>
@@ -142,9 +147,10 @@ export function SupplierInvoiceForm({
   suppliers,
 }: {
   workOrderId: string;
-  suppliers: { id: string; name: string }[];
+  suppliers: { id: string; name: string; documentNumber?: string | null; email?: string | null }[];
 }) {
   const router = useRouter();
+  const [supplierId, setSupplierId] = useState("");
   const [state, formAction, pending] = useActionState(createSupplierInvoiceAction, initial);
 
   useEffect(() => {
@@ -154,14 +160,17 @@ export function SupplierInvoiceForm({
   return (
     <form action={formAction} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2">
       <input type="hidden" name="workOrderId" value={workOrderId} />
-      <div className="space-y-1">
+      <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="supplierId">Proveedor</Label>
-        <Select id="supplierId" name="supplierId" required defaultValue="">
-          <option value="" disabled>Seleccionar…</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </Select>
+        <PartyPersonSearchSelect
+          kind="SUPPLIER"
+          name="supplierId"
+          id="supplierId"
+          value={supplierId}
+          onChange={(value) => setSupplierId(value)}
+          options={suppliers}
+          required
+        />
       </div>
       <div className="space-y-1">
         <Label htmlFor="amount">Monto</Label>

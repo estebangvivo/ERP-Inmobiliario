@@ -31,6 +31,7 @@ const KIND_LABEL: Record<PartyPersonKind, string> = {
   OWNER: "propietario",
   TENANT: "inquilino",
   GUARANTOR: "garante",
+  SUPPLIER: "proveedor",
 };
 
 type Props = {

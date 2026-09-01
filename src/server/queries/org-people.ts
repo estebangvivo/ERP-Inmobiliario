@@ -5,6 +5,7 @@ export type OrgPersonRole =
   | "OWNER"
   | "TENANT"
   | "GUARANTOR"
+  | "SUPPLIER"
   | "VIEWER"
   | "AGENT";
 

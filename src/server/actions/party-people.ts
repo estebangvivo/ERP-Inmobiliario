@@ -13,12 +13,20 @@ import {
   type OrgDniMatch,
 } from "@/server/lib/org-dni";
 
-export type PartyPersonKind = "OWNER" | "TENANT" | "GUARANTOR";
+export type PartyPersonKind = "OWNER" | "TENANT" | "GUARANTOR" | "SUPPLIER";
+
+const PARTY_PERSON_ROLES = [
+  "OWNER",
+  "TENANT",
+  "GUARANTOR",
+  "SUPPLIER",
+] as const satisfies readonly PartyPersonKind[];
 
 const PARTY_KIND_LABEL: Record<PartyPersonKind, string> = {
   OWNER: "propietario",
   TENANT: "inquilino",
   GUARANTOR: "garante",
+  SUPPLIER: "proveedor",
 };
 
 export type CreatePartyPersonResult =
@@ -132,7 +140,7 @@ export async function createPartyPersonAction(input: {
       },
     });
     if (existingMember) {
-      if (existingMember.role in PARTY_KIND_LABEL) {
+      if (PARTY_PERSON_ROLES.includes(existingMember.role as PartyPersonKind)) {
         return {
           ok: false,
           error: `Esa persona ya está cargada como ${
@@ -165,6 +173,7 @@ export async function createPartyPersonAction(input: {
     revalidatePath("/cobros");
     revalidatePath("/gestion/propiedades");
     revalidatePath("/rendiciones");
+    revalidatePath("/mantenimiento");
 
     return {
       ok: true,
@@ -196,7 +205,7 @@ export async function getPartyPersonAction(
       where: {
         organizationId: session.organizationId,
         userId: personId,
-        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
+        role: { in: [...PARTY_PERSON_ROLES] },
       },
       select: {
         user: {
@@ -255,7 +264,7 @@ export async function updatePartyPersonAction(input: {
       where: {
         organizationId: orgId,
         userId: input.personId,
-        role: { in: ["OWNER", "TENANT", "GUARANTOR"] },
+        role: { in: [...PARTY_PERSON_ROLES] },
       },
       select: { userId: true },
     });
@@ -291,6 +300,7 @@ export async function updatePartyPersonAction(input: {
     revalidatePath("/cobros");
     revalidatePath("/gestion/propiedades");
     revalidatePath("/rendiciones");
+    revalidatePath("/mantenimiento");
     revalidatePath(`/personas/${user.id}`);
 
     return {

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/dates";
 import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
-import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
+import { listOrgPeople } from "@/server/queries/org-people";
 import { prisma } from "@/lib/prisma";
 import { isStaffRole, requireModule } from "@/lib/session";
 import { workOrderScopeWhere } from "@/lib/tenant-scope";
@@ -22,7 +22,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
   const staff = isStaffRole(session.organizationRole);
   const { id } = await params;
 
-  const [workOrder, supplierMembers, bankAccounts] = await Promise.all([
+  const [workOrder, suppliers, bankAccounts] = await Promise.all([
     prisma.workOrder.findFirst({
       where: { id, AND: [workOrderScopeWhere(session)] },
       include: {
@@ -31,18 +31,9 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
         invoices: { include: { supplier: true }, orderBy: { invoiceDate: "desc" } },
       },
     }),
-    prisma.organizationMember.findMany({
-      where: {
-        organizationId: session.organizationId,
-        role: "SUPPLIER",
-        user: {
-          isActive: true,
-          ...excludePlatformSuperadminFromUser(),
-        },
-      },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { user: { name: "asc" } },
-    }),
+    staff
+      ? listOrgPeople(session.organizationId, ["SUPPLIER"])
+      : Promise.resolve([]),
     prisma.bankAccount.findMany({
       where: {
         organizationId: session.organizationId!,
@@ -84,7 +75,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
       {staff ? (
         <SupplierInvoiceForm
           workOrderId={workOrder.id}
-          suppliers={supplierMembers.map((m) => m.user)}
+          suppliers={suppliers}
         />
       ) : null}
 

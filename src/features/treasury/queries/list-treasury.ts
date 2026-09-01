@@ -203,6 +203,22 @@ export async function hasCashMovementForDoc(input: {
   return count > 0;
 }
 
+export async function hasBankMovementForDoc(input: {
+  receiptId?: string;
+  paymentOrderId?: string;
+}): Promise<boolean> {
+  const session = await requireStaff();
+  const count = await prisma.bankMovement.count({
+    where: {
+      organizationId: session.organizationId,
+      type: { in: ["INCOME", "EXPENSE"] },
+      ...(input.receiptId ? { receiptId: input.receiptId } : {}),
+      ...(input.paymentOrderId ? { paymentOrderId: input.paymentOrderId } : {}),
+    },
+  });
+  return count > 0;
+}
+
 export async function listTenantsForTreasury() {
   const session = await requireStaff();
   return prisma.user.findMany({
@@ -236,21 +252,53 @@ export async function getTreasuryFlowTotals() {
   const session = await requireStaff();
   const orgId = session.organizationId;
 
+  const [cancelledReceipts, cancelledOrders] = await Promise.all([
+    prisma.receipt.findMany({
+      where: { organizationId: orgId, status: "CANCELLED" },
+      select: { id: true },
+    }),
+    prisma.paymentOrder.findMany({
+      where: { organizationId: orgId, status: "CANCELLED" },
+      select: { id: true },
+    }),
+  ]);
+  const cancelledReceiptIds = cancelledReceipts.map((r) => r.id);
+  const cancelledOrderIds = cancelledOrders.map((o) => o.id);
+
+  const activeDocFilter = {
+    ...(cancelledReceiptIds.length
+      ? {
+          OR: [
+            { receiptId: null },
+            { receiptId: { notIn: cancelledReceiptIds } },
+          ],
+        }
+      : {}),
+    ...(cancelledOrderIds.length
+      ? {
+          OR: [
+            { paymentOrderId: null },
+            { paymentOrderId: { notIn: cancelledOrderIds } },
+          ],
+        }
+      : {}),
+  };
+
   const [cashIn, cashOut, bankIn, bankOut] = await Promise.all([
     prisma.cashMovement.findMany({
-      where: { organizationId: orgId, type: "INCOME" },
+      where: { organizationId: orgId, type: "INCOME", ...activeDocFilter },
       select: { amount: true, register: { select: { currency: true } } },
     }),
     prisma.cashMovement.findMany({
-      where: { organizationId: orgId, type: "EXPENSE" },
+      where: { organizationId: orgId, type: "EXPENSE", ...activeDocFilter },
       select: { amount: true, register: { select: { currency: true } } },
     }),
     prisma.bankMovement.findMany({
-      where: { organizationId: orgId, type: "INCOME" },
+      where: { organizationId: orgId, type: "INCOME", ...activeDocFilter },
       select: { amount: true, bankAccount: { select: { currency: true } } },
     }),
     prisma.bankMovement.findMany({
-      where: { organizationId: orgId, type: "EXPENSE" },
+      where: { organizationId: orgId, type: "EXPENSE", ...activeDocFilter },
       select: { amount: true, bankAccount: { select: { currency: true } } },
     }),
   ]);

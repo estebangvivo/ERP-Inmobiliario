@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { TreasuryPaymentMethod, TreasuryDocStatus } from "@prisma/client";
 import {
@@ -10,10 +10,14 @@ import {
   issueReceipt,
   postPaymentOrder,
   postReceipt,
+  syncPostedDocumentToBank,
   syncPostedDocumentToCash,
 } from "@/features/treasury/actions/treasury-actions";
 import { withOpenCashRetry } from "@/features/treasury/lib/with-open-cash-retry";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+
+type BankOption = { id: string; name: string; bankName: string | null };
 
 type TreasuryDocActionsProps = {
   kind: "receipt" | "payment-order";
@@ -21,6 +25,10 @@ type TreasuryDocActionsProps = {
   status: TreasuryDocStatus;
   paymentMethod?: TreasuryPaymentMethod;
   hasCashMovement?: boolean;
+  hasBankMovement?: boolean;
+  hasTransferPayment?: boolean;
+  transferMissingBankAccount?: boolean;
+  bankAccounts?: BankOption[];
 };
 
 export function TreasuryDocActions({
@@ -29,9 +37,14 @@ export function TreasuryDocActions({
   status,
   paymentMethod,
   hasCashMovement = false,
+  hasBankMovement = false,
+  hasTransferPayment = false,
+  transferMissingBankAccount = false,
+  bankAccounts = [],
 }: TreasuryDocActionsProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
 
   function run(
     action: (id: string) => Promise<{
@@ -57,12 +70,15 @@ export function TreasuryDocActions({
   const canSyncCash =
     status === "POSTED" &&
     !hasCashMovement &&
-    (paymentMethod === "CASH" ||
-      paymentMethod === "TRANSFER" ||
-      paymentMethod === "OTHER");
+    (paymentMethod === "CASH" || paymentMethod === "OTHER");
+
+  const canSyncBank =
+    status === "POSTED" &&
+    !hasBankMovement &&
+    (hasTransferPayment || paymentMethod === "TRANSFER");
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {status === "DRAFT" ? (
         <Button
           type="button"
@@ -122,6 +138,53 @@ export function TreasuryDocActions({
             ? "Registrar en caja"
             : "Pasar a efectivo y caja"}
         </Button>
+      ) : null}
+      {canSyncBank ? (
+        <>
+          {transferMissingBankAccount && bankAccounts.length > 0 ? (
+            <Select
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(e.target.value)}
+              className="h-9 w-48"
+            >
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.bankName ? ` · ${b.bankName}` : ""}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "¿Registrar las transferencias de este documento en la cuenta bancaria?",
+                )
+              ) {
+                return;
+              }
+              startTransition(async () => {
+                const result = await syncPostedDocumentToBank(
+                  kind,
+                  id,
+                  transferMissingBankAccount ? bankAccountId : undefined,
+                );
+                if (!result.ok) {
+                  window.alert(result.error ?? "No se pudo sincronizar con banco.");
+                  return;
+                }
+                router.refresh();
+              });
+            }}
+          >
+            Registrar en banco
+          </Button>
+        </>
       ) : null}
       {status !== "CANCELLED" ? (
         <Button

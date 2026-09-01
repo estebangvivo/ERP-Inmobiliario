@@ -25,6 +25,14 @@ export function cashAmountFromPayments(
     .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
 }
 
+export function transferAmountFromPayments(
+  payments: { method: TreasuryPaymentMethod; amount: number }[],
+): number {
+  return payments
+    .filter((p) => p.method === "TRANSFER")
+    .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+}
+
 export function formatPaymentMethodsShort(
   payments: { method: TreasuryPaymentMethod }[] | undefined,
   fallback: TreasuryPaymentMethod,

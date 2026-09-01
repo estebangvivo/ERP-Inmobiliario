@@ -41,6 +41,7 @@ import {
   cashAmountFromPayments,
   paymentCreateData,
   primaryPaymentMethod,
+  transferAmountFromPayments,
   validatePaymentsAgainstTotal,
   type TreasuryPaymentInput,
 } from "@/features/treasury/lib/payments";
@@ -638,6 +639,41 @@ export async function postReceipt(id: string): Promise<ActionResult> {
               : [],
       });
 
+      const paymentsForBank =
+        doc.payments.length > 0
+          ? doc.payments
+          : doc.paymentMethod === "TRANSFER"
+            ? [
+                {
+                  method: "TRANSFER" as const,
+                  amount: doc.totalAmount,
+                  bankAccountId: null,
+                },
+              ]
+            : [];
+
+      const transferDue =
+        transferAmountFromPayments(
+          paymentsForBank.map((p) => ({
+            method: p.method,
+            amount: toNumber(p.amount),
+          })),
+        ) ||
+        (doc.paymentMethod === "TRANSFER" && doc.payments.length === 0
+          ? toNumber(doc.totalAmount)
+          : 0);
+
+      if (transferDue > 0.009) {
+        const missingAccount = paymentsForBank.some(
+          (p) => p.method === "TRANSFER" && !p.bankAccountId,
+        );
+        if (missingAccount) {
+          throw new Error(
+            "En transferencias debés elegir la cuenta bancaria antes de imputar.",
+          );
+        }
+      }
+
       await postBankMovementsFromTreasuryDoc(tx, {
         organizationId: session.organizationId,
         currency: doc.currency,
@@ -649,7 +685,7 @@ export async function postReceipt(id: string): Promise<ActionResult> {
         }`,
         receiptId: doc.id,
         createdById: session.user.id,
-        payments: doc.payments,
+        payments: paymentsForBank,
       });
 
       await tx.receipt.update({
@@ -1030,6 +1066,155 @@ export async function syncPostedDocumentToCash(
   } catch (error) {
     console.error("syncPostedDocumentToCash", error);
     return failFromError(error, "No se pudo registrar el movimiento en caja.");
+  }
+}
+
+export async function syncPostedDocumentToBank(
+  kind: "receipt" | "payment-order",
+  id: string,
+  fallbackBankAccountId?: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireStaff();
+    if (!canManage(session.organizationRole)) {
+      return { ok: false, error: "Sin permiso." };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (kind === "receipt") {
+        const doc = await tx.receipt.findFirst({
+          where: { id, organizationId: session.organizationId },
+          include: { payments: true },
+        });
+        if (!doc) throw new Error("Recibo no encontrado.");
+        if (doc.status !== "POSTED") {
+          throw new Error("Solo se puede sincronizar un recibo ya imputado.");
+        }
+
+        const existing = await tx.bankMovement.findFirst({
+          where: {
+            receiptId: id,
+            type: { in: ["INCOME", "EXPENSE"] },
+          },
+        });
+        if (existing) {
+          throw new Error("Este recibo ya tiene movimientos bancarios.");
+        }
+
+        const payments =
+          doc.payments.length > 0
+            ? doc.payments
+            : doc.paymentMethod === "TRANSFER"
+              ? [
+                  {
+                    method: "TRANSFER" as const,
+                    amount: doc.totalAmount,
+                    bankAccountId: fallbackBankAccountId ?? null,
+                  },
+                ]
+              : [];
+
+        const transferDue = transferAmountFromPayments(
+          payments.map((p) => ({
+            method: p.method,
+            amount: toNumber(p.amount),
+          })),
+        );
+        if (transferDue <= 0.009) {
+          throw new Error("El recibo no tiene montos por transferencia.");
+        }
+
+        const normalized = payments.map((p) =>
+          p.method === "TRANSFER" && !p.bankAccountId && fallbackBankAccountId
+            ? { ...p, bankAccountId: fallbackBankAccountId }
+            : p,
+        );
+        if (normalized.some((p) => p.method === "TRANSFER" && !p.bankAccountId)) {
+          throw new Error("Elegí la cuenta bancaria para la transferencia.");
+        }
+
+        await postBankMovementsFromTreasuryDoc(tx, {
+          organizationId: session.organizationId,
+          currency: doc.currency,
+          kind: "INCOME",
+          description: `Recibo ${doc.number}${doc.partyName ? ` · ${doc.partyName}` : ""}`,
+          receiptId: doc.id,
+          createdById: session.user.id,
+          payments: normalized,
+        });
+
+        return { id: doc.id, number: doc.number };
+      }
+
+      const doc = await tx.paymentOrder.findFirst({
+        where: { id, organizationId: session.organizationId },
+        include: { payments: true },
+      });
+      if (!doc) throw new Error("Orden de pago no encontrada.");
+      if (doc.status !== "POSTED") {
+        throw new Error("Solo se puede sincronizar una OP ya imputada.");
+      }
+
+      const existing = await tx.bankMovement.findFirst({
+        where: {
+          paymentOrderId: id,
+          type: { in: ["INCOME", "EXPENSE"] },
+        },
+      });
+      if (existing) {
+        throw new Error("Esta orden ya tiene movimientos bancarios.");
+      }
+
+      const payments =
+        doc.payments.length > 0
+          ? doc.payments
+          : doc.paymentMethod === "TRANSFER"
+            ? [
+                {
+                  method: "TRANSFER" as const,
+                  amount: doc.totalAmount,
+                  bankAccountId: fallbackBankAccountId ?? null,
+                },
+              ]
+            : [];
+
+      const transferDue = transferAmountFromPayments(
+        payments.map((p) => ({
+          method: p.method,
+          amount: toNumber(p.amount),
+        })),
+      );
+      if (transferDue <= 0.009) {
+        throw new Error("La orden no tiene montos por transferencia.");
+      }
+
+      const normalized = payments.map((p) =>
+        p.method === "TRANSFER" && !p.bankAccountId && fallbackBankAccountId
+          ? { ...p, bankAccountId: fallbackBankAccountId }
+          : p,
+      );
+      if (normalized.some((p) => p.method === "TRANSFER" && !p.bankAccountId)) {
+        throw new Error("Elegí la cuenta bancaria para la transferencia.");
+      }
+
+      await postBankMovementsFromTreasuryDoc(tx, {
+        organizationId: session.organizationId,
+        currency: doc.currency,
+        kind: "EXPENSE",
+        description: `OP ${doc.number}${doc.partyName ? ` · ${doc.partyName}` : ""}`,
+        paymentOrderId: doc.id,
+        createdById: session.user.id,
+        payments: normalized,
+      });
+
+      return { id: doc.id, number: doc.number };
+    });
+
+    revalidateTreasury({ kind, id });
+    return { ok: true, id: result.id, number: result.number };
+  } catch (error) {
+    console.error("syncPostedDocumentToBank", error);
+    return failFromError(error, "No se pudo registrar el movimiento en banco.");
   }
 }
 

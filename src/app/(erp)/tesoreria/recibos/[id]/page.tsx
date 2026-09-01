@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { requireModule } from "@/lib/session";
 import {
   getReceiptById,
+  hasBankMovementForDoc,
   hasCashMovementForDoc,
 } from "@/features/treasury/queries/list-treasury";
+import { listBankAccounts } from "@/features/treasury/queries/bank-queries";
 import { TreasuryDocActions } from "@/features/treasury/components/treasury-doc-actions";
 import {
   formatMoney,
@@ -24,7 +26,16 @@ export default async function ReciboDetailPage({ params }: PageProps) {
   const doc = await getReceiptById(id);
   if (!doc) notFound();
 
-  const hasCashMovement = await hasCashMovementForDoc({ receiptId: id });
+  const [hasCashMovement, hasBankMovement, bankAccounts] = await Promise.all([
+    hasCashMovementForDoc({ receiptId: id }),
+    hasBankMovementForDoc({ receiptId: id }),
+    listBankAccounts({ activeOnly: true }),
+  ]);
+
+  const hasTransferPayment = doc.payments.some((p) => p.method === "TRANSFER");
+  const transferMissingBankAccount = doc.payments.some(
+    (p) => p.method === "TRANSFER" && !p.bankAccountId,
+  );
 
   return (
     <div className="space-y-6">
@@ -44,6 +55,17 @@ export default async function ReciboDetailPage({ params }: PageProps) {
               status={doc.status}
               paymentMethod={doc.paymentMethod}
               hasCashMovement={hasCashMovement}
+              hasBankMovement={hasBankMovement}
+              hasTransferPayment={hasTransferPayment}
+              transferMissingBankAccount={
+                transferMissingBankAccount ||
+                (doc.paymentMethod === "TRANSFER" && doc.payments.length === 0)
+              }
+              bankAccounts={bankAccounts.map((b) => ({
+                id: b.id,
+                name: b.name,
+                bankName: b.bankName,
+              }))}
             />
           </div>
         }
@@ -101,6 +123,9 @@ export default async function ReciboDetailPage({ params }: PageProps) {
             <li key={p.id}>
               {PAYMENT_METHOD_LABEL[p.method]} ·{" "}
               {formatMoney(Number(p.amount), doc.currency)}
+              {p.bankAccount
+                ? ` · ${p.bankAccount.name}${p.bankAccount.bankName ? ` (${p.bankAccount.bankName})` : ""}`
+                : null}
             </li>
           ))}
         </ul>

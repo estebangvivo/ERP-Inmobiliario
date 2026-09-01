@@ -22,7 +22,7 @@ export default async function CajaPage() {
       <dl className="grid gap-4 sm:grid-cols-2">
         <div className="border-l-2 border-[var(--primary)] pl-3">
           <dt className="text-xs uppercase text-[var(--muted-foreground)]">Caja diaria</dt>
-          <dd className="text-2xl font-semibold">
+          <dd className="text-2xl font-semibold" data-testid="daily-cash-balance">
             {formatCashMoney(overview.daily.balance, overview.daily.currency)}
           </dd>
         </div>

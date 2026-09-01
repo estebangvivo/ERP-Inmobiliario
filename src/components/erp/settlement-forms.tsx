@@ -44,7 +44,11 @@ export function GenerateSettlementForm({
 
   return (
     <div className="space-y-3">
-      <form action={formAction} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <form
+        action={formAction}
+        data-testid="generate-settlement-form"
+        className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-5"
+      >
         <div className="space-y-1 lg:col-span-2">
           <Label htmlFor="ownerId">Propietario</Label>
           <PartyPersonSearchSelect
@@ -59,11 +63,27 @@ export function GenerateSettlementForm({
         </div>
         <div className="space-y-1">
           <Label htmlFor="periodYear">Año</Label>
-          <Input id="periodYear" name="periodYear" type="number" defaultValue={now.getFullYear()} required />
+          <Input
+            id="periodYear"
+            name="periodYear"
+            type="number"
+            defaultValue={now.getFullYear()}
+            required
+            data-testid="generate-settlement-year"
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="periodMonth">Mes</Label>
-          <Input id="periodMonth" name="periodMonth" type="number" min={1} max={12} defaultValue={now.getMonth() + 1} required />
+          <Input
+            id="periodMonth"
+            name="periodMonth"
+            type="number"
+            min={1}
+            max={12}
+            defaultValue={now.getMonth() + 1}
+            required
+            data-testid="generate-settlement-month"
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="currency">Moneda</Label>
@@ -74,7 +94,7 @@ export function GenerateSettlementForm({
           </Select>
         </div>
         <div className="lg:col-span-5">
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending} data-testid="generate-settlement-submit">
             {pending ? "Calculando…" : "Generar liquidación"}
           </Button>
         </div>
@@ -216,7 +236,7 @@ export function SettlementActions({
             <Label htmlFor="transferRef">Ref. transferencia</Label>
             <Input id="transferRef" name="transferRef" />
           </div>
-          <Button type="submit" disabled={payPending}>
+          <Button type="submit" disabled={payPending} data-testid="settlement-pay-submit">
             {payPending ? "Pagando…" : "Pagar (generar OP)"}
           </Button>
           {payState && !payState.ok ? (
@@ -225,7 +245,7 @@ export function SettlementActions({
             </p>
           ) : null}
           {payState?.ok ? (
-            <div className="w-full space-y-1 text-sm text-emerald-700">
+            <div className="w-full space-y-1 text-sm text-emerald-700" data-testid="settlement-pay-success">
               <p>{payState.message}</p>
               {payState.printUrl ? (
                 <a

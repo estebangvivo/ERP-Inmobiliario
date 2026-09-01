@@ -515,6 +515,13 @@ async function main() {
   }
 
   console.log("Seed complete.");
+  const { alignContractPropertyOwners } = await import(
+    "../scripts/lib/align-contract-owners"
+  );
+  const aligned = await alignContractPropertyOwners(prisma, org.id);
+  if (aligned > 0) {
+    console.log(`Contratos alineados (owner ↔ propiedad): ${aligned}`);
+  }
   console.log("Org:", org.slug);
   console.log("Demo login: admin@erp.local / demo1234");
   console.log(

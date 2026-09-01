@@ -41,7 +41,9 @@ export default async function RendicionDetailPage({ params }: { params: Params }
         description={`${settlement.owner.name} · ${settlement.periodMonth}/${settlement.periodYear}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{settlement.status}</Badge>
+            <Badge variant="secondary" data-testid="settlement-status">
+              {settlement.status}
+            </Badge>
             <a
               href={`/api/rendiciones/${settlement.id}/pdf`}
               target="_blank"

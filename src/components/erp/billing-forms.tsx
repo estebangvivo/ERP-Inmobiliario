@@ -114,7 +114,11 @@ export function PaymentForm({
   );
 
   return (
-    <form action={formAction} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2">
+    <form
+      action={formAction}
+      data-testid="payment-form"
+      className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2"
+    >
       <input type="hidden" name="tenantBillId" value={billId} />
       <div className="space-y-1">
         <Label htmlFor="amount">Monto (saldo {balance.toFixed(2)})</Label>
@@ -207,7 +211,7 @@ export function PaymentForm({
         <Input id="notes" name="notes" />
       </div>
       <div className="sm:col-span-2">
-        <Button type="submit" disabled={pending || balance <= 0}>
+        <Button type="submit" disabled={pending || balance <= 0} data-testid="payment-submit">
           {pending ? "Registrando…" : "Registrar pago"}
         </Button>
       </div>
@@ -215,7 +219,10 @@ export function PaymentForm({
         <p className="text-sm text-[var(--destructive)] sm:col-span-2">{state.error}</p>
       ) : null}
       {state?.ok ? (
-        <div className="space-y-1 text-sm text-emerald-700 sm:col-span-2">
+        <div
+          className="space-y-1 text-sm text-emerald-700 sm:col-span-2"
+          data-testid="payment-success"
+        >
           <p>{state.message ?? "Pago registrado."}</p>
           {state.printUrl ? (
             <a

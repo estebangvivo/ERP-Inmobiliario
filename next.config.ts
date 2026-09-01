@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  images: {
+    localPatterns: [
+      { pathname: "/brand/**", search: "" },
+      { pathname: "/brand/**" },
+    ],
+  },
 };
 
 export default nextConfig;

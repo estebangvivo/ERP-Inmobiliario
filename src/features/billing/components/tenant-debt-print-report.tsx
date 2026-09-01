@@ -10,9 +10,7 @@ const KIND_LABEL = {
 } as const;
 
 function statusLabel(status: string): string {
-  return (
-    BILL_STATUS_LABELS[status as BillStatus] ?? status
-  );
+  return BILL_STATUS_LABELS[status as BillStatus] ?? status;
 }
 
 export function TenantDebtPrintReport({ data }: { data: TenantDebtPrintData }) {
@@ -101,73 +99,93 @@ export function TenantDebtPrintReport({ data }: { data: TenantDebtPrintData }) {
           No hay cuotas pendientes al momento de la emisión.
         </p>
       ) : (
-        <section className="mt-8">
+        <section className="mt-8 space-y-6">
           <h2 className="text-xs uppercase tracking-wider text-[#78716c]">
             Cuotas pendientes
           </h2>
-          <table className="mt-2 w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[#d6d3d1] text-xs uppercase tracking-wider text-[#78716c]">
-                <th className="py-2 pr-3 font-medium">Cuota</th>
-                <th className="py-2 pr-3 font-medium">Propiedad</th>
-                <th className="py-2 pr-3 font-medium">Vencimiento</th>
-                <th className="py-2 pr-3 font-medium">Estado</th>
-                <th className="py-2 text-right font-medium">Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.bills.map((bill) => (
-                <tr
-                  key={`${bill.contractCode}-${bill.installmentLabel}-${bill.dueDate.toISOString()}`}
-                  className="border-b border-[#e7e5e4] align-top"
-                >
-                  <td className="py-2.5 pr-3">
-                    <p>{bill.installmentLabel}</p>
+
+          {data.bills.map((bill) => (
+            <div
+              key={bill.id}
+              className="border border-[#e7e5e4] rounded-md overflow-hidden"
+            >
+              <div className="bg-[#fafaf9] px-4 py-3 border-b border-[#e7e5e4]">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{bill.installmentLabel}</p>
                     <p className="mt-0.5 text-xs text-[#78716c]">
-                      {KIND_LABEL[bill.kind]} · {bill.contractCode}
+                      {KIND_LABEL[bill.kind]} · {bill.contractCode} ·{" "}
+                      {bill.propertyTitle}
                     </p>
-                  </td>
-                  <td className="py-2.5 pr-3">{bill.propertyTitle}</td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap">
-                    {formatDateAR(bill.dueDate)}
-                  </td>
-                  <td className="py-2.5 pr-3 whitespace-nowrap">
-                    {statusLabel(bill.status)}
-                    {bill.paidAmount > 0.001 ? (
-                      <p className="mt-0.5 text-xs text-[#78716c]">
-                        Pagado:{" "}
-                        {formatMoney(
-                          String(bill.paidAmount),
-                          bill.currency as "ARS" | "USD" | "EUR",
-                        )}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums whitespace-nowrap">
+                    <p className="mt-0.5 text-xs text-[#78716c]">
+                      Vence {formatDateAR(bill.dueDate)} ·{" "}
+                      {statusLabel(bill.status)}
+                      {bill.paidAmount > 0.001
+                        ? ` · Pagado ${formatMoney(String(bill.paidAmount), bill.currency as "ARS" | "USD" | "EUR")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <p className="font-display text-lg tabular-nums whitespace-nowrap">
                     {formatMoney(
                       String(bill.balance),
                       bill.currency as "ARS" | "USD" | "EUR",
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              {currencies.map((currency) => (
-                <tr key={currency}>
-                  <td colSpan={4} className="pt-4 font-medium">
-                    Total adeudado ({currency})
-                  </td>
-                  <td className="pt-4 text-right font-display text-lg tabular-nums">
-                    {formatMoney(
-                      String(data.balanceByCurrency[currency]),
-                      currency as "ARS" | "USD" | "EUR",
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tfoot>
-          </table>
+                  </p>
+                </div>
+              </div>
+
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[#e7e5e4] text-xs uppercase tracking-wider text-[#78716c]">
+                    <th className="py-2 px-4 font-medium">Concepto</th>
+                    <th className="py-2 px-4 text-right font-medium">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bill.lines.map((line, index) => (
+                    <tr
+                      key={`${bill.id}-${line.label}-${index}`}
+                      className="border-b border-[#f5f5f4]"
+                    >
+                      <td className="py-2 px-4">{line.label}</td>
+                      <td className="py-2 px-4 text-right tabular-nums whitespace-nowrap">
+                        {formatMoney(
+                          String(line.amount),
+                          bill.currency as "ARS" | "USD" | "EUR",
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-[#fafaf9] font-medium">
+                    <td className="py-2.5 px-4">Subtotal cuota</td>
+                    <td className="py-2.5 px-4 text-right tabular-nums whitespace-nowrap">
+                      {formatMoney(
+                        String(bill.balance),
+                        bill.currency as "ARS" | "USD" | "EUR",
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          <div className="border-t border-[#d6d3d1] pt-4 space-y-2">
+            {currencies.map((currency) => (
+              <div
+                key={currency}
+                className="flex items-center justify-between font-display text-lg"
+              >
+                <span>Total adeudado ({currency})</span>
+                <span className="tabular-nums">
+                  {formatMoney(
+                    String(data.balanceByCurrency[currency]),
+                    currency as "ARS" | "USD" | "EUR",
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

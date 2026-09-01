@@ -226,7 +226,51 @@ export async function buildTenantDebtPdf(
           8,
         );
       }
-      y -= 10;
+      y -= 4;
+
+      for (const line of bill.lines) {
+        if (y < MARGIN + 40) {
+          page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+          y = PAGE_HEIGHT - MARGIN;
+        }
+        page.drawText(`  ${sanitizePdfText(line.label)}`, {
+          x: MARGIN + 8,
+          y,
+          size: 8,
+          font,
+        });
+        page.drawText(
+          formatMoney(line.amount, bill.currency as Currency),
+          {
+            x: PAGE_WIDTH - MARGIN - 90,
+            y,
+            size: 8,
+            font,
+          },
+        );
+        y -= 12;
+      }
+
+      if (y < MARGIN + 30) {
+        page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        y = PAGE_HEIGHT - MARGIN;
+      }
+      page.drawText("  Subtotal cuota", {
+        x: MARGIN + 8,
+        y,
+        size: 8,
+        font: fontBold,
+      });
+      page.drawText(
+        formatMoney(bill.balance, bill.currency as Currency),
+        {
+          x: PAGE_WIDTH - MARGIN - 90,
+          y,
+          size: 8,
+          font: fontBold,
+        },
+      );
+      y -= 16;
     }
 
     y -= 6;

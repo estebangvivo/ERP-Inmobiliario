@@ -122,6 +122,37 @@ export async function getUnitExpenseBreakdown(
   };
 }
 
+/** Líneas de servicios del edificio facturados al inquilino (agua, gas, etc.). */
+export async function getUnitServiceExpenseLines(
+  unitId: string,
+  year: number,
+  month: number,
+): Promise<
+  { concept: string; amount: number; type: "ORDINARY" | "EXTRAORDINARY" }[]
+> {
+  const allocations = await prisma.expenseAllocation.findMany({
+    where: {
+      unitId,
+      expense: {
+        periodYear: year,
+        periodMonth: month,
+        billToTenant: true,
+        ledger: "SERVICES",
+      },
+    },
+    include: {
+      expense: { select: { concept: true, type: true } },
+    },
+    orderBy: [{ expense: { type: "asc" } }, { expense: { concept: "asc" } }],
+  });
+
+  return allocations.map((a) => ({
+    concept: a.expense.concept,
+    amount: Number(a.amount),
+    type: a.expense.type,
+  }));
+}
+
 const OPEN_BILL_STATUSES: BillStatus[] = ["PENDING", "PARTIAL", "OVERDUE"];
 
 /** Recalcula expensas en una cuota abierta (no PAID/CANCELLED). */

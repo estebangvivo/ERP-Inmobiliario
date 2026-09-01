@@ -85,6 +85,7 @@ export async function listTenantsWithDebt(
 
 export type BillDebtDetail = {
   id: string;
+  unitId: string | null;
   kind: "RENT" | "SERVICES";
   periodYear: number;
   periodMonth: number;
@@ -199,6 +200,7 @@ export async function getTenantDebtDetail(
 
     details.push({
       id: bill.id,
+      unitId: bill.contract.property.unitId,
       kind: bill.kind,
       periodYear: bill.periodYear,
       periodMonth: bill.periodMonth,

@@ -1,9 +1,18 @@
+import { buildBillDebtPrintLines } from "@/features/billing/lib/bill-debt-concepts";
 import { getOrganizationProfile } from "@/features/settings/queries/get-organization";
 import { organizationLogoSrc } from "@/features/settings/lib/organization-logo";
 import { prisma } from "@/lib/prisma";
+import { getUnitServiceExpenseLines } from "@/server/services/billing";
+import { getBillContractServiceLinesForDisplay } from "@/server/services/contract-services-billing";
 import { getTenantDebtDetail } from "@/server/services/tenant-ledger";
 
+export type TenantDebtPrintLine = {
+  label: string;
+  amount: number;
+};
+
 export type TenantDebtPrintBill = {
+  id: string;
   installmentLabel: string;
   kind: "RENT" | "SERVICES";
   dueDate: Date;
@@ -14,6 +23,7 @@ export type TenantDebtPrintBill = {
   totalAmount: number;
   paidAmount: number;
   balance: number;
+  lines: TenantDebtPrintLine[];
 };
 
 export type TenantDebtPrintData = {
@@ -47,24 +57,53 @@ export async function getTenantDebtPrintData(
 
   if (!detail || !org) return null;
 
+  const bills: TenantDebtPrintBill[] = [];
+
+  for (const bill of detail.bills) {
+    const [contractServiceLines, unitServiceLines] = await Promise.all([
+      bill.kind === "SERVICES"
+        ? getBillContractServiceLinesForDisplay(bill.id)
+        : Promise.resolve([]),
+      bill.unitId
+        ? getUnitServiceExpenseLines(
+            bill.unitId,
+            bill.periodYear,
+            bill.periodMonth,
+          )
+        : Promise.resolve([]),
+    ]);
+
+    const lines = buildBillDebtPrintLines(bill, {
+      contractServiceLines: contractServiceLines.map((line) => ({
+        concept: line.concept,
+        amount: Number(line.amount),
+      })),
+      unitServiceLines,
+    });
+
+    bills.push({
+      id: bill.id,
+      installmentLabel: bill.installmentLabel,
+      kind: bill.kind,
+      dueDate: bill.dueDate,
+      status: bill.status,
+      currency: bill.currency,
+      contractCode: bill.contractCode,
+      propertyTitle: bill.propertyTitle,
+      totalAmount: bill.totalAmount,
+      paidAmount: bill.paidAmount,
+      balance: bill.balance,
+      lines,
+    });
+  }
+
   return {
     issueDate: new Date(),
     tenant: {
       ...detail.tenant,
       documentNumber: tenantDoc?.documentNumber ?? null,
     },
-    bills: detail.bills.map((b) => ({
-      installmentLabel: b.installmentLabel,
-      kind: b.kind,
-      dueDate: b.dueDate,
-      status: b.status,
-      currency: b.currency,
-      contractCode: b.contractCode,
-      propertyTitle: b.propertyTitle,
-      totalAmount: b.totalAmount,
-      paidAmount: b.paidAmount,
-      balance: b.balance,
-    })),
+    bills,
     balanceByCurrency: detail.balanceByCurrency,
     organizationName: org.name,
     organizationTaxId: org.taxId,

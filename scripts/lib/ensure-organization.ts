@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { BillingPlan, BillingStatus, PrismaClient } from "@prisma/client";
 
 type EnsureOrgInput = {
   slug: string;
@@ -7,15 +7,8 @@ type EnsureOrgInput = {
   city?: string;
   province?: string;
   country?: string;
-  billingStatus?: "EXEMPT" | "PENDING_PAYMENT" | "ACTIVE" | "PAST_DUE" | "CANCELLED";
-  billingPlan?:
-    | "TRIAL"
-    | "SOLO_MONTHLY"
-    | "SOLO_ANNUAL"
-    | "TEAM_MONTHLY"
-    | "TEAM_ANNUAL"
-    | "UNLIMITED_MONTHLY"
-    | "UNLIMITED_ANNUAL";
+  billingStatus?: BillingStatus;
+  billingPlan?: BillingPlan;
 };
 
 export async function ensureOrganization(

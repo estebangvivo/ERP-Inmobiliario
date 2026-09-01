@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Printer } from "lucide-react";
 import { PageHeader } from "@/components/erp/page-chrome";
 import { TenantLedgerPaymentPanel } from "@/components/erp/tenant-ledger-payment";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,14 @@ export default async function TesoreriaCuentaInquilinoPage({
         description={`${tenant.email}${tenant.phone ? ` · ${tenant.phone}` : ""}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            {bills.length > 0 ? (
+              <Link href={`/tesoreria/cuentas/inquilinos/${tenant.id}/print`}>
+                <Button variant="outline" size="sm">
+                  <Printer className="size-4" aria-hidden />
+                  Imprimir deuda
+                </Button>
+              </Link>
+            ) : null}
             <Link href={`/personas/${tenant.id}`}>
               <Button variant="outline" size="sm">
                 Historial

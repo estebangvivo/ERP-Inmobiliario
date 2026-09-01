@@ -74,6 +74,7 @@ export function ServiceCostForm({
   return (
     <form
       action={formAction}
+      data-testid="service-cost-form"
       className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-3"
     >
       <input type="hidden" name="ledger" value={ledger} />

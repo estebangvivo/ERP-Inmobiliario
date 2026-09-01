@@ -34,6 +34,22 @@ npm run db:up
 - Login: http://localhost:3001/login
 - Demo: `admin@erp.local` / `demo1234`
 
+## Tests
+
+Requisitos: PostgreSQL con seed (`npm run db:seed`).
+
+```bash
+# Unitarios (conceptos de deuda, etc.)
+npm run test:unit
+
+# E2E (sandbox aislado org demo-e2e, Playwright)
+npm run test:e2e:setup    # DB check + browser Chromium (una vez)
+npm run test:e2e          # levanta dev en :3001, corre ~25 specs
+npm run test:e2e:report   # HTML tras fallos
+```
+
+El prepare E2E resetea la org **Demo E2E** (`demo-e2e`) con un contrato, cuota pendiente y caja abierta. Ver `e2e/README.md`.
+
 ## Scripts DB
 
 | Script | Descripción |

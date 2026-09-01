@@ -16,6 +16,7 @@
     "test:e2e:report": "playwright show-report e2e-report",
     "test:e2e:setup": "tsx scripts/e2e-check-db.ts && npx playwright install chromium",
     "test:e2e:prepare": "tsx scripts/e2e-prepare.ts",
+    "test:unit": "tsx --test scripts/test/*.test.ts",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",

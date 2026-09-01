@@ -79,7 +79,7 @@ export default async function RendicionesPage({
         empty={total === 0}
       >
         {settlements.map((s) => (
-          <tr key={s.id}>
+          <tr key={s.id} data-testid={`settlement-row-${s.code}`}>
             <td className="px-4 py-3 font-medium">{s.code}</td>
             <td className="px-4 py-3">{s.owner.name}</td>
             <td className="px-4 py-3">

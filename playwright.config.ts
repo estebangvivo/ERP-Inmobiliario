@@ -1,12 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3001";
+const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: isCI,
+  retries: isCI ? 1 : 0,
   workers: 1,
   reporter: [["list"], ["html", { open: "never", outputFolder: "e2e-report" }]],
   timeout: 60_000,
@@ -36,9 +37,9 @@ export default defineConfig({
   ],
   globalSetup: "./e2e/global-setup.ts",
   webServer: {
-    command: "npm run dev",
+    command: isCI ? "npm run start" : "npm run dev",
     url: `${baseURL}/api/health`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 180_000 : 120_000,
   },
 });

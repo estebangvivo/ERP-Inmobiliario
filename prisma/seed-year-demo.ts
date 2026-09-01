@@ -1129,6 +1129,14 @@ async function main() {
   console.log(`Login admin: admin@erp.local / ${PASSWORD}`);
   console.log("Propietario ej: prop.yr.1@erp.local / demo1234");
   console.log("Inquilino ej: inq.yr.1@erp.local / demo1234");
+
+  const { alignContractPropertyOwners } = await import(
+    "../scripts/lib/align-contract-owners"
+  );
+  const aligned = await alignContractPropertyOwners(prisma, org.id);
+  if (aligned > 0) {
+    console.log(`Contratos alineados (owner ↔ propiedad): ${aligned}`);
+  }
 }
 
 main()

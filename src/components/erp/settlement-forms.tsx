@@ -240,7 +240,7 @@ export function SettlementActions({
             {payPending ? "Pagando…" : "Pagar (generar OP)"}
           </Button>
           {payState && !payState.ok ? (
-            <p className="w-full text-sm text-[var(--destructive)]">
+            <p className="w-full text-sm text-[var(--destructive)]" data-testid="settlement-pay-error">
               {payState.error}
             </p>
           ) : null}

@@ -74,6 +74,7 @@ export default async function CobroDetailPage({ params }: { params: Params }) {
                     ? "success"
                     : "secondary"
               }
+              data-testid="bill-status"
             >
               {BILL_STATUS_LABELS[bill.status]}
             </Badge>

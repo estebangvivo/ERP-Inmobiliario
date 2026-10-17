@@ -94,19 +94,23 @@ enum ContractServicePaidBy {
 
 /// Servicio mensual recurrente del contrato (luz, agua, gas, etc.), distinto del alquiler.
 model ContractService {
-  id            String                @id @default(cuid())
-  contractId    String
-  category      ServiceCostCategory
-  concept       String
-  amount        Decimal               @db.Decimal(14, 2)
-  currency      Currency              @default(ARS)
-  paidBy        ContractServicePaidBy @default(TENANT)
-  sortOrder     Int                   @default(0)
-  active        Boolean               @default(true)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  contract      Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  billLines     TenantBillContractServiceLine[]
+  id                     String                @id @default(cuid())
+  contractId             String
+  category               ServiceCostCategory
+  concept                String
+  amount                 Decimal               @db.Decimal(14, 2)
+  currency               Currency              @default(ARS)
+  paidBy                 ContractServicePaidBy @default(TENANT)
+  /// N° de cuenta/contrato con el proveedor del servicio.
+  providerContractNumber String?
+  /// N° de medidor (solo luz, agua y gas).
+  meterNumber            String?
+  sortOrder              Int                   @default(0)
+  active                 Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  contract               Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  billLines              TenantBillContractServiceLine[]
 
   @@index([contractId, active])
 }
@@ -547,6 +551,9 @@ model User {
   whatsappChatsAssigned   WhatsAppChatSession[]  @relation("WhatsAppChatAgent")
   whatsappMessagesSent    WhatsAppMessage[]      @relation("WhatsAppMessageSender")
   bankMovementsCreated    BankMovement[]         @relation("BankMovementCreator")
+  agentDeskThreadsOwned   AgentDeskThread[]      @relation("AgentDeskThreadCreator")
+  agentDeskParticipations AgentDeskParticipant[]
+  agentDeskMessagesSent   AgentDeskMessage[]     @relation("AgentDeskMessageSender")
 
   @@index([documentNumber])
 }
@@ -622,6 +629,8 @@ model OrganizationMember {
   whatsappHourEnd      Int              @default(18)
   /// Mayor prioridad = primero en round-robin
   whatsappPriority     Int              @default(0)
+  /// Áreas que atiende (SALES_RENTALS, WORKS, CONTRACTS, CASH). Por defecto una.
+  whatsappAreas        WhatsAppAgentArea[] @default([])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   turneroPuestoId String?
@@ -710,6 +719,7 @@ model Organization {
   checkInstruments         CheckInstrument[]
   checkRejectionFees       CheckRejectionFee[]
   whatsappChatSessions     WhatsAppChatSession[]
+  agentDeskThreads         AgentDeskThread[]
 
   /// ID del número de WhatsApp Cloud API (Meta) asociado a esta inmobiliaria.
   waPhoneNumberId          String?                 @unique
@@ -1009,6 +1019,8 @@ enum CostBearer {
   OWNER_DEDUCTIBLE
   TENANT
   AGENCY
+  /// La inmobiliaria paga y luego recupera el gasto (p. ej. vía rendición).
+  AGENCY_RECOVERABLE
 }
 
 enum Currency {
@@ -1611,6 +1623,14 @@ enum WhatsAppRoutingMode {
   LEAST_BUSY
 }
 
+/// Especialidad del agente / área de consulta del bot.
+enum WhatsAppAgentArea {
+  SALES_RENTALS
+  WORKS
+  CONTRACTS
+  CASH
+}
+
 enum WhatsAppChatStatus {
   BOT_ACTIVE
   WAITING_AGENT
@@ -1631,28 +1651,32 @@ enum WhatsAppMessageSenderType {
 
 /// Sesión de chat WhatsApp (inbox multiagente).
 model WhatsAppChatSession {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   organizationId  String
   waContactPhone  String
   waContactName   String?
-  status          WhatsAppChatStatus @default(BOT_ACTIVE)
-  /// Paso actual del bot (MAIN_MENU, COLLECT_ZONE, …).
+  status          WhatsAppChatStatus  @default(BOT_ACTIVE)
+  /// Paso actual del bot (AREA_MENU, COLLECT_ZONE, …).
   botStep         String?
   /// Datos recolectados por el bot (intención, zona, presupuesto, tipo).
   botPayload      Json?
+  /// Área elegida por el visitante en el menú del bot.
+  requestedArea   WhatsAppAgentArea?
   assignedAgentId String?
   leadId          String?
-  lastMessageAt   DateTime           @default(now())
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  lastMessageAt   DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignedAgent User?             @relation("WhatsAppChatAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
   lead          Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
   messages      WhatsAppMessage[]
+  deskThreads   AgentDeskThread[]
 
   @@unique([organizationId, waContactPhone])
   @@index([organizationId, status, lastMessageAt])
+  @@index([organizationId, requestedArea, status])
   @@map("whatsapp_chat_sessions")
 }
 
@@ -1675,4 +1699,54 @@ model WhatsAppMessage {
   @@index([sessionId, createdAt])
   @@index([organizationId, createdAt])
   @@map("whatsapp_messages")
+}
+
+/// Chat interno entre agentes (no WhatsApp).
+model AgentDeskThread {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  title                  String?
+  createdById            String?
+  relatedWhatsAppSessionId String?
+  lastMessageAt          DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy            User?                  @relation("AgentDeskThreadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  relatedWhatsAppSession WhatsAppChatSession? @relation(fields: [relatedWhatsAppSessionId], references: [id], onDelete: SetNull)
+  participants         AgentDeskParticipant[]
+  messages             AgentDeskMessage[]
+
+  @@index([organizationId, lastMessageAt])
+  @@map("agent_desk_threads")
+}
+
+model AgentDeskParticipant {
+  id         String    @id @default(cuid())
+  threadId   String
+  userId     String
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+
+  thread AgentDeskThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+  @@map("agent_desk_participants")
+}
+
+model AgentDeskMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  thread AgentDeskThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User            @relation("AgentDeskMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("agent_desk_messages")
 }

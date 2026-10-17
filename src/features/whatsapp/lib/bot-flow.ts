@@ -1,10 +1,15 @@
-import type { WhatsAppChatSession } from "@prisma/client";
+import type { WhatsAppAgentArea, WhatsAppChatSession } from "@prisma/client";
 import type { WhatsAppCredentials } from "@/features/whatsapp/lib/config";
 import {
   sendWhatsAppList,
   sendWhatsAppText,
 } from "@/features/whatsapp/lib/meta-client";
 import { parseBotPayload, upsertLeadFromWhatsAppBot } from "@/features/whatsapp/lib/lead-sync";
+import {
+  AREA_MENU_ROWS,
+  areaFromButtonId,
+  WHATSAPP_AGENT_AREA_LABELS,
+} from "@/features/whatsapp/lib/areas";
 import type {
   BotPayload,
   BotStep,
@@ -13,6 +18,7 @@ import type {
 } from "@/features/whatsapp/lib/types";
 import { prisma } from "@/lib/prisma";
 import { publishWhatsAppInboxEvent } from "@/features/whatsapp/lib/event-bus";
+import { listWhatsAppEligibleAgents } from "@/features/whatsapp/services/agent-eligibility";
 import { recordOutboundBotMessage } from "@/features/whatsapp/services/message-service";
 import { autoRouteChatSession } from "@/features/whatsapp/services/agent-routing-service";
 import {
@@ -28,6 +34,7 @@ import {
 async function tryAutoRoute(
   sessionId: string,
   organizationId: string,
+  area?: WhatsAppAgentArea | null,
 ): Promise<void> {
   try {
     const org = await prisma.organization.findUnique({
@@ -39,10 +46,11 @@ async function tryAutoRoute(
         sessionId,
         organizationId,
         routingMode: org.waRoutingMode,
+        area,
       });
     }
   } catch {
-    /* Cliente Prisma desactualizado */
+    /* ignore */
   }
 }
 
@@ -50,11 +58,6 @@ const PROSPECT_ROWS = [
   { id: "intent_buy", title: "Comprar", description: "Busco comprar propiedad" },
   { id: "intent_rent", title: "Alquilar", description: "Busco alquilar" },
   { id: "intent_appraise", title: "Tasar", description: "Quiero tasar mi inmueble" },
-  {
-    id: "intent_agent",
-    title: "Hablar con asesor",
-    description: "Atención humana",
-  },
 ] as const;
 
 function intentFromButtonId(id: string): WhatsAppIntent | null {
@@ -136,7 +139,7 @@ function buildClientMenuRows(profile: WhatsAppContactProfile) {
   rows.push({
     id: "intent_agent",
     title: "Hablar con asesor",
-    description: "Atención humana",
+    description: "Elegí el área",
   });
 
   return rows.slice(0, 10);
@@ -149,6 +152,7 @@ async function updateSessionBotState(
     botPayload?: BotPayload;
     status?: "BOT_ACTIVE" | "WAITING_AGENT" | "AGENT_HANDLED" | "CLOSED";
     leadId?: string;
+    requestedArea?: WhatsAppAgentArea | null;
   },
 ) {
   return prisma.whatsAppChatSession.update({
@@ -158,6 +162,9 @@ async function updateSessionBotState(
       botPayload: data.botPayload ?? undefined,
       status: data.status,
       leadId: data.leadId,
+      ...(data.requestedArea !== undefined
+        ? { requestedArea: data.requestedArea }
+        : {}),
       lastMessageAt: new Date(),
     },
   });
@@ -246,7 +253,7 @@ async function resolveContact(
   return { payload: payloadFromProfile(payload, profile), profile };
 }
 
-async function sendProspectMenu(
+async function sendAreaMenu(
   session: WhatsAppChatSession,
   credentials: WhatsAppCredentials,
   payload: BotPayload,
@@ -254,13 +261,32 @@ async function sendProspectMenu(
 ) {
   const name = greetingName(profile, session, payload);
   const body = name
-    ? `¡Hola ${name}! Soy el asistente de la inmobiliaria. ¿En qué podemos ayudarte?`
-    : "¡Hola! Soy el asistente de la inmobiliaria. ¿En qué podemos ayudarte?";
+    ? `¡Hola ${name}! Soy el asistente de la inmobiliaria. ¿Con qué área te podemos ayudar?`
+    : "¡Hola! Soy el asistente de la inmobiliaria. ¿Con qué área te podemos ayudar?";
 
   await sendBotList(
     session,
     credentials,
     body,
+    AREA_MENU_ROWS.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+    })),
+    "AREA_MENU",
+    payload,
+  );
+}
+
+async function sendSalesIntentMenu(
+  session: WhatsAppChatSession,
+  credentials: WhatsAppCredentials,
+  payload: BotPayload,
+) {
+  await sendBotList(
+    session,
+    credentials,
+    "Perfecto. ¿Qué necesitás en Ventas / Alquileres?",
     PROSPECT_ROWS.map((r) => ({
       id: r.id,
       title: r.title,
@@ -298,43 +324,113 @@ async function sendWelcomeMenu(
     await sendClientMenu(session, credentials, payload, profile);
     return;
   }
-  await sendProspectMenu(session, credentials, payload, profile);
+  await sendAreaMenu(session, credentials, payload, profile);
+}
+
+async function publishWaitingAgentEvent(input: {
+  organizationId: string;
+  sessionId: string;
+  leadId: string | null;
+  phone: string;
+  contactName: string | null;
+  area: WhatsAppAgentArea | null;
+}) {
+  const agents = await listWhatsAppEligibleAgents(input.organizationId, {
+    area: input.area,
+  });
+  const areaLabel = input.area
+    ? WHATSAPP_AGENT_AREA_LABELS[input.area]
+    : "WhatsApp";
+  publishWhatsAppInboxEvent({
+    type: "session.waiting_agent",
+    organizationId: input.organizationId,
+    sessionId: input.sessionId,
+    payload: {
+      leadId: input.leadId,
+      phone: input.phone,
+      area: input.area,
+      notifyUserIds: agents.map((a) => a.userId),
+      senderName: input.contactName ?? input.phone,
+      preview: `Nueva consulta · ${areaLabel}`,
+      href: `/whatsapp?session=${input.sessionId}`,
+    },
+  });
 }
 
 async function requestHumanHandoff(
   session: WhatsAppChatSession,
   credentials: WhatsAppCredentials,
   payload: BotPayload,
+  area?: WhatsAppAgentArea | null,
 ) {
+  const requestedArea = area ?? payload.area ?? null;
   const leadId = await upsertLeadFromWhatsAppBot({
     organizationId: session.organizationId,
     phone: session.waContactPhone,
     contactName: session.waContactName,
-    payload,
+    payload: { ...payload, area: requestedArea ?? undefined },
     existingLeadId: session.leadId,
   });
 
   await updateSessionBotState(session.id, {
     botStep: null,
-    botPayload: payload,
+    botPayload: { ...payload, area: requestedArea ?? undefined },
     status: "WAITING_AGENT",
     leadId,
+    requestedArea,
   });
 
+  const areaLabel = requestedArea
+    ? WHATSAPP_AGENT_AREA_LABELS[requestedArea]
+    : "un asesor";
   await sendBotText(
     session,
     credentials,
-    "Perfecto. Un asesor humano va a atenderte en breve. Gracias por tu paciencia.",
+    `Perfecto. Te vamos a conectar con ${areaLabel}. Un agente te atenderá en breve.`,
   );
 
-  publishWhatsAppInboxEvent({
-    type: "session.waiting_agent",
+  await publishWaitingAgentEvent({
     organizationId: session.organizationId,
     sessionId: session.id,
-    payload: { leadId, phone: session.waContactPhone },
+    leadId,
+    phone: session.waContactPhone,
+    contactName: session.waContactName,
+    area: requestedArea,
   });
 
-  await tryAutoRoute(session.id, session.organizationId);
+  await tryAutoRoute(session.id, session.organizationId, requestedArea);
+}
+
+async function handleAreaSelection(
+  session: WhatsAppChatSession,
+  credentials: WhatsAppCredentials,
+  payload: BotPayload,
+  area: WhatsAppAgentArea,
+) {
+  const nextPayload: BotPayload = { ...payload, area };
+
+  if (area === "SALES_RENTALS") {
+    await updateSessionBotState(session.id, {
+      botStep: "MAIN_MENU",
+      botPayload: nextPayload,
+      requestedArea: area,
+      status: "BOT_ACTIVE",
+    });
+    await sendSalesIntentMenu(session, credentials, nextPayload);
+    return;
+  }
+
+  await updateSessionBotState(session.id, {
+    botStep: "COLLECT_AREA_NOTE",
+    botPayload: nextPayload,
+    requestedArea: area,
+    status: "BOT_ACTIVE",
+  });
+  await sendBotText(
+    session,
+    credentials,
+    `Contanos brevemente tu consulta de ${WHATSAPP_AGENT_AREA_LABELS[area]}:`,
+  );
 }
 
 async function handleClientMenuAction(
@@ -345,12 +441,18 @@ async function handleClientMenuAction(
   action: ClientMenuAction,
 ) {
   if (action === "intent_agent") {
-    await requestHumanHandoff(session, credentials, payload);
+    await sendAreaMenu(session, credentials, payload, profile);
     return;
   }
 
   if (action === "client_commercial") {
-    await sendProspectMenu(session, credentials, payload, profile);
+    const nextPayload: BotPayload = { ...payload, area: "SALES_RENTALS" };
+    await updateSessionBotState(session.id, {
+      botStep: "MAIN_MENU",
+      botPayload: nextPayload,
+      requestedArea: "SALES_RENTALS",
+    });
+    await sendSalesIntentMenu(session, credentials, nextPayload);
     return;
   }
 
@@ -388,16 +490,26 @@ async function startProspectFlow(
   payload: BotPayload,
   intent: WhatsAppIntent,
 ) {
-  const nextPayload: BotPayload = { ...payload, intent };
+  const nextPayload: BotPayload = {
+    ...payload,
+    intent,
+    area: payload.area ?? "SALES_RENTALS",
+  };
 
   if (intent === "AGENT") {
-    await requestHumanHandoff(session, credentials, nextPayload);
+    await requestHumanHandoff(
+      session,
+      credentials,
+      nextPayload,
+      nextPayload.area,
+    );
     return;
   }
 
   await updateSessionBotState(session.id, {
     botStep: "COLLECT_ZONE",
     botPayload: nextPayload,
+    requestedArea: nextPayload.area ?? "SALES_RENTALS",
   });
   await sendBotText(
     session,
@@ -424,9 +536,12 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   );
   payload = resolvedPayload;
 
-  const step = (session.botStep as BotStep | null) ?? "MAIN_MENU";
+  const step = (session.botStep as BotStep | null) ?? "AREA_MENU";
   const text = normalizeUserText(input.body);
   const textLower = text.toLowerCase();
+  const buttonArea = input.interactiveId
+    ? areaFromButtonId(input.interactiveId)
+    : null;
   const buttonIntent = input.interactiveId
     ? intentFromButtonId(input.interactiveId)
     : null;
@@ -471,6 +586,46 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     return;
   }
 
+  if (step === "AREA_MENU") {
+    const area =
+      buttonArea ??
+      (textLower.includes("obra") || textLower.includes("manten")
+        ? "WORKS"
+        : textLower.includes("contrato")
+          ? "CONTRACTS"
+          : textLower.includes("caja") || textLower.includes("pago")
+            ? "CASH"
+            : textLower.includes("venta") ||
+                textLower.includes("alquiler") ||
+                textLower.includes("comprar") ||
+                textLower.includes("tas")
+              ? "SALES_RENTALS"
+              : null);
+
+    if (!area) {
+      await sendAreaMenu(session, credentials, payload, profile);
+      return;
+    }
+
+    await handleAreaSelection(session, credentials, payload, area);
+    return;
+  }
+
+  if (step === "COLLECT_AREA_NOTE") {
+    if (!text) {
+      await sendBotText(
+        session,
+        credentials,
+        "Por favor contanos brevemente tu consulta.",
+      );
+      return;
+    }
+    const area = payload.area ?? session.requestedArea;
+    const nextPayload: BotPayload = { ...payload, areaNote: text, area: area ?? undefined };
+    await requestHumanHandoff(session, credentials, nextPayload, area);
+    return;
+  }
+
   if (step === "MAIN_MENU") {
     const intent =
       buttonIntent ??
@@ -480,16 +635,10 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
           ? "RENT"
           : textLower.includes("tas")
             ? "APPRAISE"
-            : textLower.includes("asesor")
-              ? "AGENT"
-              : null);
+            : null);
 
     if (!intent) {
-      if (profile?.isClient && payload.isClient) {
-        await sendClientMenu(session, credentials, payload, profile);
-      } else {
-        await sendProspectMenu(session, credentials, payload, profile);
-      }
+      await sendSalesIntentMenu(session, credentials, payload);
       return;
     }
 
@@ -542,7 +691,11 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       );
       return;
     }
-    const nextPayload: BotPayload = { ...payload, propertyType: text };
+    const nextPayload: BotPayload = {
+      ...payload,
+      propertyType: text,
+      area: payload.area ?? "SALES_RENTALS",
+    };
     const leadId = await upsertLeadFromWhatsAppBot({
       organizationId: session.organizationId,
       phone: session.waContactPhone,
@@ -556,27 +709,34 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       botPayload: nextPayload,
       status: "WAITING_AGENT",
       leadId,
+      requestedArea: nextPayload.area ?? "SALES_RENTALS",
     });
 
     await sendBotText(
       session,
       credentials,
-      "¡Gracias! Registramos tu consulta. Un asesor se comunicará con vos pronto. Si preferís hablar ahora, respondé *asesor*.",
+      "¡Gracias! Registramos tu consulta de Ventas / Alquileres. Un asesor se comunicará con vos pronto.",
     );
 
-    publishWhatsAppInboxEvent({
-      type: "session.waiting_agent",
+    await publishWaitingAgentEvent({
       organizationId: session.organizationId,
       sessionId: session.id,
-      payload: { leadId },
+      leadId,
+      phone: session.waContactPhone,
+      contactName: session.waContactName,
+      area: nextPayload.area ?? "SALES_RENTALS",
     });
 
-    await tryAutoRoute(session.id, session.organizationId);
+    await tryAutoRoute(
+      session.id,
+      session.organizationId,
+      nextPayload.area ?? "SALES_RENTALS",
+    );
     return;
   }
 
   if (textLower.includes("asesor")) {
-    await requestHumanHandoff(session, credentials, payload);
+    await sendAreaMenu(session, credentials, payload, profile);
     return;
   }
 

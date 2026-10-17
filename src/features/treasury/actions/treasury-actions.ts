@@ -34,6 +34,7 @@ import {
   replacePaymentOrderInvoiceApps,
   replacePaymentOrderSettlementApps,
   replaceReceiptBillApps,
+  resolveWorkOrderAppsToInvoiceApps,
   validateApplicationsSum,
   type DocumentApplicationInput,
 } from "@/features/treasury/lib/document-applications";
@@ -88,6 +89,8 @@ export type CreatePaymentOrderInput = {
   lines: TreasuryLineInput[];
   payments?: TreasuryPaymentInput[];
   invoiceApps?: DocumentApplicationInput[];
+  /** Aplicaciones a OT: se convierten a factura (creándola si hace falta). */
+  workOrderApps?: DocumentApplicationInput[];
   settlementApps?: DocumentApplicationInput[];
 };
 
@@ -395,7 +398,13 @@ export async function createPaymentOrder(
     });
     if (paymentError) return { ok: false, error: paymentError };
 
-    const invoiceApps = (input.invoiceApps ?? [])
+    const invoiceAppsInput = (input.invoiceApps ?? [])
+      .map((a) => ({
+        documentId: a.documentId,
+        amount: Number(a.amount) || 0,
+      }))
+      .filter((a) => a.amount > 0);
+    const workOrderApps = (input.workOrderApps ?? [])
       .map((a) => ({
         documentId: a.documentId,
         amount: Number(a.amount) || 0,
@@ -408,8 +417,11 @@ export async function createPaymentOrder(
       }))
       .filter((a) => a.amount > 0);
     const appsError =
-      validateApplicationsSum(invoiceApps, totalAmount, "facturas") ??
-      validateApplicationsSum(settlementApps, totalAmount, "rendiciones");
+      validateApplicationsSum(
+        [...invoiceAppsInput, ...workOrderApps],
+        totalAmount,
+        "facturas/OT",
+      ) ?? validateApplicationsSum(settlementApps, totalAmount, "rendiciones");
     if (appsError) return { ok: false, error: appsError };
 
     const issueDate = parseDateInput(input.issueDate);
@@ -423,6 +435,15 @@ export async function createPaymentOrder(
     const checkData = legacyCheckFromPayments(payments);
 
     const order = await prisma.$transaction(async (tx) => {
+      const fromWorkOrders = await resolveWorkOrderAppsToInvoiceApps(
+        tx,
+        session.organizationId,
+        input.supplierId,
+        workOrderApps,
+        currency,
+      );
+      const invoiceApps = [...invoiceAppsInput, ...fromWorkOrders];
+
       const number = await nextTreasuryNumber(session.organizationId, "OP", tx);
 
       const paymentRows = paymentCreateData(payments, {

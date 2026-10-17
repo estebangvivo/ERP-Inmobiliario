@@ -19,7 +19,10 @@ import {
   upsertContractServiceBillOverride,
 } from "@/server/services/contract-services-billing";
 import { computeBillStatus } from "@/server/services/bill-utils";
-import type { ContractServiceInput } from "@/features/contracts/lib/contract-services";
+import {
+  normalizeServiceReferenceFields,
+  type ContractServiceInput,
+} from "@/features/contracts/lib/contract-services";
 
 export async function createContractServices(
   contractId: string,
@@ -28,15 +31,20 @@ export async function createContractServices(
   if (items.length === 0) return;
 
   await prisma.contractService.createMany({
-    data: items.map((item, index) => ({
-      contractId,
-      category: item.category,
-      concept: item.concept.trim(),
-      amount: item.amount,
-      paidBy: item.paidBy,
-      active: item.active ?? item.amount > 0,
-      sortOrder: index,
-    })),
+    data: items.map((item, index) => {
+      const refs = normalizeServiceReferenceFields(item);
+      return {
+        contractId,
+        category: item.category,
+        concept: item.concept.trim(),
+        amount: item.amount,
+        paidBy: item.paidBy,
+        providerContractNumber: refs.providerContractNumber,
+        meterNumber: refs.meterNumber,
+        active: item.active ?? item.amount > 0,
+        sortOrder: index,
+      };
+    }),
   });
 }
 
@@ -112,6 +120,7 @@ export async function addContractServiceAction(
     _max: { sortOrder: true },
   });
 
+  const refs = normalizeServiceReferenceFields(d);
   const service = await prisma.contractService.create({
     data: {
       contractId: d.contractId,
@@ -119,6 +128,8 @@ export async function addContractServiceAction(
       concept: d.concept.trim(),
       amount: d.amount,
       paidBy: d.paidBy,
+      providerContractNumber: refs.providerContractNumber,
+      meterNumber: refs.meterNumber,
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
     },
   });
@@ -159,6 +170,21 @@ export async function updateContractServiceAction(
     return { ok: false, error: "Servicio no encontrado." };
   }
 
+  const refs = normalizeServiceReferenceFields({
+    category: service.category,
+    providerContractNumber: d.providerContractNumber,
+    meterNumber: d.meterNumber,
+  });
+
+  // Datos de referencia (n° contrato / medidor) viven en el servicio del contrato.
+  await prisma.contractService.update({
+    where: { id: service.id },
+    data: {
+      providerContractNumber: refs.providerContractNumber,
+      meterNumber: refs.meterNumber,
+    },
+  });
+
   if (d.scope === "SINGLE_BILL") {
     if (!d.tenantBillId) {
       return { ok: false, error: "Seleccioná la cuota a modificar." };
@@ -191,7 +217,10 @@ export async function updateContractServiceAction(
 
     await prisma.contractService.update({
       where: { id: service.id },
-      data: { amount: d.amount, paidBy: d.paidBy },
+      data: {
+        amount: d.amount,
+        paidBy: d.paidBy,
+      },
     });
     await syncOpenBillsContractServicesFrom(
       service.contractId,

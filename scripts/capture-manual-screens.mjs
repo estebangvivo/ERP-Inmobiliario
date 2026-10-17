@@ -32,6 +32,7 @@ const screens = [
   { id: "09-expensas", path: "/expensas", title: "Expensas" },
   { id: "10-mantenimiento", path: "/mantenimiento", title: "Mantenimiento" },
   { id: "11-rendiciones", path: "/rendiciones", title: "Rendiciones" },
+  { id: "23-reportes", path: "/reportes", title: "Reportes" },
   { id: "12-consultas", path: "/leads", title: "Consultas" },
   { id: "13-visitas", path: "/visitas", title: "Visitas" },
   { id: "14-turnero", path: "/turnero", title: "Turnero" },

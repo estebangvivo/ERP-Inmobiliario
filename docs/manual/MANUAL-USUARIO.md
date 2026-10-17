@@ -22,14 +22,15 @@ Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingres
 12. [Tesorería](#12-tesorería)
 13. [Obras y Mantenimiento](#13-obras-y-mantenimiento)
 14. [Rendiciones](#14-rendiciones)
-15. [Consultas](#15-consultas)
-16. [Visitas](#16-visitas)
-17. [Agenda unificada](#17-agenda-unificada)
-18. [Ventas](#18-ventas)
-19. [Turnero](#19-turnero)
-20. [Portal público](#20-portal-público)
-21. [Flujo completo de ejemplo](#21-flujo-completo-de-ejemplo)
-22. [Preguntas frecuentes](#22-preguntas-frecuentes)
+15. [Reportes](#15-reportes)
+16. [Consultas](#16-consultas)
+17. [Visitas](#17-visitas)
+18. [Agenda unificada](#18-agenda-unificada)
+19. [Ventas](#19-ventas)
+20. [Turnero](#20-turnero)
+21. [Portal público](#21-portal-público)
+22. [Flujo completo de ejemplo](#22-flujo-completo-de-ejemplo)
+23. [Preguntas frecuentes](#23-preguntas-frecuentes)
 
 ---
 
@@ -59,6 +60,7 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 | Servicios | Misma lógica que expensas + gasto común |
 | Obras y Mantenimiento | Órdenes de trabajo |
 | Rendiciones | Liquidación a propietarios |
+| Reportes | Flujo de caja, recuperables y morosidad |
 | Consultas | Leads del portal |
 | Visitas | Agenda de visitas del portal |
 | Agenda | Visitas de la semana + turnero de hoy |
@@ -288,7 +290,7 @@ Los ledgers no se mezclan: un período puede tener documentos de Expensas y de S
 
 Acá viven las **cuotas** (alquiler + expensas + servicios + honorarios + mora) y el registro de pagos.
 
-Staff puede **Exportar morosos** (CSV) desde Cobros o Cuenta corriente.
+Staff puede **Exportar morosos** (CSV) desde Cobros o Cuenta corriente. El informe completo de aging está en **Reportes → Morosidad**.
 
 ### Generar cuotas del período
 
@@ -359,14 +361,14 @@ Gestioná **órdenes de trabajo** (reparaciones) y facturas de proveedores.
 
 1. Título y propiedad.
 2. Proveedor (usuario con rol Proveedor), si ya lo tenés.
-3. Quién asume el costo: deducible propietario / inquilino / agencia.
+3. Quién asume el costo: deducible del propietario, del inquilino, a cargo de la agencia, o **gastos a recuperar por la inmobiliaria**.
 4. Detalle del trabajo.
 
 ### Ciclo de vida
 
 `Abierta → Asignada → En curso → Completada` (o Cancelada).
 
-Los trabajos a cargo del propietario suelen impactar la **rendición**.
+Los trabajos a cargo del propietario (deducible) suelen impactar la **rendición**. Los de cargo **a recuperar por la inmobiliaria** se siguen en **Reportes → Gastos a recuperar** (pagados al proveedor vs. pendientes de recuperar del propietario).
 
 ---
 
@@ -393,7 +395,37 @@ También podés **Generar todas (ARS)** para crear borradores de todos los propi
 
 ---
 
-## 15. Consultas
+## 15. Reportes
+
+Módulo de informes operativos para **Administrador** y **Agente** (el agente necesita el módulo tildado en Usuarios). El menú **Reportes** apunta a `/reportes`.
+
+Desde el índice abrís cada informe. En todos podés **Descargar CSV** e **Imprimir** (impresión del navegador).
+
+### Flujo e pendientes (`/reportes/flujo`)
+
+Filtrá **desde / hasta** y aplicá.
+
+1. **Movimientos del período:** ingresos y egresos de caja y bancos (sin documentos anulados), con totales por moneda.
+2. **Pendiente a cobrar:** cuotas de inquilinos con saldo abierto (pendiente, parcial o vencida).
+3. **Pendiente a pagar:** liquidaciones emitidas (menos lo ya pagado por OP) y facturas de proveedor sin pagar.
+
+Los KPI de arriba resumen ingresos, egresos, neto, a cobrar y a pagar.
+
+### Gastos a recuperar (`/reportes/gastos-recuperables`)
+
+Lista facturas y órdenes de trabajo con cargo **Gastos a recuperar por la inmobiliaria**, filtradas por fechas.
+
+- **Pendiente de pagar:** aún no se pagó al proveedor.
+- **Pagado · pendiente recuperar:** ya se pagó al proveedor; la recuperación al propietario vía rendición es un paso operativo aparte.
+- También aparecen OT recuperables **sin factura** (gasto aún no documentado).
+
+### Morosidad (`/reportes/morosidad`)
+
+Inquilinos con deuda abierta y aging (0–30, 31–60, 61–90, +90 días). Desde cada fila entrás a la **cuenta corriente** del inquilino. El CSV incluye saldos y buckets de mora.
+
+---
+
+## 16. Consultas
 
 ![Consultas](images/12-consultas.png)
 
@@ -406,7 +438,7 @@ Inbox de interesados que escriben o agendan desde el **portal**.
 
 ---
 
-## 16. Visitas
+## 17. Visitas
 
 ![Visitas](images/13-visitas.png)
 
@@ -430,7 +462,7 @@ Cada reserva también genera una **consulta** vinculada.
 
 ---
 
-## 17. Agenda unificada
+## 18. Agenda unificada
 
 ![Agenda](images/21-agenda.png)
 
@@ -442,7 +474,7 @@ No reemplaza Visitas ni Turnero: es un tablero para ver ambos juntos. Links ráp
 
 ---
 
-## 18. Ventas
+## 19. Ventas
 
 ![Ventas](images/20-ventas.png)
 
@@ -458,7 +490,7 @@ Desde la ficha de una propiedad de venta: botón **Crear oportunidad**.
 
 ---
 
-## 19. Turnero
+## 20. Turnero
 
 ![Turnero](images/14-turnero.png)
 
@@ -471,7 +503,7 @@ Abrí según el dispositivo:
 
 ---
 
-## 20. Portal público
+## 21. Portal público
 
 El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes**.
 
@@ -493,7 +525,7 @@ Eso crea automáticamente:
 
 ---
 
-## 21. Flujo completo de ejemplo
+## 22. Flujo completo de ejemplo
 
 Caso típico de alquiler de un departamento:
 
@@ -511,7 +543,7 @@ Caso de venta: propiedad SALE → **Ventas** → seña (Reservada) → Vendida.
 
 ---
 
-## 22. Preguntas frecuentes
+## 23. Preguntas frecuentes
 
 **¿Por qué no veo una propiedad en el portal?**  
 Revisá que el estado sea Disponible o Reservada y que esté publicada. Borradores, inactivas o alquiladas no se muestran.
@@ -522,6 +554,9 @@ Necesitás contratos activos. Si incluyen expensas, cargalas antes del período.
 **¿Un agente no ve Usuarios o Ajustes?**  
 Es esperado: esas secciones son del administrador de la inmobiliaria.
 
+**¿Un agente no ve Reportes?**  
+El administrador debe tildarle el módulo **Reportes** en Usuarios (igual que con WhatsApp u otros módulos opcionales). Los administradores lo ven siempre.
+
 **¿Turnero, Visitas y Agenda son lo mismo?**  
 No. Visitas = agenda web del portal. Turnero = fila presencial. Agenda = vista unificada de apoyo.
 
@@ -530,6 +565,9 @@ En **Visitas**, panel *Horarios y feriados* (administrador).
 
 **¿Dónde está el pipeline de venta?**  
 Menú **Ventas**. Solo aplica a propiedades con operación Venta o Ambos.
+
+**¿Dónde veo lo pendiente de cobrar y pagar?**  
+En **Reportes → Flujo e pendientes**, con filtro de fechas. La morosidad detallada está en **Reportes → Morosidad**.
 
 ---
 

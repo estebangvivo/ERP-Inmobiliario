@@ -16,8 +16,13 @@ import {
   WHATSAPP_WEEKDAYS,
   type WhatsAppAgentConfigRow,
 } from "@/features/whatsapp/lib/agent-config";
+import {
+  WHATSAPP_AGENT_AREA_LABELS,
+  WHATSAPP_AGENT_AREAS,
+} from "@/features/whatsapp/lib/areas";
 import { updateWhatsAppAgentsSettingsAction } from "@/features/whatsapp/actions/settings-actions";
 import { cn } from "@/lib/utils";
+import type { WhatsAppAgentArea } from "@prisma/client";
 
 type AgentDraft = WhatsAppAgentConfigRow;
 
@@ -65,9 +70,28 @@ export function WhatsAppAgentsPanel({
     );
   }
 
+  function toggleArea(memberId: string, area: WhatsAppAgentArea) {
+    setAgents((prev) =>
+      prev.map((a) => {
+        if (a.memberId !== memberId) return a;
+        const areas = a.areas.includes(area)
+          ? a.areas.filter((x) => x !== area)
+          : [...a.areas, area];
+        return { ...a, areas };
+      }),
+    );
+  }
+
   function save() {
     setError(null);
     setSaved(null);
+    const invalid = agents.find((a) => a.enabled && a.areas.length === 0);
+    if (invalid) {
+      setError(
+        `${invalid.name}: elegí al menos un área antes de habilitarlo.`,
+      );
+      return;
+    }
     startTransition(async () => {
       const result = await updateWhatsAppAgentsSettingsAction({
         agents: agents.map((a) => ({
@@ -77,6 +101,7 @@ export function WhatsAppAgentsPanel({
           weekdays: a.schedule.weekdays,
           hourStart: a.schedule.hourStart,
           hourEnd: a.schedule.hourEnd,
+          areas: a.areas,
         })),
       });
       if (!result.ok) {
@@ -106,8 +131,9 @@ export function WhatsAppAgentsPanel({
       <div className="mb-4">
         <h3 className="text-lg font-semibold">Agentes de WhatsApp</h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Elegí qué agentes pueden atender y en qué horario. Expandí una fila
-          para editar. La prioridad define el orden en asignación rotativa.
+          Elegí qué agentes pueden atender, en qué área(s) y en qué horario.
+          Por defecto una área; podés sumar más. La prioridad define el orden
+          en asignación rotativa.
         </p>
       </div>
 
@@ -150,6 +176,9 @@ export function WhatsAppAgentsPanel({
                   </span>
                   <span className="block truncate text-xs text-[var(--muted-foreground)]">
                     {agent.email}
+                    {agent.areas.length
+                      ? ` · ${agent.areas.map((a) => WHATSAPP_AGENT_AREA_LABELS[a]).join(", ")}`
+                      : ""}
                     {agent.enabled
                       ? ` · ${formatAgentScheduleSummary(agent.schedule)}`
                       : ""}
@@ -204,6 +233,34 @@ export function WhatsAppAgentsPanel({
                           })
                         }
                       />
+                    </div>
+
+                    <div className="space-y-2 lg:col-span-2">
+                      <Label>Áreas que atiende</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {WHATSAPP_AGENT_AREAS.map((area) => {
+                          const active = agent.areas.includes(area);
+                          return (
+                            <button
+                              key={area}
+                              type="button"
+                              onClick={() => toggleArea(agent.memberId, area)}
+                              className={cn(
+                                "rounded-md border px-3 py-1 text-xs font-medium",
+                                active
+                                  ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                                  : "border-[var(--border)] bg-[var(--background)]",
+                              )}
+                            >
+                              {WHATSAPP_AGENT_AREA_LABELS[area]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Obligatorio al menos una si está habilitado. Podés marcar
+                        varias.
+                      </p>
                     </div>
 
                     <div className="space-y-2 lg:col-span-2">

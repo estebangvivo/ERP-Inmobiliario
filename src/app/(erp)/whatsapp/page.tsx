@@ -34,9 +34,7 @@ export default async function WhatsAppInboxPage({
     selectedSessionId
       ? getWhatsAppThreadAction(selectedSessionId)
       : Promise.resolve(null),
-    session.organizationRole === "ADMIN"
-      ? loadEligibleAgents(session.organizationId)
-      : Promise.resolve([]),
+    loadEligibleAgents(session.organizationId),
     isWhatsAppConfiguredForOrg(session.organizationId),
   ]);
 
@@ -46,16 +44,24 @@ export default async function WhatsAppInboxPage({
     <div className="space-y-6">
       <PageHeader
         title="WhatsApp"
-        description="Inbox multiagente con bot de calificación y derivación a asesores."
+        description="Inbox por área: Ventas/Alquileres, Obras, Contratos y Caja."
         actions={
-          isAdmin ? (
+          <div className="flex flex-wrap gap-2">
             <Link
-              href="/whatsapp/configuracion"
+              href="/whatsapp/equipo"
               className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm font-medium hover:bg-[var(--muted)]"
             >
-              Configuración
+              Equipo
             </Link>
-          ) : undefined
+            {isAdmin ? (
+              <Link
+                href="/whatsapp/configuracion"
+                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm font-medium hover:bg-[var(--muted)]"
+              >
+                Configuración
+              </Link>
+            ) : null}
+          </div>
         }
       />
       <WhatsAppInbox

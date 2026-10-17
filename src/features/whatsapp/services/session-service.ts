@@ -35,7 +35,7 @@ export async function getOrCreateChatSession(input: {
       waContactPhone: phone,
       waContactName: input.waContactName ?? null,
       status: "BOT_ACTIVE",
-      botStep: "MAIN_MENU",
+      botStep: "AREA_MENU",
     },
   });
 }
@@ -49,12 +49,13 @@ export async function touchSessionLastMessage(sessionId: string) {
 
 export async function listInboxSessions(
   organizationId: string,
-  options?: { status?: string; limit?: number },
+  options?: { status?: string; area?: string; limit?: number },
 ) {
   const sessions = await prisma.whatsAppChatSession.findMany({
     where: {
       organizationId,
       ...(options?.status ? { status: options.status as never } : {}),
+      ...(options?.area ? { requestedArea: options.area as never } : {}),
     },
     orderBy: { lastMessageAt: "desc" },
     take: options?.limit ?? 50,
@@ -82,6 +83,7 @@ export async function listInboxSessions(
     status: s.status,
     botStep: s.botStep,
     botPayload: s.botPayload,
+    requestedArea: s.requestedArea,
     assignedAgentId: s.assignedAgentId,
     assignedAgentName: s.assignedAgent?.name ?? null,
     leadId: s.leadId,

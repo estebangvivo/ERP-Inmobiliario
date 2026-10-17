@@ -1,4 +1,4 @@
-import type { WhatsAppRoutingMode } from "@prisma/client";
+import type { WhatsAppAgentArea, WhatsAppRoutingMode } from "@prisma/client";
 import { VISIT_TZ } from "@/lib/visit-slots";
 
 export type WhatsAppAgentSchedule = {
@@ -14,6 +14,7 @@ export type WhatsAppAgentConfigRow = {
   email: string;
   enabled: boolean;
   priority: number;
+  areas: WhatsAppAgentArea[];
   schedule: WhatsAppAgentSchedule;
 };
 

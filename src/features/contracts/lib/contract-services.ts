@@ -20,13 +20,39 @@ export const CONTRACT_SERVICE_PAID_BY_LABELS: Record<
   OWNER: "Propietario",
 };
 
+/** Luz, agua y gas llevan número de medidor. */
+export function serviceCategoryHasMeter(
+  category: ContractService["category"],
+): boolean {
+  return (
+    category === "ELECTRICITY" ||
+    category === "WATER" ||
+    category === "GAS"
+  );
+}
+
 export type ContractServiceInput = {
   category: ContractService["category"];
   concept: string;
   amount: number;
   paidBy: ContractServicePaidBy;
+  providerContractNumber?: string | null;
+  meterNumber?: string | null;
   active?: boolean;
 };
+
+export function normalizeServiceReferenceFields(input: {
+  category: ContractService["category"];
+  providerContractNumber?: string | null;
+  meterNumber?: string | null;
+}) {
+  const providerContractNumber =
+    input.providerContractNumber?.trim() || null;
+  const meterNumber = serviceCategoryHasMeter(input.category)
+    ? input.meterNumber?.trim() || null
+    : null;
+  return { providerContractNumber, meterNumber };
+}
 
 export type ResolvedContractServiceLine = {
   contractServiceId: string;

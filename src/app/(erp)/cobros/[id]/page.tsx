@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/erp/page-chrome";
-import { PaymentForm } from "@/components/erp/billing-forms";
 import { LateFeeButton } from "@/components/erp/late-fee-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,15 @@ import { requireModule, isStaffRole } from "@/lib/session";
 import { billScopeWhere } from "@/lib/tenant-scope";
 import { syncBillOverdueState } from "@/server/services/billing";
 import { getBillContractServiceLinesForDisplay } from "@/server/services/contract-services-billing";
+import { TreasuryDocumentForm } from "@/features/treasury/components/treasury-document-form";
+import { listContractsForTreasury } from "@/features/treasury/queries/list-contracts-for-treasury";
+import { listTenantsForTreasury } from "@/features/treasury/queries/list-treasury";
+import {
+  getEnabledCurrencies,
+  getOrganizationCurrency,
+} from "@/features/settings/queries/get-organization";
+import { listActiveBankAccountsForPayment } from "@/features/treasury/queries/bank-queries";
+import { listOpenTenantBills } from "@/features/treasury/queries/account-statements";
 
 type Params = Promise<{ id: string }>;
 
@@ -39,27 +47,29 @@ export default async function CobroDetailPage({ params }: { params: Params }) {
     ? await getBillContractServiceLinesForDisplay(bill.id)
     : [];
   const balance = Number(bill.totalAmount) - Number(bill.paidAmount);
+  const installmentLabel = formatInstallmentLabel({
+    contractStart: bill.contract.startDate,
+    contractEnd: bill.contract.endDate,
+    periodYear: bill.periodYear,
+    periodMonth: bill.periodMonth,
+  });
 
-  const bankAccounts = staff
-    ? await prisma.bankAccount.findMany({
-        where: {
-          organizationId: session.organizationId!,
-          isActive: true,
-        },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, bankName: true, currency: true },
-      })
-    : [];
+  const receiptFormData =
+    staff && balance > 0
+      ? await Promise.all([
+          listContractsForTreasury(),
+          listTenantsForTreasury(),
+          getOrganizationCurrency(),
+          getEnabledCurrencies(),
+          listActiveBankAccountsForPayment(),
+          listOpenTenantBills({ contractId: bill.contractId }),
+        ])
+      : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${TENANT_BILL_KIND_LABELS[bill.kind]} · ${formatInstallmentLabel({
-          contractStart: bill.contract.startDate,
-          contractEnd: bill.contract.endDate,
-          periodYear: bill.periodYear,
-          periodMonth: bill.periodMonth,
-        })}`}
+        title={`${TENANT_BILL_KIND_LABELS[bill.kind]} · ${installmentLabel}`}
         description={`${bill.contract.code} · ${bill.contract.property.title}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -140,17 +150,42 @@ export default async function CobroDetailPage({ params }: { params: Params }) {
         {formatMoney(bill.totalAmount.toString(), bill.currency)}
       </p>
 
-      {staff ? (
-        <PaymentForm
-          billId={bill.id}
-          balance={balance}
-          currency={bill.currency}
-          bankAccounts={bankAccounts.map((b) => ({
-            id: b.id,
-            currency: b.currency,
-            label: `${b.name} · ${b.bankName} (${b.currency})`,
-          }))}
-        />
+      {receiptFormData ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Nuevo recibo</CardTitle>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Mismo formulario que Tesorería → Nuevo recibo, con esta cuota
+              preseleccionada.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <TreasuryDocumentForm
+              kind="receipt"
+              contracts={receiptFormData[0]}
+              parties={receiptFormData[1].map((t) => ({
+                id: t.id,
+                name: t.name,
+                documentNumber: t.documentNumber,
+              }))}
+              defaultCurrency={receiptFormData[2]}
+              enabledCurrencies={receiptFormData[3]}
+              defaultContractId={bill.contractId}
+              bankAccounts={receiptFormData[4]}
+              openDocuments={receiptFormData[5].map((b) => ({
+                id: b.id,
+                label: b.label,
+                balance: b.balance,
+                currency: b.currency,
+                contractId: b.contractId,
+              }))}
+              defaultDocumentApps={
+                balance > 0 ? [{ documentId: bill.id, amount: balance }] : []
+              }
+              defaultConcept={`Cobro ${installmentLabel}`}
+            />
+          </CardContent>
+        </Card>
       ) : null}
 
       <Card>

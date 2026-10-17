@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   assignAgentToChatSession,
   closeChatSession,
+  releaseChatSessionToBot,
   sendAgentWhatsAppMessage,
 } from "@/features/whatsapp/services/handoff-service";
 import {
@@ -16,16 +17,21 @@ import {
   listInboxSessions,
 } from "@/features/whatsapp/services/session-service";
 import { parseBotPayload } from "@/features/whatsapp/lib/lead-sync";
+import { listWhatsAppEligibleAgents } from "@/features/whatsapp/services/agent-eligibility";
 import { requireModule, requireStaff } from "@/lib/session";
 import type { ActionResult } from "@/server/actions/users";
 
 export type WhatsAppActionResult = ActionResult & { message?: string };
 
-export async function listWhatsAppSessionsAction(status?: string) {
+export async function listWhatsAppSessionsAction(filters?: {
+  status?: string;
+  area?: string;
+}) {
   const session = await requireModule("whatsapp");
   await requireStaff();
   const items = await listInboxSessions(session.organizationId, {
-    status: status || undefined,
+    status: filters?.status || undefined,
+    area: filters?.area || undefined,
     limit: 100,
   });
   return items.map((item) => ({
@@ -47,6 +53,7 @@ export async function getWhatsAppThreadAction(sessionId: string) {
       waContactName: chat.waContactName,
       status: chat.status,
       botPayload: parseBotPayload(chat.botPayload),
+      requestedArea: chat.requestedArea,
       assignedAgentId: chat.assignedAgentId,
       assignedAgentName: chat.assignedAgent?.name ?? null,
       leadId: chat.leadId,
@@ -97,7 +104,7 @@ export async function sendWhatsAppReplyAction(
     if (msg === "BOT_STILL_ACTIVE") {
       return {
         ok: false,
-        error: "Asigná el chat a un agente antes de responder manualmente.",
+        error: "Tomá el control del chat antes de responder manualmente.",
       };
     }
     return { ok: false, error: "No se pudo enviar el mensaje." };
@@ -117,7 +124,7 @@ export async function assignWhatsAppAgentAction(
       agentUserId: agentUserId ?? session.user.id,
       notifyCustomer: true,
     });
-    return { ok: true, message: "Chat asignado. El bot quedó deshabilitado." };
+    return { ok: true, message: "Chat tomado. El bot quedó deshabilitado." };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg === "AGENT_NOT_ELIGIBLE") {
@@ -127,6 +134,22 @@ export async function assignWhatsAppAgentAction(
       };
     }
     return { ok: false, error: "No se pudo asignar el chat." };
+  }
+}
+
+export async function releaseWhatsAppSessionAction(
+  sessionId: string,
+): Promise<WhatsAppActionResult> {
+  try {
+    const session = await requireModule("whatsapp");
+    await requireStaff();
+    await releaseChatSessionToBot({
+      sessionId,
+      organizationId: session.organizationId,
+    });
+    return { ok: true, message: "Conversación devuelta al bot." };
+  } catch {
+    return { ok: false, error: "No se pudo devolver al bot." };
   }
 }
 
@@ -144,4 +167,13 @@ export async function closeWhatsAppSessionAction(
   } catch {
     return { ok: false, error: "No se pudo cerrar la conversación." };
   }
+}
+
+export async function listEligibleAgentsForSessionAction(sessionId: string) {
+  const session = await requireModule("whatsapp");
+  await requireStaff();
+  const chat = await getSessionForOrg(sessionId, session.organizationId);
+  return listWhatsAppEligibleAgents(session.organizationId, {
+    area: chat?.requestedArea ?? undefined,
+  });
 }

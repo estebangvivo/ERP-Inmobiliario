@@ -1,4 +1,4 @@
-import type { WhatsAppRoutingMode } from "@prisma/client";
+import type { WhatsAppAgentArea, WhatsAppRoutingMode } from "@prisma/client";
 import { assignAgentToChatSession } from "@/features/whatsapp/services/handoff-service";
 import {
   listWhatsAppEligibleAgents,
@@ -51,9 +51,11 @@ function pickLeastBusyAgent(
 export async function pickAgentForRouting(
   organizationId: string,
   routingMode: WhatsAppRoutingMode,
+  area?: WhatsAppAgentArea | null,
 ): Promise<EligibleWhatsAppAgent | null> {
   const available = await listWhatsAppEligibleAgents(organizationId, {
     onlyAvailableNow: true,
+    area: area ?? undefined,
   });
   if (available.length === 0) return null;
 
@@ -71,14 +73,25 @@ export async function autoRouteChatSession(input: {
   sessionId: string;
   organizationId: string;
   routingMode: WhatsAppRoutingMode;
+  area?: WhatsAppAgentArea | null;
 }): Promise<{ assigned: boolean; agentUserId?: string }> {
   if (input.routingMode === "MANUAL") {
     return { assigned: false };
   }
 
+  let area = input.area;
+  if (area === undefined) {
+    const session = await prisma.whatsAppChatSession.findFirst({
+      where: { id: input.sessionId, organizationId: input.organizationId },
+      select: { requestedArea: true },
+    });
+    area = session?.requestedArea ?? null;
+  }
+
   const agent = await pickAgentForRouting(
     input.organizationId,
     input.routingMode,
+    area,
   );
   if (!agent) return { assigned: false };
 

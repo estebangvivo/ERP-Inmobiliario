@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  FileBarChart,
   FileText,
   Home,
   Landmark,
@@ -153,6 +154,13 @@ export const erpNavItems: NavItem[] = [
     href: "/turnero",
     icon: Ticket,
     module: "turnero",
+    roles: ["ADMIN", "AGENT"],
+  },
+  {
+    title: "Reportes",
+    href: "/reportes",
+    icon: FileBarChart,
+    module: "reportes",
     roles: ["ADMIN", "AGENT"],
   },
   {

@@ -58,6 +58,7 @@ async function loadAgentMembers(organizationId: string) {
         whatsappWeekdays: true,
         whatsappHourStart: true,
         whatsappHourEnd: true,
+        whatsappAreas: true,
         user: { select: { name: true, email: true } },
       },
     });
@@ -118,6 +119,7 @@ export async function getWhatsAppSettings(
         whatsappWeekdays?: number[];
         whatsappHourStart?: number;
         whatsappHourEnd?: number;
+        whatsappAreas?: WhatsAppAgentConfigRow["areas"];
       };
       return {
         memberId: row.id,
@@ -127,6 +129,7 @@ export async function getWhatsAppSettings(
         enabled:
           row.whatsappEnabled ?? hasModule(row.allowedModules, "whatsapp"),
         priority: row.whatsappPriority ?? 0,
+        areas: row.whatsappAreas ?? [],
         schedule: {
           weekdays: row.whatsappWeekdays?.length
             ? row.whatsappWeekdays

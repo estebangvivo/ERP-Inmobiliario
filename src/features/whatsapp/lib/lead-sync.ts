@@ -1,8 +1,9 @@
-import type { OrganizationRole } from "@prisma/client";
+import type { OrganizationRole, WhatsAppAgentArea } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { hasModule } from "@/features/auth/lib/modules";
 import { prisma } from "@/lib/prisma";
+import { WHATSAPP_AGENT_AREA_LABELS, isWhatsAppAgentArea } from "@/features/whatsapp/lib/areas";
 import type { BotPayload, WhatsAppIntent } from "@/features/whatsapp/lib/types";
 import { WHATSAPP_INTENT_LABELS } from "@/features/whatsapp/lib/types";
 
@@ -14,11 +15,15 @@ function intentLabel(intent?: WhatsAppIntent): string {
 function buildLeadMessage(payload: BotPayload, contactName?: string | null): string {
   const lines = [
     `Consulta vía WhatsApp${contactName ? ` (${contactName})` : ""}.`,
-    `Intención: ${intentLabel(payload.intent)}`,
   ];
+  if (payload.area) {
+    lines.push(`Área: ${WHATSAPP_AGENT_AREA_LABELS[payload.area]}`);
+  }
+  if (payload.intent) lines.push(`Intención: ${intentLabel(payload.intent)}`);
   if (payload.zone) lines.push(`Zona: ${payload.zone}`);
   if (payload.budget) lines.push(`Presupuesto: ${payload.budget}`);
   if (payload.propertyType) lines.push(`Tipo de inmueble: ${payload.propertyType}`);
+  if (payload.areaNote) lines.push(`Detalle: ${payload.areaNote}`);
   return lines.join("\n");
 }
 
@@ -102,10 +107,15 @@ export function parseBotPayload(value: Prisma.JsonValue | null): BotPayload {
       o.intent === "AGENT"
         ? o.intent
         : undefined,
+    area:
+      typeof o.area === "string" && isWhatsAppAgentArea(o.area)
+        ? (o.area as WhatsAppAgentArea)
+        : undefined,
     zone: typeof o.zone === "string" ? o.zone : undefined,
     budget: typeof o.budget === "string" ? o.budget : undefined,
     propertyType:
       typeof o.propertyType === "string" ? o.propertyType : undefined,
+    areaNote: typeof o.areaNote === "string" ? o.areaNote : undefined,
     userId: typeof o.userId === "string" ? o.userId : undefined,
     contactFirstName:
       typeof o.contactFirstName === "string" ? o.contactFirstName : undefined,

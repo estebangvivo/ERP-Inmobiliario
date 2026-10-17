@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
-import { WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
+import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
+import type { CostBearer } from "@prisma/client";
 import {
   createSupplierInvoiceAction,
   createWorkOrderAction,
@@ -79,9 +80,11 @@ export function WorkOrderForm({
           <div className="space-y-1">
             <Label htmlFor="costBearer">Cargo</Label>
             <Select id="costBearer" name="costBearer" defaultValue="OWNER_DEDUCTIBLE">
-              <option value="OWNER_DEDUCTIBLE">Deducible propietario</option>
-              <option value="TENANT">Inquilino</option>
-              <option value="AGENCY">Agencia</option>
+              {(Object.keys(COST_BEARER_LABELS) as CostBearer[]).map((k) => (
+                <option key={k} value={k}>
+                  {COST_BEARER_LABELS[k]}
+                </option>
+              ))}
             </Select>
           </div>
         </>
@@ -187,9 +190,11 @@ export function SupplierInvoiceForm({
       <div className="space-y-1">
         <Label htmlFor="costBearer">Cargo</Label>
         <Select id="costBearer" name="costBearer" defaultValue="OWNER_DEDUCTIBLE">
-          <option value="OWNER_DEDUCTIBLE">Deducible propietario</option>
-          <option value="TENANT">Inquilino</option>
-          <option value="AGENCY">Agencia</option>
+          {(Object.keys(COST_BEARER_LABELS) as CostBearer[]).map((k) => (
+            <option key={k} value={k}>
+              {COST_BEARER_LABELS[k]}
+            </option>
+          ))}
         </Select>
       </div>
       <div className="flex items-end">

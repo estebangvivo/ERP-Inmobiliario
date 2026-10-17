@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { ChatThread } from "@/features/whatsapp/components/chat-thread";
@@ -7,7 +8,12 @@ import { SessionList } from "@/features/whatsapp/components/session-list";
 import { WhatsAppSetupBanner } from "@/features/whatsapp/components/whatsapp-setup-banner";
 import { useWhatsAppInboxRealtime } from "@/features/whatsapp/components/use-inbox-realtime";
 import type { EligibleWhatsAppAgent } from "@/features/whatsapp/services/agent-eligibility";
-import type { MessageListItem, SessionListItem } from "@/features/whatsapp/lib/types";
+import type {
+  BotPayload,
+  MessageListItem,
+  SessionListItem,
+} from "@/features/whatsapp/lib/types";
+import type { WhatsAppAgentArea } from "@prisma/client";
 
 type ThreadData = {
   session: {
@@ -16,6 +22,9 @@ type ThreadData = {
     waContactName: string | null;
     status: SessionListItem["status"];
     assignedAgentName: string | null;
+    assignedAgentId: string | null;
+    requestedArea: WhatsAppAgentArea | null;
+    botPayload: BotPayload | null;
     leadId: string | null;
     leadName: string | null;
   };
@@ -49,11 +58,24 @@ export function WhatsAppInbox({
 
   return (
     <div className="space-y-4">
-      {!configured ? (
-        <WhatsAppSetupBanner isAdmin={isAdmin} />
-      ) : null}
+      {!configured ? <WhatsAppSetupBanner isAdmin={isAdmin} /> : null}
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="flex flex-wrap gap-2 text-sm">
+        <Link
+          href="/whatsapp"
+          className="rounded-md bg-[var(--primary)] px-3 py-1.5 font-medium text-[var(--primary-foreground)]"
+        >
+          Inbox
+        </Link>
+        <Link
+          href="/whatsapp/equipo"
+          className="rounded-md border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--muted)]"
+        >
+          Equipo
+        </Link>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
           <div className="border-b border-[var(--border)] px-4 py-3">
             <p className="text-sm font-semibold">Bandeja</p>
@@ -77,6 +99,7 @@ export function WhatsAppInbox({
               session={thread.session}
               messages={thread.messages}
               canReply={configured}
+              currentUserId={currentUserId}
             />
           ) : (
             <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-sm text-[var(--muted-foreground)]">

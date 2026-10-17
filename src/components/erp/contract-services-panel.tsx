@@ -17,7 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateOnly } from "@/lib/dates";
 import { BILL_STATUS_LABELS, SERVICE_COST_CATEGORY_LABELS } from "@/lib/labels";
 import { formatMoney } from "@/lib/money";
-import { CONTRACT_SERVICE_PAID_BY_LABELS } from "@/features/contracts/lib/contract-services";
+import {
+  CONTRACT_SERVICE_PAID_BY_LABELS,
+  serviceCategoryHasMeter,
+} from "@/features/contracts/lib/contract-services";
 import {
   addContractServiceAction,
   removeContractServiceAction,
@@ -33,6 +36,8 @@ export type ContractServiceRow = {
   concept: string;
   amount: string;
   paidBy: ContractServicePaidBy;
+  providerContractNumber: string | null;
+  meterNumber: string | null;
 };
 
 export type OpenBillOption = {
@@ -48,6 +53,8 @@ type EditState = {
   service: ContractServiceRow;
   amount: string;
   paidBy: ContractServicePaidBy;
+  providerContractNumber: string;
+  meterNumber: string;
   scope: "REST_OF_CONTRACT" | "SINGLE_BILL";
   fromYear: string;
   fromMonth: string;
@@ -73,6 +80,8 @@ export function ContractServicesPanel({
 }: Props) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
+  const [addCategory, setAddCategory] =
+    useState<ServiceCostCategory>("OTHER");
   const [edit, setEdit] = useState<EditState | null>(null);
   const [addState, addAction, addPending] = useActionState(
     addContractServiceAction,
@@ -103,6 +112,8 @@ export function ContractServicesPanel({
       service,
       amount: service.amount,
       paidBy: service.paidBy,
+      providerContractNumber: service.providerContractNumber ?? "",
+      meterNumber: service.meterNumber ?? "",
       scope: "REST_OF_CONTRACT",
       fromYear: String(bill?.periodYear ?? contractStartYear),
       fromMonth: String(bill?.periodMonth ?? contractStartMonth),
@@ -147,6 +158,10 @@ export function ContractServicesPanel({
                 <p className="text-xs text-[var(--muted-foreground)]">
                   {SERVICE_COST_CATEGORY_LABELS[s.category]} · Paga{" "}
                   {CONTRACT_SERVICE_PAID_BY_LABELS[s.paidBy].toLowerCase()}
+                  {s.providerContractNumber
+                    ? ` · Contrato ${s.providerContractNumber}`
+                    : ""}
+                  {s.meterNumber ? ` · Medidor ${s.meterNumber}` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -187,7 +202,13 @@ export function ContractServicesPanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Tipo</Label>
-              <Select name="category" defaultValue="OTHER">
+              <Select
+                name="category"
+                value={addCategory}
+                onChange={(e) =>
+                  setAddCategory(e.target.value as ServiceCostCategory)
+                }
+              >
                 {(
                   Object.keys(
                     SERVICE_COST_CATEGORY_LABELS,
@@ -223,6 +244,19 @@ export function ContractServicesPanel({
                 ))}
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label>N° contrato del servicio</Label>
+              <Input
+                name="providerContractNumber"
+                placeholder="N° de cuenta / contrato"
+              />
+            </div>
+            {serviceCategoryHasMeter(addCategory) ? (
+              <div className="space-y-1">
+                <Label>N° medidor</Label>
+                <Input name="meterNumber" placeholder="N° de medidor" />
+              </div>
+            ) : null}
           </div>
           {addState && !addState.ok ? (
             <p className="text-sm text-[var(--destructive)]">{addState.error}</p>
@@ -296,6 +330,35 @@ export function ContractServicesPanel({
                   ))}
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>N° contrato del servicio</Label>
+                <Input
+                  name="providerContractNumber"
+                  value={edit.providerContractNumber}
+                  onChange={(e) =>
+                    setEdit({
+                      ...edit,
+                      providerContractNumber: e.target.value,
+                    })
+                  }
+                  placeholder="N° de cuenta / contrato"
+                />
+              </div>
+              {serviceCategoryHasMeter(edit.service.category) ? (
+                <div className="space-y-1">
+                  <Label>N° medidor</Label>
+                  <Input
+                    name="meterNumber"
+                    value={edit.meterNumber}
+                    onChange={(e) =>
+                      setEdit({ ...edit, meterNumber: e.target.value })
+                    }
+                    placeholder="N° de medidor"
+                  />
+                </div>
+              ) : (
+                <input type="hidden" name="meterNumber" value="" />
+              )}
             </div>
 
             <fieldset className="mt-4 space-y-2">

@@ -23,6 +23,7 @@ export async function assignAgentToChatSession(input: {
   const eligible = await isUserWhatsAppEligible(
     input.organizationId,
     input.agentUserId,
+    { area: session.requestedArea, ignoreSchedule: true },
   );
   const isAdmin = await prisma.organizationMember.findFirst({
     where: {
@@ -90,6 +91,47 @@ export async function closeChatSession(input: {
     status: "CLOSED",
     botStep: null,
   });
+  revalidatePath("/whatsapp");
+  return updated;
+}
+
+/** Devuelve la conversación al bot (menú de áreas). */
+export async function releaseChatSessionToBot(input: {
+  sessionId: string;
+  organizationId: string;
+  notifyCustomer?: boolean;
+}) {
+  const session = await prisma.whatsAppChatSession.findFirst({
+    where: { id: input.sessionId, organizationId: input.organizationId },
+  });
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+
+  const updated = await updateSessionStatus(input.sessionId, input.organizationId, {
+    status: "BOT_ACTIVE",
+    botStep: "AREA_MENU",
+    assignedAgent: { disconnect: true },
+  });
+
+  if (input.notifyCustomer !== false) {
+    const credentials = await getOrganizationWhatsAppConfig(input.organizationId);
+    if (credentials) {
+      const body =
+        "La conversación volvió al asistente automático. Escribí *menu* para ver las opciones.";
+      const waId = await sendWhatsAppText({
+        credentials,
+        toPhone: session.waContactPhone,
+        body,
+      });
+      await recordOutboundAgentMessage({
+        sessionId: session.id,
+        organizationId: session.organizationId,
+        body,
+        sentByUserId: null,
+        waMessageId: waId,
+      });
+    }
+  }
+
   revalidatePath("/whatsapp");
   return updated;
 }

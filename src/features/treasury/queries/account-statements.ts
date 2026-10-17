@@ -172,20 +172,24 @@ export async function listOpenTenantBills(opts?: {
 /** Facturas de proveedor con saldo para aplicar en OP. */
 export async function listOpenSupplierInvoices(opts?: {
   supplierId?: string;
+  workOrderId?: string;
 }) {
   const session = await requireStaff();
   const rows = await prisma.supplierInvoice.findMany({
     where: {
       paidAt: null,
       ...(opts?.supplierId ? { supplierId: opts.supplierId } : {}),
+      ...(opts?.workOrderId ? { workOrderId: opts.workOrderId } : {}),
       workOrder: { organizationId: session.organizationId },
     },
     include: {
       supplier: { select: { name: true } },
       workOrder: {
         select: {
+          code: true,
+          costBearer: true,
           property: { select: { title: true } },
-          contract: { select: { code: true } },
+          contract: { select: { code: true, id: true } },
         },
       },
     },
@@ -193,23 +197,103 @@ export async function listOpenSupplierInvoices(opts?: {
     take: 100,
   });
 
+  const { COST_BEARER_LABELS } = await import("@/lib/labels");
+
   return rows
     .map((inv) => {
       const balance = toNumber(inv.amount);
       const currency = inv.currency;
-      const code = inv.workOrder.contract?.code ?? inv.workOrder.property.title;
+      const place =
+        inv.workOrder.contract?.code ?? inv.workOrder.property.title;
       return {
         id: inv.id,
         number: inv.invoiceNumber ?? inv.id.slice(-6),
         currency,
         balance,
-        label: `${inv.invoiceNumber ?? "Factura"} · saldo ${balance.toLocaleString("es-AR", {
+        supplierId: inv.supplierId,
+        workOrderId: inv.workOrderId,
+        contractId: inv.workOrder.contract?.id ?? null,
+        label: `${inv.workOrder.code} · ${inv.invoiceNumber ?? "Factura"} · ${COST_BEARER_LABELS[inv.costBearer]} · saldo ${balance.toLocaleString("es-AR", {
           style: "currency",
           currency,
-        })} · ${code}`,
+        })} · ${place}`,
       };
     })
     .filter((i) => i.balance > 0.009);
+}
+
+/**
+ * Órdenes de trabajo pagables desde OP (con factura pendiente o cargo recuperable
+ * sin factura, para generar la factura al emitir la OP).
+ */
+export async function listPayableWorkOrdersForPaymentOrder(opts?: {
+  supplierId?: string;
+  workOrderId?: string;
+}) {
+  const session = await requireStaff();
+  const { COST_BEARER_LABELS } = await import("@/lib/labels");
+
+  const rows = await prisma.workOrder.findMany({
+    where: {
+      organizationId: session.organizationId,
+      status: { not: "CANCELLED" },
+      ...(opts?.workOrderId ? { id: opts.workOrderId } : {}),
+      ...(opts?.supplierId
+        ? {
+            OR: [
+              { assigneeId: opts.supplierId },
+              { invoices: { some: { supplierId: opts.supplierId, paidAt: null } } },
+            ],
+          }
+        : {}),
+      OR: [
+        { invoices: { some: { paidAt: null } } },
+        {
+          costBearer: { in: ["AGENCY_RECOVERABLE", "AGENCY"] },
+          assigneeId: { not: null },
+        },
+      ],
+    },
+    include: {
+      property: { select: { title: true } },
+      contract: { select: { id: true, code: true } },
+      assignee: { select: { id: true, name: true } },
+      invoices: {
+        where: { paidAt: null },
+        orderBy: { invoiceDate: "asc" },
+      },
+    },
+    orderBy: [{ requestedAt: "desc" }],
+    take: 80,
+  });
+
+  return rows
+    .map((wo) => {
+      const unpaid = wo.invoices[0];
+      const balance = unpaid ? toNumber(unpaid.amount) : 0;
+      const currency = unpaid?.currency ?? "ARS";
+      const place = wo.contract?.code ?? wo.property.title;
+      return {
+        id: wo.id,
+        label: `${wo.code} · ${COST_BEARER_LABELS[wo.costBearer]} · ${place}${
+          wo.assignee ? ` · ${wo.assignee.name}` : ""
+        }${
+          unpaid
+            ? ` · saldo ${balance.toLocaleString("es-AR", {
+                style: "currency",
+                currency,
+              })}`
+            : " · sin factura (se genera al pagar)"
+        }`,
+        balance,
+        currency,
+        contractId: wo.contract?.id ?? null,
+        supplierId: unpaid?.supplierId ?? wo.assigneeId,
+        invoiceId: unpaid?.id ?? null,
+        code: wo.code,
+        title: wo.title,
+      };
+    });
 }
 
 /** Rendiciones con saldo para aplicar en OP. */

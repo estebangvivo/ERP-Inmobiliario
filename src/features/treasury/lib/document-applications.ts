@@ -1,4 +1,4 @@
-import type { Prisma, PaymentMethod, BillStatus } from "@prisma/client";
+import type { Prisma, BillStatus, Currency } from "@prisma/client";
 import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { round2 } from "@/features/treasury/lib/cash-labels";
 
@@ -70,6 +70,65 @@ export async function replacePaymentOrderInvoiceApps(
       amount: round2(a.amount),
     })),
   });
+}
+
+/**
+ * Convierte aplicaciones a OT en aplicaciones a factura de proveedor.
+ * Si la OT no tiene factura pendiente, la crea con el monto indicado.
+ */
+export async function resolveWorkOrderAppsToInvoiceApps(
+  tx: Tx,
+  organizationId: string,
+  supplierId: string | null | undefined,
+  workOrderApps: DocumentApplicationInput[],
+  currency: string,
+): Promise<DocumentApplicationInput[]> {
+  const resolved: DocumentApplicationInput[] = [];
+
+  for (const app of workOrderApps.filter((a) => a.amount > 0.009)) {
+    const wo = await tx.workOrder.findFirst({
+      where: { id: app.documentId, organizationId },
+      include: {
+        invoices: {
+          where: { paidAt: null },
+          orderBy: { invoiceDate: "asc" },
+        },
+      },
+    });
+    if (!wo) {
+      throw new Error("Orden de trabajo no encontrada.");
+    }
+
+    const paySupplierId = supplierId || wo.assigneeId;
+    if (!paySupplierId) {
+      throw new Error(
+        `La OT ${wo.code} no tiene proveedor. Asignalo en la OT o elegilo en la orden de pago.`,
+      );
+    }
+
+    let invoice =
+      wo.invoices.find((i) => i.supplierId === paySupplierId) ??
+      wo.invoices[0] ??
+      null;
+
+    if (!invoice) {
+      invoice = await tx.supplierInvoice.create({
+        data: {
+          workOrderId: wo.id,
+          supplierId: paySupplierId,
+          amount: round2(app.amount),
+          currency: (currency || "ARS") as Currency,
+          invoiceDate: new Date(),
+          costBearer: wo.costBearer,
+          notes: `Generada automáticamente desde OP · ${wo.code}`,
+        },
+      });
+    }
+
+    resolved.push({ documentId: invoice.id, amount: round2(app.amount) });
+  }
+
+  return resolved;
 }
 
 export async function replacePaymentOrderSettlementApps(

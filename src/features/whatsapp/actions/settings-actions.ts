@@ -25,6 +25,9 @@ const agentRowSchema = z.object({
   weekdays: z.array(z.number().int().min(1).max(7)).min(1),
   hourStart: z.number().int().min(0).max(23),
   hourEnd: z.number().int().min(1).max(24),
+  areas: z
+    .array(z.enum(["SALES_RENTALS", "WORKS", "CONTRACTS", "CASH"]))
+    .default([]),
 });
 
 const agentsPayloadSchema = z.object({
@@ -127,6 +130,13 @@ export async function updateWhatsAppAgentsSettingsAction(
           error: "La hora de fin debe ser posterior a la de inicio en cada agente.",
         };
       }
+      if (row.enabled && row.areas.length === 0) {
+        return {
+          ok: false,
+          error:
+            "Cada agente habilitado debe tener al menos un área (Ventas/Alquileres, Obras, Contratos o Caja).",
+        };
+      }
     }
 
     const memberIds = parsed.data.agents.map((a) => a.memberId);
@@ -171,12 +181,13 @@ export async function updateWhatsAppAgentsSettingsAction(
               whatsappWeekdays: [...new Set(row.weekdays)].sort((a, b) => a - b),
               whatsappHourStart: row.hourStart,
               whatsappHourEnd: row.hourEnd,
+              whatsappAreas: row.areas,
             },
           }),
         ),
       );
     } catch {
-      /* Horarios extendidos opcionales */
+      /* Campos extendidos opcionales */
     }
 
     revalidatePath("/whatsapp");

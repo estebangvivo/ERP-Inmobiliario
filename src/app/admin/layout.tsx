@@ -15,10 +15,12 @@ export default async function AdminLayout({
     <ErpShell
       organizationRole={session.organizationRole ?? "ADMIN"}
       allowedModules={session.allowedModules}
+      userId={session.user.id}
       userName={session.user.name}
       organizationName={BRAND_NAME}
       organizationLogoSrc={null}
       showAdminNav
+      enableMessageNotifications={false}
     >
       {children}
     </ErpShell>

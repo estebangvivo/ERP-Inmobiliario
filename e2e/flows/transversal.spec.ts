@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loadFixtures, type E2EFixtures } from "../helpers/fixtures";
 
-test.describe.configure({ mode: "serial", order: "first" });
+test.describe.configure({ mode: "serial" });
 
 function parseMoney(text: string): number {
   const digits = text.replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", ".");
@@ -22,31 +22,30 @@ test.describe("Flujos transversales", () => {
     await page.goto(`/cobros/${fixtures.billId}`);
     await expect(page.locator("body")).toContainText(fixtures.contractCode);
 
-    const balance = await page.locator("#amount").inputValue();
-    expect(Number(balance)).toBe(fixtures.billTotalAmount);
+    await expect(page.getByTestId("treasury-receipt-form")).toBeVisible();
+    const amount = await page.getByTestId("treasury-payment-amount").inputValue();
+    expect(Number(amount)).toBe(fixtures.billTotalAmount);
 
-    await page.locator("#method").selectOption("CASH");
-    await page.getByTestId("payment-submit").click();
+    await page.getByTestId("treasury-payment-method").selectOption("CASH");
 
-    await expect(page.getByTestId("payment-success")).toBeVisible({
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByTestId("treasury-receipt-submit").click();
+
+    await expect(page).toHaveURL(/\/tesoreria\/recibos\/[^/]+/, {
       timeout: 30_000,
     });
-    await expect(page.getByTestId("payment-success")).toContainText(
-      /Recibo\s+[\w-]+\s+generado/i,
-    );
+    receiptId = page.url().match(/\/tesoreria\/recibos\/([^/?]+)/)?.[1] ?? null;
+    expect(receiptId).toBeTruthy();
 
-    const text = (await page.getByTestId("payment-success").textContent()) ?? "";
-    const match = text.match(/Recibo\s+([\w-]+)\s+generado/i);
+    const numberEl = page.locator("body");
+    await expect(numberEl).toContainText(/REC[-/]?\w+/i);
+    const bodyText = (await numberEl.textContent()) ?? "";
+    const match = bodyText.match(/\b(REC[-/\w]+)\b/i);
     expect(match).toBeTruthy();
     receiptNumber = match![1]!;
 
+    await page.goto(`/cobros/${fixtures.billId}`);
     await expect(page.getByTestId("bill-status")).toContainText(/Pagada/i);
-
-    const printLink = page.getByRole("link", {
-      name: /Abrir recibo para imprimir/i,
-    });
-    const href = await printLink.getAttribute("href");
-    receiptId = href?.match(/\/tesoreria\/recibos\/([^/]+)/)?.[1] ?? null;
 
     await page.goto("/tesoreria/caja");
     const balanceText = await page.getByTestId("daily-cash-balance").textContent();

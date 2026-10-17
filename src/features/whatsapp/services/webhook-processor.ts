@@ -119,17 +119,13 @@ async function handleInboundMessage(
     return;
   }
 
-  if (
-    session.status === "WAITING_AGENT" &&
-    inbound.body.toLowerCase().includes("menu")
-  ) {
-    // No reactivar bot automáticamente; solo notificar agentes.
-    publishWhatsAppInboxEvent({
-      type: "session.updated",
-      organizationId,
-      sessionId: session.id,
-    });
-  }
+  // Inbox en tiempo real cuando el bot ya no atiende.
+  publishWhatsAppInboxEvent({
+    type: "session.updated",
+    organizationId,
+    sessionId: session.id,
+    payload: { status: session.status },
+  });
 }
 
 export async function processWhatsAppWebhookPayload(

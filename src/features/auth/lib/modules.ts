@@ -15,6 +15,7 @@ export const APP_MODULE_KEYS = [
   "whatsapp",
   "ventas",
   "turnero",
+  "reportes",
   "usuarios",
   "ajustes",
   "manual",
@@ -56,6 +57,7 @@ export const APP_MODULES: AppModuleDef[] = [
   },
   { key: "ventas", label: "Ventas", pathPrefixes: ["/ventas"] },
   { key: "turnero", label: "Turnero", pathPrefixes: ["/turnero"] },
+  { key: "reportes", label: "Reportes", pathPrefixes: ["/reportes"] },
   { key: "usuarios", label: "Usuarios", pathPrefixes: ["/usuarios"] },
   { key: "ajustes", label: "Ajustes", pathPrefixes: ["/ajustes"] },
   { key: "manual", label: "Manual", pathPrefixes: ["/manual"] },
@@ -83,6 +85,7 @@ export const ROLE_DEFAULT_MODULES: Record<OrganizationRole, AppModuleKey[]> = {
     "whatsapp",
     "ventas",
     "turnero",
+    "reportes",
     "manual",
   ],
   OWNER: [
@@ -145,6 +148,7 @@ export const SIDEBAR_MODULE_BY_HREF: Record<string, AppModuleKey> = {
   "/whatsapp": "whatsapp",
   "/ventas": "ventas",
   "/turnero": "turnero",
+  "/reportes": "reportes",
   "/usuarios": "usuarios",
   "/personas": "contratos",
   "/ajustes": "ajustes",
@@ -171,6 +175,7 @@ export function moduleForPathname(pathname: string): AppModuleKey | null {
   if (pathname.startsWith("/whatsapp")) return "whatsapp";
   if (pathname.startsWith("/ventas")) return "ventas";
   if (pathname.startsWith("/turnero")) return "turnero";
+  if (pathname.startsWith("/reportes")) return "reportes";
   if (pathname.startsWith("/ajustes")) return "ajustes";
   if (pathname.startsWith("/manual")) return "manual";
   if (pathname.startsWith("/dashboard") || pathname === "/") return "home";

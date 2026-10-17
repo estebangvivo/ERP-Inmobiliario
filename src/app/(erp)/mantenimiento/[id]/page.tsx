@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/erp/page-chrome";
 import {
@@ -6,6 +7,7 @@ import {
   WorkOrderStatusButtons,
 } from "@/components/erp/work-order-forms";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/dates";
 import { COST_BEARER_LABELS, WORK_ORDER_STATUS_LABELS } from "@/lib/labels";
@@ -56,11 +58,26 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
     <div className="space-y-6">
       <PageHeader
         title={workOrder.code}
-        description={`${workOrder.title} · ${workOrder.property.title}`}
+        description={`${workOrder.title} · ${workOrder.property.title} · Cargo: ${COST_BEARER_LABELS[workOrder.costBearer]}`}
         actions={
-          <Badge variant="secondary">
-            {WORK_ORDER_STATUS_LABELS[workOrder.status]}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {WORK_ORDER_STATUS_LABELS[workOrder.status]}
+            </Badge>
+            {staff && workOrder.status !== "CANCELLED" ? (
+              <Link
+                href={`/tesoreria/ordenes-pago/new?workOrderId=${workOrder.id}${
+                  workOrder.assigneeId
+                    ? `&supplierId=${workOrder.assigneeId}`
+                    : ""
+                }`}
+              >
+                <Button size="sm" variant="outline">
+                  Emitir orden de pago
+                </Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

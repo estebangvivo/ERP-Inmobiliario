@@ -67,6 +67,7 @@ export const COST_BEARER_LABELS: Record<CostBearer, string> = {
   OWNER_DEDUCTIBLE: "Deducible propietario",
   TENANT: "Inquilino",
   AGENCY: "Agencia",
+  AGENCY_RECOVERABLE: "Gastos a recuperar por la inmobiliaria",
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {

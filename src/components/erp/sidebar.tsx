@@ -10,6 +10,7 @@ import { ROLE_LABELS } from "@/lib/labels";
 import { navForSession } from "@/lib/nav";
 import type { AppModuleKey } from "@/features/auth/lib/modules";
 import { OperadorSidebarWidget } from "@/features/turnero/components/operador-sidebar-widget";
+import { useStaffNotifications } from "@/features/whatsapp/components/staff-message-notifications";
 import { cn } from "@/lib/utils";
 
 type ErpSidebarProps = {
@@ -33,6 +34,7 @@ export function ErpSidebar({
   onNavigate,
 }: ErpSidebarProps) {
   const pathname = usePathname();
+  const notifications = useStaffNotifications();
   const items = navForSession(organizationRole, allowedModules, {
     includeAdmin: showAdminNav,
   });
@@ -100,7 +102,16 @@ export function ErpSidebar({
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {item.title}
+              <span className="min-w-0 flex-1 truncate">{item.title}</span>
+              {item.href === "/whatsapp" &&
+              notifications &&
+              notifications.deskUnread > 0 ? (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1.5 text-[10px] font-semibold text-emerald-950">
+                  {notifications.deskUnread > 9
+                    ? "9+"
+                    : notifications.deskUnread}
+                </span>
+              ) : null}
             </Link>
           );
         })}

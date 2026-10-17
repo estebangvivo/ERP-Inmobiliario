@@ -211,6 +211,8 @@ export default async function ContratoDetailPage({ params }: { params: Params })
             concept: s.concept,
             amount: s.amount.toString(),
             paidBy: s.paidBy,
+            providerContractNumber: s.providerContractNumber,
+            meterNumber: s.meterNumber,
           }))}
           openBills={openBills.map((b) => ({
             ...b,

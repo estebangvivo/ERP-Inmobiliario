@@ -16,7 +16,6 @@ import type { TreasuryPaymentMethod } from "@prisma/client";
 import type { TreasuryContractOption } from "@/features/treasury/queries/list-contracts-for-treasury";
 import type { TreasuryPaymentInput } from "@/features/treasury/lib/payments";
 import { DateInput } from "@/components/ui/date-input";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toDateInputValue } from "@/lib/dates";
 import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import { formatMoney, PAYMENT_METHOD_LABEL } from "@/features/treasury/lib/labels";
@@ -75,7 +74,16 @@ type TreasuryDocumentFormProps = {
     balance: number;
     currency: string;
   }[];
+  openWorkOrders?: {
+    id: string;
+    label: string;
+    balance: number;
+    currency: string;
+    contractId?: string | null;
+    supplierId?: string | null;
+  }[];
   defaultDocumentApps?: { documentId: string; amount: number }[];
+  defaultWorkOrderApps?: { documentId: string; amount: number }[];
   defaultConcept?: string;
   defaultAmount?: number;
   defaultPartyId?: string;
@@ -148,7 +156,9 @@ export function TreasuryDocumentForm({
   bankAccounts = [],
   openDocuments = [],
   openSettlements = [],
+  openWorkOrders = [],
   defaultDocumentApps = [],
+  defaultWorkOrderApps = [],
   defaultConcept = "",
   defaultAmount = 0,
   defaultPartyId,
@@ -217,6 +227,29 @@ export function TreasuryDocumentForm({
           }))
       : [],
   );
+  const [workOrderApps, setWorkOrderApps] = useState<
+    { key: string; documentId: string; amount: string }[]
+  >(() => {
+    if (kind !== "payment-order") return [];
+    if (defaultWorkOrderApps.some((a) => a.documentId)) {
+      return defaultWorkOrderApps
+        .filter((a) => a.documentId)
+        .map((a) => ({
+          key: Math.random().toString(36).slice(2),
+          documentId: a.documentId,
+          amount: a.amount > 0 ? String(a.amount) : "",
+        }));
+    }
+    return openWorkOrders.length > 0
+      ? [
+          {
+            key: Math.random().toString(36).slice(2),
+            documentId: "",
+            amount: "",
+          },
+        ]
+      : [];
+  });
   const [settlementApps, setSettlementApps] = useState<
     { key: string; documentId: string; amount: string }[]
   >([]);
@@ -457,6 +490,13 @@ export function TreasuryDocumentForm({
         }))
         .filter((a) => a.documentId && a.amount > 0);
 
+      const parsedWorkOrderApps = workOrderApps
+        .map((a) => ({
+          documentId: a.documentId,
+          amount: Number(String(a.amount).replace(",", ".")) || 0,
+        }))
+        .filter((a) => a.documentId && a.amount > 0);
+
       const result =
         kind === "receipt"
           ? await createReceipt({
@@ -470,6 +510,7 @@ export function TreasuryDocumentForm({
               supplierId: partyId || undefined,
               partyName: partyName || undefined,
               invoiceApps: parsedInvoiceApps,
+              workOrderApps: parsedWorkOrderApps,
               settlementApps: parsedSettlementApps,
             });
 
@@ -509,7 +550,11 @@ export function TreasuryDocumentForm({
   const linesDiff = Math.round((linesTotal - paymentsTotal) * 100) / 100;
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-6"
+      data-testid={kind === "receipt" ? "treasury-receipt-form" : "treasury-payment-order-form"}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="block text-sm">
           <Label className="mb-1">Fecha</Label>
@@ -543,12 +588,16 @@ export function TreasuryDocumentForm({
               emptyLabel="Sin catálogo / otro"
             />
           ) : (
-            <SearchableSelect
+            <PartyPersonSearchSelect
+              kind="SUPPLIER"
+              name="partyId"
               value={partyId}
-              onChange={onPartyChange}
+              onChange={(id, person) => {
+                onPartyChange(id);
+                if (person?.name) setPartyName(person.name);
+              }}
+              options={parties}
               emptyLabel="Sin catálogo / otro"
-              placeholder={`Elegir ${partyLabel.toLowerCase()}…`}
-              options={parties.map((p) => ({ value: p.id, label: p.name }))}
             />
           )}
         </div>
@@ -756,6 +805,100 @@ export function TreasuryDocumentForm({
         </section>
       ) : null}
 
+      {kind === "payment-order" && openWorkOrders.length > 0 ? (
+        <section className="space-y-3">
+          <h3 className="font-medium">Aplicar a órdenes de trabajo</h3>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Incluye OT con factura pendiente y OT con cargo recuperable (si no
+            hay factura, se genera al crear la OP).
+          </p>
+          {workOrderApps.map((app) => (
+            <div key={app.key} className="grid gap-2 sm:grid-cols-3">
+              <Select
+                value={app.documentId}
+                onChange={(e) => {
+                  const wo = openWorkOrders.find((w) => w.id === e.target.value);
+                  setWorkOrderApps((prev) =>
+                    prev.map((a) =>
+                      a.key === app.key
+                        ? {
+                            ...a,
+                            documentId: e.target.value,
+                            amount:
+                              wo && wo.balance > 0
+                                ? String(wo.balance)
+                                : a.amount,
+                          }
+                        : a,
+                    ),
+                  );
+                  if (wo?.contractId) {
+                    setLines((prev) =>
+                      prev.length === 1
+                        ? [{ ...prev[0], contractId: wo.contractId! }]
+                        : prev,
+                    );
+                  }
+                  if (wo?.supplierId && !partyId) {
+                    onPartyChange(wo.supplierId);
+                  }
+                }}
+              >
+                <option value="">Elegir OT…</option>
+                {openWorkOrders.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                type="number"
+                step="0.01"
+                value={app.amount}
+                onChange={(e) =>
+                  setWorkOrderApps((prev) =>
+                    prev.map((a) =>
+                      a.key === app.key ? { ...a, amount: e.target.value } : a,
+                    ),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setWorkOrderApps((prev) =>
+                    prev.length > 1
+                      ? prev.filter((a) => a.key !== app.key)
+                      : prev,
+                  )
+                }
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setWorkOrderApps((prev) => [
+                ...prev,
+                {
+                  key: Math.random().toString(36).slice(2),
+                  documentId: "",
+                  amount: "",
+                },
+              ])
+            }
+          >
+            + Orden de trabajo
+          </Button>
+        </section>
+      ) : null}
+
       {kind === "payment-order" && openDocuments.length > 0 ? (
         <section className="space-y-3">
           <h3 className="font-medium">Aplicar a facturas</h3>
@@ -892,12 +1035,23 @@ export function TreasuryDocumentForm({
             <div>
               <Label>Medio</Label>
               <Select
+                data-testid="treasury-payment-method"
                 value={payment.method}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const method = e.target.value as TreasuryPaymentMethod;
                   updatePayment(payment.key, {
-                    method: e.target.value as TreasuryPaymentMethod,
-                  })
-                }
+                    method,
+                    isElectronicCheck: undefined,
+                    ...(method !== "CHECK"
+                      ? {
+                          checkNumber: "",
+                          checkBank: "",
+                          checkDueDate: "",
+                        }
+                      : {}),
+                    ...(method !== "TRANSFER" ? { bankAccountId: "" } : {}),
+                  });
+                }}
               >
                 {METHOD_OPTIONS.map((m) => (
                   <option key={m} value={m}>
@@ -909,6 +1063,7 @@ export function TreasuryDocumentForm({
             <div>
               <Label>Monto</Label>
               <Input
+                data-testid="treasury-payment-amount"
                 type="number"
                 step="0.01"
                 value={payment.amount || ""}
@@ -976,29 +1131,69 @@ export function TreasuryDocumentForm({
             {payment.method === "CHECK" &&
             (kind === "receipt" || payment.isOwnCheck) ? (
               <div className="sm:col-span-4 grid gap-2 sm:grid-cols-2">
-                <Input
-                  placeholder="N° cheque"
-                  value={payment.checkNumber ?? ""}
-                  onChange={(e) =>
-                    updatePayment(payment.key, { checkNumber: e.target.value })
-                  }
-                />
-                <Input
-                  placeholder="Banco"
-                  value={payment.checkBank ?? ""}
-                  onChange={(e) =>
-                    updatePayment(payment.key, { checkBank: e.target.value })
-                  }
-                />
-                <DateInput
-                  value={payment.checkDueDate ?? ""}
-                  onChange={(iso) =>
-                    updatePayment(payment.key, { checkDueDate: iso })
-                  }
-                />
-                <p className="text-xs text-[var(--muted-foreground)] self-center">
-                  {checkFormatLabel(Boolean(payment.isElectronicCheck))}
-                </p>
+                <div className="space-y-1">
+                  <Label>N° cheque</Label>
+                  <Input
+                    placeholder="N° cheque"
+                    value={payment.checkNumber ?? ""}
+                    onChange={(e) =>
+                      updatePayment(payment.key, {
+                        checkNumber: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Banco</Label>
+                  <Input
+                    placeholder="Banco"
+                    value={payment.checkBank ?? ""}
+                    onChange={(e) =>
+                      updatePayment(payment.key, {
+                        checkBank: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Vencimiento</Label>
+                  <DateInput
+                    value={payment.checkDueDate ?? ""}
+                    onChange={(iso) =>
+                      updatePayment(payment.key, { checkDueDate: iso })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Tipo de cheque</Label>
+                  <Select
+                    data-testid="treasury-check-type"
+                    required
+                    value={
+                      typeof payment.isElectronicCheck === "boolean"
+                        ? payment.isElectronicCheck
+                          ? "true"
+                          : "false"
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      updatePayment(payment.key, {
+                        isElectronicCheck:
+                          v === "" ? undefined : v === "true",
+                      });
+                    }}
+                  >
+                    <option value="">Elegir…</option>
+                    <option value="false">Cheque físico</option>
+                    <option value="true">Cheque electrónico</option>
+                  </Select>
+                  {typeof payment.isElectronicCheck === "boolean" ? (
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {checkFormatLabel(payment.isElectronicCheck)}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>
@@ -1016,7 +1211,15 @@ export function TreasuryDocumentForm({
         </p>
       ) : null}
 
-      <Button type="submit" disabled={pending}>
+      <Button
+        type="submit"
+        disabled={pending}
+        data-testid={
+          kind === "receipt"
+            ? "treasury-receipt-submit"
+            : "treasury-payment-order-submit"
+        }
+      >
         {pending ? "Guardando…" : kind === "receipt" ? "Crear recibo" : "Crear orden de pago"}
       </Button>
     </form>

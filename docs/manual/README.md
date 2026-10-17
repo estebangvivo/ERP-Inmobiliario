@@ -3,6 +3,8 @@
 - **Manual completo:** [MANUAL-USUARIO.md](./MANUAL-USUARIO.md)
 - **Capturas:** carpeta [`images/`](./images/)
 
+Incluye el módulo **Reportes** (flujo e pendientes, gastos a recuperar, morosidad).
+
 ## Regenerar capturas
 
 Con el servidor local levantado:

@@ -29,16 +29,36 @@ export async function recordInboundCustomerMessage(input: {
     },
   });
 
-  await prisma.whatsAppChatSession.update({
+  const session = await prisma.whatsAppChatSession.update({
     where: { id: input.sessionId },
     data: { lastMessageAt: new Date() },
+    select: {
+      assignedAgentId: true,
+      status: true,
+      waContactName: true,
+      waContactPhone: true,
+    },
   });
+
+  const notifyUserIds =
+    session.status === "AGENT_HANDLED" && session.assignedAgentId
+      ? [session.assignedAgentId]
+      : [];
 
   publishWhatsAppInboxEvent({
     type: "message.created",
     organizationId: input.organizationId,
     sessionId: input.sessionId,
-    payload: { messageId: message.id, direction: "INBOUND" },
+    payload: {
+      messageId: message.id,
+      direction: "INBOUND",
+      status: session.status,
+      assignedAgentId: session.assignedAgentId,
+      notifyUserIds,
+      senderName: session.waContactName ?? session.waContactPhone,
+      preview: input.body.slice(0, 160),
+      href: `/whatsapp?session=${input.sessionId}`,
+    },
   });
 
   return message;
@@ -77,7 +97,7 @@ export async function recordOutboundAgentMessage(input: {
   sessionId: string;
   organizationId: string;
   body: string;
-  sentByUserId: string;
+  sentByUserId?: string | null;
   waMessageId?: string | null;
 }) {
   const message = await prisma.whatsAppMessage.create({
@@ -89,7 +109,7 @@ export async function recordOutboundAgentMessage(input: {
       senderType: "AGENT",
       body: input.body,
       messageType: "text",
-      sentByUserId: input.sentByUserId,
+      sentByUserId: input.sentByUserId ?? null,
     },
   });
 

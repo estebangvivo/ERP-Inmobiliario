@@ -1,4 +1,9 @@
-import type { Prisma, BillStatus, Currency } from "@prisma/client";
+import type {
+  Prisma,
+  BillStatus,
+  Currency,
+  PaymentMethod,
+} from "@prisma/client";
 import { formatInstallmentLabel } from "@/features/billing/lib/installment-label";
 import { round2 } from "@/features/treasury/lib/cash-labels";
 

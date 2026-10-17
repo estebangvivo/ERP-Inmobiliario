@@ -242,7 +242,7 @@ export async function listSuppliersForTreasury() {
         some: { organizationId: session.organizationId, role: "SUPPLIER" },
       },
     },
-    select: { id: true, name: true },
+    select: { id: true, name: true, documentNumber: true },
     orderBy: { name: "asc" },
   });
 }

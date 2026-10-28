@@ -57,6 +57,9 @@ export const propertyUpdateSchema = propertyCreateSchema.extend({
 export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
   HOUSE: "Casa",
   APARTMENT: "Departamento",
+  DUPLEX: "Dúplex",
+  STUDIO: "Monoambiente",
+  GARAGE: "Cochera",
   COMMERCIAL: "Comercial",
   LAND: "Terreno",
   OFFICE: "Oficina",

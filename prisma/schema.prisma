@@ -1086,6 +1086,9 @@ enum PropertyStatus {
 enum PropertyType {
   HOUSE
   APARTMENT
+  DUPLEX
+  STUDIO
+  GARAGE
   COMMERCIAL
   LAND
   OFFICE

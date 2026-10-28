@@ -1,9 +1,15 @@
 import Link from "next/link";
-import { OperationType, PropertyStatus, Prisma } from "@prisma/client";
+import {
+  OperationType,
+  PropertyStatus,
+  PropertyType,
+  Prisma,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
 import { propertyScopeWhere } from "@/lib/tenant-scope";
 import { formatPropertyPrices } from "@/lib/property-prices";
+import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +32,8 @@ type SearchParams = Promise<{
   q?: string;
   status?: string;
   operationType?: string;
+  propertyType?: string;
+  ownerId?: string;
   portal?: string;
   page?: string;
   pageSize?: string;
@@ -42,12 +50,16 @@ export default async function PropiedadesPage({
   const q = params.q?.trim() ?? "";
   const status = params.status as PropertyStatus | undefined;
   const operationType = params.operationType as OperationType | undefined;
+  const propertyType = params.propertyType as PropertyType | undefined;
+  const ownerId = params.ownerId?.trim() || "";
   const portal = params.portal === "si" || params.portal === "no" ? params.portal : "";
   const pageSize = parseListPageSize(params.pageSize);
   const listParams = {
     q: q || undefined,
     status: status || undefined,
     operationType: operationType || undefined,
+    propertyType: propertyType || undefined,
+    ownerId: ownerId || undefined,
     portal: portal || undefined,
     pageSize: pageSize !== 10 ? String(pageSize) : undefined,
   };
@@ -67,6 +79,10 @@ export default async function PropiedadesPage({
         : {},
       status ? { status } : {},
       operationType ? { operationType } : {},
+      propertyType ? { propertyType } : {},
+      ownerId
+        ? { ownerships: { some: { ownerId } } }
+        : {},
       portal === "si"
         ? { publishedAt: { not: null } }
         : portal === "no"
@@ -75,7 +91,23 @@ export default async function PropiedadesPage({
     ],
   };
 
-  const total = await prisma.property.count({ where });
+  const [total, owners] = await Promise.all([
+    prisma.property.count({ where }),
+    prisma.membership.findMany({
+      where: {
+        organizationId: session.organizationId,
+        role: "OWNER",
+        user: {
+          isActive: true,
+          ...excludePlatformSuperadminFromUser(),
+        },
+      },
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: { user: { name: "asc" } },
+    }),
+  ]);
   const page = clampListPage(parseListPage(params.page), total, pageSize);
   const properties = await prisma.property.findMany({
     where,
@@ -101,7 +133,7 @@ export default async function PropiedadesPage({
         }
       />
 
-      <FilterBar>
+      <FilterBar className="lg:grid-cols-3 xl:grid-cols-6">
         <Input name="q" placeholder="Buscar título, dirección o ciudad" defaultValue={q} />
         <Select name="status" defaultValue={status ?? ""}>
           <option value="">Todos los estados</option>
@@ -113,6 +145,20 @@ export default async function PropiedadesPage({
           <option value="">Todas las operaciones</option>
           {(Object.keys(OPERATION_LABELS) as OperationType[]).map((o) => (
             <option key={o} value={o}>{OPERATION_LABELS[o]}</option>
+          ))}
+        </Select>
+        <Select name="propertyType" defaultValue={propertyType ?? ""}>
+          <option value="">Todos los tipos</option>
+          {(Object.keys(PROPERTY_TYPE_LABELS) as PropertyType[]).map((t) => (
+            <option key={t} value={t}>{PROPERTY_TYPE_LABELS[t]}</option>
+          ))}
+        </Select>
+        <Select name="ownerId" defaultValue={ownerId}>
+          <option value="">Todos los propietarios</option>
+          {owners.map((m) => (
+            <option key={m.user.id} value={m.user.id}>
+              {m.user.name}
+            </option>
           ))}
         </Select>
         <Select name="portal" defaultValue={portal}>

@@ -93,7 +93,7 @@ export default async function PropiedadesPage({
 
   const [total, owners] = await Promise.all([
     prisma.property.count({ where }),
-    prisma.membership.findMany({
+    prisma.organizationMember.findMany({
       where: {
         organizationId: session.organizationId,
         role: "OWNER",

@@ -956,6 +956,76 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
   return { applied, skipped, percent: input.percent, effective, rows };
 }
 
+/**
+ * Reconstruye el reporte de contratos ajustados por una carga de índices
+ * (año/mes de carga + período), sin volver a aplicar aumentos.
+ */
+export async function getIndexAdjustmentReport(input: {
+  organizationId: string;
+  periodYear: number;
+  periodMonth: number;
+  periodMonths: number;
+}) {
+  const effective = addMonths(input.periodYear, input.periodMonth, 1);
+  const effectiveFrom = new Date(
+    Date.UTC(effective.year, effective.month - 1, 1),
+  );
+  const loadTag = `carga ${input.periodMonth}/${input.periodYear}`;
+  const periodTag = `período ${input.periodMonths}m`;
+
+  const adjustments = await prisma.contractAdjustment.findMany({
+    where: {
+      appliedRent: { not: null },
+      periodMonths: input.periodMonths,
+      effectiveFrom,
+      notes: { contains: loadTag },
+      contract: { organizationId: input.organizationId },
+    },
+    include: {
+      contract: {
+        select: {
+          id: true,
+          code: true,
+          currency: true,
+          property: { select: { title: true } },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+
+  const rows: IndexAdjustmentReportRow[] = [];
+  let percent: number | undefined;
+
+  for (const adj of adjustments) {
+    if (adj.notes && !adj.notes.includes(periodTag)) continue;
+    const newRent = Number(adj.appliedRent);
+    const pct = adj.customPercent != null ? Number(adj.customPercent) : null;
+    if (!(newRent > 0) || pct == null || !(pct > 0)) continue;
+    if (percent == null) percent = pct;
+    const previousRent = round2(newRent / (1 + pct / 100));
+    rows.push({
+      contractId: adj.contract.id,
+      contractCode: adj.contract.code,
+      propertyTitle: adj.contract.property.title,
+      currency: adj.contract.currency,
+      previousRent,
+      newRent,
+      percent: pct,
+    });
+  }
+
+  rows.sort((a, b) => a.contractCode.localeCompare(b.contractCode, "es"));
+
+  return {
+    rows,
+    percent: percent ?? null,
+    effectiveLabel: `${String(effective.month).padStart(2, "0")}/${effective.year}`,
+    loadLabel: `${String(input.periodMonth).padStart(2, "0")}/${input.periodYear}`,
+    periodMonths: input.periodMonths,
+  };
+}
+
 export async function recordPayment(input: {
   tenantBillId: string;
   amount: number;

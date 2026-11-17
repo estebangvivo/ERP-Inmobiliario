@@ -151,6 +151,9 @@ export default async function ContratosPage({
         actions={
           staff ? (
             <div className="flex flex-wrap gap-2">
+              <Link href="/contratos/por-vencer">
+                <Button variant="outline">Próximos a vencer</Button>
+              </Link>
               <a href="/api/export/contratos">
                 <Button variant="outline">Exportar CSV</Button>
               </a>
@@ -158,7 +161,11 @@ export default async function ContratosPage({
                 <Button>Nuevo contrato</Button>
               </Link>
             </div>
-          ) : undefined
+          ) : (
+            <Link href="/contratos/por-vencer">
+              <Button variant="outline">Próximos a vencer</Button>
+            </Link>
+          )
         }
       />
 

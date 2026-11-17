@@ -110,9 +110,20 @@ export default async function ContratoDetailPage({ params }: { params: Params })
         title={contract.code}
         description={`${contract.property.title} · Vigencia ${formatDateOnly(contract.startDate)} – ${formatDateOnly(contract.endDate)}`}
         actions={
-          <Badge variant={contract.status === "ACTIVE" ? "success" : "secondary"}>
-            {CONTRACT_STATUS_LABELS[contract.status]}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant={contract.status === "ACTIVE" ? "success" : "secondary"}
+            >
+              {CONTRACT_STATUS_LABELS[contract.status]}
+            </Badge>
+            {staff &&
+            (contract.status === "ACTIVE" ||
+              contract.status === "EXPIRED") ? (
+              <Link href={`/contratos/renovar/${contract.id}`}>
+                <Button variant="outline">Renovar</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

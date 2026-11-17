@@ -44,13 +44,20 @@ function buildInitialRows(): ContractServiceDraft[] {
 }
 
 type Props = {
+  /** Solo controlado si se pasa junto con onChange. */
   value?: ContractServiceDraft[];
+  /** Siembra el estado interno una sola vez (p. ej. renovación). */
+  initialValue?: ContractServiceDraft[];
   onChange?: (rows: ContractServiceDraft[]) => void;
 };
 
-export function ContractServicesFields({ value, onChange }: Props) {
+export function ContractServicesFields({
+  value,
+  initialValue,
+  onChange,
+}: Props) {
   const [internalRows, setInternalRows] = useState<ContractServiceDraft[]>(
-    () => value ?? buildInitialRows(),
+    () => value ?? initialValue ?? buildInitialRows(),
   );
   const rows = value ?? internalRows;
 

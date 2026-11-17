@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Currency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { IndexAdjustmentReportPanel } from "@/components/erp/index-adjustment-report";
 import {
+  getIndexAdjustmentReportAction,
   upsertIndexRatesAction,
   type IndexRatesActionResult,
 } from "@/server/actions/index-rates";
@@ -16,7 +16,7 @@ import {
   INDEX_PERIOD_OPTIONS,
   indexRateKey,
 } from "@/lib/index-periods";
-import { formatMoney } from "@/lib/money";
+import type { IndexAdjustmentReportRow } from "@/server/services/billing";
 
 const initial: IndexRatesActionResult | null = null;
 
@@ -52,6 +52,18 @@ export function IndexRatesForm({
     upsertIndexRatesAction,
     initial,
   );
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, startReportTransition] = useTransition();
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportRows, setReportRows] = useState<IndexAdjustmentReportRow[]>([]);
+  const [reportPercent, setReportPercent] = useState<number | null>(null);
+  const [reportEffectiveLabel, setReportEffectiveLabel] = useState<
+    string | null
+  >(null);
+  const [reportLoadLabel, setReportLoadLabel] = useState<string | null>(null);
+  const [reportPeriodMonths, setReportPeriodMonths] = useState<number | null>(
+    null,
+  );
 
   const key = useMemo(
     () => indexRateKey(periodYear, periodMonth, periodMonths),
@@ -66,7 +78,41 @@ export function IndexRatesForm({
     if (state?.ok) router.refresh();
   }, [state, router]);
 
-  const adjustments = state?.ok ? state.adjustments ?? [] : [];
+  useEffect(() => {
+    if (state?.ok && (state.adjustments?.length ?? 0) > 0) {
+      setReportRows(state.adjustments ?? []);
+      setReportPercent(state.percent ?? null);
+      setReportEffectiveLabel(state.effectiveLabel ?? null);
+      setReportLoadLabel(
+        `${String(periodMonth).padStart(2, "0")}/${periodYear}`,
+      );
+      setReportPeriodMonths(periodMonths);
+    }
+  }, [state, periodMonth, periodYear, periodMonths]);
+
+  const liveAdjustments = state?.ok ? state.adjustments ?? [] : [];
+
+  function openSavedReport() {
+    setReportError(null);
+    startReportTransition(async () => {
+      const result = await getIndexAdjustmentReportAction({
+        periodYear,
+        periodMonth,
+        periodMonths,
+      });
+      if (!result.ok) {
+        setReportError(result.error);
+        setReportOpen(true);
+        return;
+      }
+      setReportRows(result.rows);
+      setReportPercent(result.percent);
+      setReportEffectiveLabel(result.effectiveLabel);
+      setReportLoadLabel(result.loadLabel);
+      setReportPeriodMonths(result.periodMonths);
+      setReportOpen(true);
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -175,72 +221,77 @@ export function IndexRatesForm({
         ) : null}
       </form>
 
-      {state?.ok && adjustments.length > 0 ? (
-        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div>
-            <h4 className="text-base font-semibold">
-              Reporte de contratos ajustados
-            </h4>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Índice aplicado: {state.percent}%
-              {state.effectiveLabel
-                ? ` · vigencia ${state.effectiveLabel}`
-                : ""}
-              {" · "}
-              {adjustments.length} contrato
-              {adjustments.length === 1 ? "" : "s"}
-            </p>
-          </div>
-          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-[var(--border)] bg-[var(--muted)]/40 text-xs text-[var(--muted-foreground)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Contrato</th>
-                  <th className="px-3 py-2 font-medium">Propiedad</th>
-                  <th className="px-3 py-2 font-medium text-right">
-                    Pagaba
-                  </th>
-                  <th className="px-3 py-2 font-medium text-right">
-                    Nuevo alquiler
-                  </th>
-                  <th className="px-3 py-2 font-medium text-right">
-                    Diferencia
-                  </th>
-                  <th className="px-3 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {adjustments.map((row) => {
-                  const diff = row.newRent - row.previousRent;
-                  const currency = row.currency as Currency;
-                  return (
-                    <tr key={row.contractId}>
-                      <td className="px-3 py-2 font-medium">
-                        {row.contractCode}
-                      </td>
-                      <td className="px-3 py-2">{row.propertyTitle}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatMoney(String(row.previousRent), currency)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium tabular-nums">
-                        {formatMoney(String(row.newRent), currency)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                        +{formatMoney(String(diff), currency)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Link
-                          href={`/contratos/${row.contractId}`}
-                          className="text-[var(--primary)] hover:underline"
-                        >
-                          Ver
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={openSavedReport}
+          disabled={reportLoading}
+        >
+          {reportLoading
+            ? "Cargando reporte…"
+            : "Ver reporte de ajustes de este período"}
+        </Button>
+      </div>
+
+      {state?.ok && liveAdjustments.length > 0 ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+          <IndexAdjustmentReportPanel
+            percent={state.percent}
+            effectiveLabel={state.effectiveLabel}
+            loadLabel={`${String(periodMonth).padStart(2, "0")}/${periodYear}`}
+            periodMonths={periodMonths}
+            adjustments={liveAdjustments}
+          />
+        </div>
+      ) : null}
+
+      {reportOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="index-adjustment-report-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setReportOpen(false);
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg">
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+              <div>
+                <h3
+                  id="index-adjustment-report-title"
+                  className="text-base font-semibold"
+                >
+                  Reporte de ajustes guardado
+                </h3>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Contratos afectados por la carga seleccionada (sin reaplicar
+                  índices).
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setReportOpen(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
+            <div className="overflow-auto p-4">
+              {reportError ? (
+                <p className="text-sm text-[var(--destructive)]">{reportError}</p>
+              ) : (
+                <IndexAdjustmentReportPanel
+                  percent={reportPercent}
+                  effectiveLabel={reportEffectiveLabel}
+                  loadLabel={reportLoadLabel}
+                  periodMonths={reportPeriodMonths}
+                  adjustments={reportRows}
+                />
+              )}
+            </div>
           </div>
         </div>
       ) : null}

@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/session";
 import { INDEX_PERIOD_OPTIONS } from "@/lib/index-periods";
 import {
   applyDueAdjustmentsFromIndexRates,
+  getIndexAdjustmentReport,
   type IndexAdjustmentReportRow,
 } from "@/server/services/billing";
 
@@ -138,6 +139,65 @@ export async function upsertIndexRatesAction(
       ok: false,
       error:
         e instanceof Error ? e.message : "No se pudieron guardar los índices",
+    };
+  }
+}
+
+export type IndexAdjustmentReportActionResult =
+  | {
+      ok: true;
+      rows: IndexAdjustmentReportRow[];
+      percent: number | null;
+      effectiveLabel: string;
+      loadLabel: string;
+      periodMonths: number;
+    }
+  | { ok: false; error: string };
+
+/** Reporte histórico de contratos ajustados al cargar índices (sin reaplicar). */
+export async function getIndexAdjustmentReportAction(input: {
+  periodYear: number;
+  periodMonth: number;
+  periodMonths: number;
+}): Promise<IndexAdjustmentReportActionResult> {
+  const session = await requireStaff();
+  const { periodYear, periodMonth, periodMonths } = input;
+
+  if (!periodYear || !periodMonth || periodMonth < 1 || periodMonth > 12) {
+    return { ok: false, error: "Año/mes inválidos." };
+  }
+  if (
+    !periodMonths ||
+    !(INDEX_PERIOD_OPTIONS as readonly number[]).includes(periodMonths)
+  ) {
+    return {
+      ok: false,
+      error: `Período inválido. Usá: ${INDEX_PERIOD_OPTIONS.join(", ")} meses.`,
+    };
+  }
+
+  try {
+    const report = await getIndexAdjustmentReport({
+      organizationId: session.organizationId,
+      periodYear,
+      periodMonth,
+      periodMonths,
+    });
+    return {
+      ok: true,
+      rows: report.rows,
+      percent: report.percent,
+      effectiveLabel: report.effectiveLabel,
+      loadLabel: report.loadLabel,
+      periodMonths: report.periodMonths,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? e.message
+          : "No se pudo obtener el reporte de ajustes",
     };
   }
 }

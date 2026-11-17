@@ -161,6 +161,28 @@ export async function createContractAction(
     };
   }
 
+  const renewFromContractId = String(
+    formData.get("renewFromContractId") ?? "",
+  ).trim();
+  let renewFromCode: string | null = null;
+  if (renewFromContractId) {
+    const previous = await prisma.contract.findFirst({
+      where: {
+        id: renewFromContractId,
+        organizationId: session.organizationId,
+        status: { in: ["ACTIVE", "EXPIRED"] },
+      },
+      select: { id: true, code: true },
+    });
+    if (!previous) {
+      return {
+        ok: false,
+        error: "El contrato a renovar no existe o ya no se puede renovar.",
+      };
+    }
+    renewFromCode = previous.code;
+  }
+
   const code = await nextContractCode(session.organizationId);
 
   const property = await prisma.property.findFirst({
@@ -220,6 +242,13 @@ export async function createContractAction(
     },
   });
 
+  if (renewFromContractId) {
+    await prisma.contract.update({
+      where: { id: renewFromContractId },
+      data: { status: "RENEWED" },
+    });
+  }
+
   await ensureOwnerOwnership(d.propertyId, d.ownerId);
 
   await prisma.property.update({
@@ -249,7 +278,11 @@ export async function createContractAction(
     });
 
   revalidatePath("/contratos");
+  revalidatePath("/contratos/por-vencer");
   revalidatePath(`/contratos/${contract.id}`);
+  if (renewFromContractId) {
+    revalidatePath(`/contratos/${renewFromContractId}`);
+  }
   revalidatePath("/gestion/propiedades");
   revalidatePath("/rendiciones");
   revalidatePath("/cobros");
@@ -265,9 +298,13 @@ export async function createContractAction(
   const attachmentsWarn = attachmentsResult.error
     ? ` ${attachmentsResult.error}`
     : "";
+  const renewNote =
+    renewFromCode != null
+      ? ` Renovación de ${renewFromCode} (marcado como Renovado).`
+      : "";
   return {
     ok: true,
-    message: `Contrato creado con ${bills.length} cuota${bills.length === 1 ? "" : "s"} de alquiler (vencimiento día 10).${commissionNote}${attachmentsNote}${attachmentsWarn}`,
+    message: `Contrato ${renewFromCode ? "renovado" : "creado"} con ${bills.length} cuota${bills.length === 1 ? "" : "s"} de alquiler (vencimiento día 10).${commissionNote}${attachmentsNote}${attachmentsWarn}${renewNote}`,
   };
 }
 

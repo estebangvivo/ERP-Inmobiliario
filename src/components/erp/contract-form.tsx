@@ -37,7 +37,10 @@ import {
   COMMISSION_MODES,
   type CommissionModeValue,
 } from "@/features/contracts/lib/commission";
-import { ContractServicesFields } from "@/components/erp/contract-services-fields";
+import {
+  ContractServicesFields,
+  type ContractServiceDraft,
+} from "@/components/erp/contract-services-fields";
 
 const initial: ActionResult | null = null;
 
@@ -51,6 +54,32 @@ type PropertyOpt = {
   currency?: string | null;
   ownerId?: string | null;
   ownerName?: string | null;
+};
+
+export type ContractCreateDefaults = {
+  renewFromContractId?: string;
+  renewFromCode?: string;
+  propertyId?: string;
+  ownerId?: string;
+  tenantId?: string;
+  guarantorIds?: string[];
+  startDate?: string;
+  endDate?: string;
+  initialRent?: string;
+  currency?: Currency;
+  depositAmount?: string;
+  lateFeeDailyRatePct?: string;
+  indexType?: AdjustmentIndex;
+  periodMonths?: string;
+  notes?: string;
+  includesOrdinaryExp?: boolean;
+  includesExtraordExp?: boolean;
+  commissionMode?: CommissionModeValue;
+  commissionValue?: string;
+  commissionTenantPct?: string;
+  commissionOwnerPct?: string;
+  commissionInstallments?: string;
+  services?: ContractServiceDraft[];
 };
 
 type PayerPreset = "OWNER" | "TENANT" | "SPLIT";
@@ -317,30 +346,45 @@ export function ContractCreateForm({
   owners,
   tenants,
   guarantors,
+  defaults,
 }: {
   properties: PropertyOpt[];
   owners: Person[];
   tenants: Person[];
   guarantors: Person[];
+  defaults?: ContractCreateDefaults;
 }) {
   const router = useRouter();
+  const isRenew = Boolean(defaults?.renewFromContractId);
   const [state, formAction, pending] = useActionState(
     createContractAction,
     initial,
   );
-  const [propertyId, setPropertyId] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [tenantId, setTenantId] = useState("");
-  const [guarantorCount, setGuarantorCount] = useState(2);
-  const [guarantorIds, setGuarantorIds] = useState<string[]>(["", ""]);
+  const initialGuarantors =
+    defaults?.guarantorIds && defaults.guarantorIds.length > 0
+      ? defaults.guarantorIds
+      : ["", ""];
+  const [propertyId, setPropertyId] = useState(defaults?.propertyId ?? "");
+  const [ownerId, setOwnerId] = useState(defaults?.ownerId ?? "");
+  const [tenantId, setTenantId] = useState(defaults?.tenantId ?? "");
+  const [guarantorCount, setGuarantorCount] = useState(
+    Math.max(2, initialGuarantors.length),
+  );
+  const [guarantorIds, setGuarantorIds] = useState<string[]>(() => {
+    const next = [...initialGuarantors];
+    while (next.length < Math.max(2, initialGuarantors.length)) next.push("");
+    return next;
+  });
   const [guarantorAckIds, setGuarantorAckIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [attachRows, setAttachRows] = useState<AttachmentDraftRow[]>([
     { key: 0, kind: "CONTRACT_DOC", files: [] },
   ]);
-  const [initialRent, setInitialRent] = useState("");
-  const [currency, setCurrency] = useState<Currency>("ARS");
+  const [initialRent, setInitialRent] = useState(defaults?.initialRent ?? "");
+  const [currency, setCurrency] = useState<Currency>(
+    defaults?.currency ?? "ARS",
+  );
 
   useEffect(() => {
     if (state?.ok) {
@@ -371,6 +415,7 @@ export function ContractCreateForm({
 
   function onPropertyChange(id: string) {
     setPropertyId(id);
+    if (isRenew && id === defaults?.propertyId) return;
     const prop = properties.find((p) => p.id === id);
     if (!prop) return;
     if (prop.ownerId) setOwnerId(prop.ownerId);
@@ -393,6 +438,20 @@ export function ContractCreateForm({
       encType="multipart/form-data"
       className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6"
     >
+      {defaults?.renewFromContractId ? (
+        <input
+          type="hidden"
+          name="renewFromContractId"
+          value={defaults.renewFromContractId}
+        />
+      ) : null}
+      {isRenew && defaults?.renewFromCode ? (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 text-sm">
+          Renovación de <strong>{defaults.renewFromCode}</strong>. Revisá y
+          editá lo que haga falta; al guardar se crea el contrato nuevo y el
+          anterior queda como Renovado.
+        </p>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="propertyId">Propiedad</Label>
@@ -449,6 +508,7 @@ export function ContractCreateForm({
           ids={guarantorIds}
           options={guarantors}
           acknowledgedIds={guarantorAckIds}
+          excludeContractId={defaults?.renewFromContractId}
           onCountChange={setGuarantorCount}
           onIdChange={(index, value) =>
             setGuarantorIds((prev) =>
@@ -463,11 +523,21 @@ export function ContractCreateForm({
         />
         <div className="space-y-2">
           <Label htmlFor="startDate">Inicio</Label>
-          <DateInput id="startDate" name="startDate" required />
+          <DateInput
+            id="startDate"
+            name="startDate"
+            required
+            defaultValue={defaults?.startDate}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="endDate">Fin</Label>
-          <DateInput id="endDate" name="endDate" required />
+          <DateInput
+            id="endDate"
+            name="endDate"
+            required
+            defaultValue={defaults?.endDate}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="initialRent">Alquiler inicial</Label>
@@ -502,7 +572,7 @@ export function ContractCreateForm({
             type="number"
             step="any"
             min={0}
-            defaultValue={0}
+            defaultValue={defaults?.depositAmount ?? 0}
             placeholder="0 si no hay depósito"
           />
         </div>
@@ -513,16 +583,16 @@ export function ContractCreateForm({
             name="lateFeeDailyRatePct"
             type="number"
             step="0.0001"
-            defaultValue={1.2}
+            defaultValue={defaults?.lateFeeDailyRatePct ?? 1.2}
           />
         </div>
 
         <CommissionFields
-          defaultMode="CONTRACT_TOTAL"
-          defaultValue="5"
-          defaultTenantPct="100"
-          defaultOwnerPct="0"
-          defaultInstallments="1"
+          defaultMode={defaults?.commissionMode ?? "CONTRACT_TOTAL"}
+          defaultValue={defaults?.commissionValue ?? "5"}
+          defaultTenantPct={defaults?.commissionTenantPct ?? "100"}
+          defaultOwnerPct={defaults?.commissionOwnerPct ?? "0"}
+          defaultInstallments={defaults?.commissionInstallments ?? "1"}
         />
 
         <div className="space-y-2">
@@ -530,7 +600,10 @@ export function ContractCreateForm({
           <Select
             id="indexType"
             name="indexType"
-            defaultValue={"MAX_ICL_IPC_CP" satisfies AdjustmentIndex}
+            defaultValue={
+              defaults?.indexType ??
+              ("MAX_ICL_IPC_CP" satisfies AdjustmentIndex)
+            }
           >
             <option value="ICL">ICL</option>
             <option value="IPC">IPC</option>
@@ -545,7 +618,7 @@ export function ContractCreateForm({
           <Select
             id="periodMonths"
             name="periodMonths"
-            defaultValue="3"
+            defaultValue={defaults?.periodMonths ?? "3"}
             required
           >
             <option value="2">2 meses</option>
@@ -561,34 +634,55 @@ export function ContractCreateForm({
         </div>
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="notes">Notas</Label>
-          <Textarea id="notes" name="notes" />
+          <Textarea
+            id="notes"
+            name="notes"
+            defaultValue={defaults?.notes ?? ""}
+          />
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             name="includesOrdinaryExp"
-            defaultChecked
+            defaultChecked={defaults?.includesOrdinaryExp ?? true}
             className="h-4 w-4"
           />
           Incluye expensas ordinarias
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="includesExtraordExp" className="h-4 w-4" />
+          <input
+            type="checkbox"
+            name="includesExtraordExp"
+            defaultChecked={defaults?.includesExtraordExp ?? false}
+            className="h-4 w-4"
+          />
           Incluye expensas extraordinarias
         </label>
-        <ContractServicesFields />
+        <ContractServicesFields
+          initialValue={
+            defaults?.services && defaults.services.length > 0
+              ? defaults.services
+              : undefined
+          }
+        />
       </div>
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)]">{state.error}</p>
       ) : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Guardando…" : "Crear contrato"}
+          {pending
+            ? "Guardando…"
+            : isRenew
+              ? "Confirmar renovación"
+              : "Crear contrato"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/contratos")}
+          onClick={() =>
+            router.push(isRenew ? "/contratos/por-vencer" : "/contratos")
+          }
         >
           Cancelar
         </Button>

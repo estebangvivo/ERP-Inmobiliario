@@ -205,7 +205,7 @@ export function PrintReportToolbar({
         className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-surface disabled:opacity-60 sm:flex-none"
       >
         <Printer className="size-4" aria-hidden />
-        Imprimir
+        Imprimir (2 copias)
       </button>
       <button
         type="button"

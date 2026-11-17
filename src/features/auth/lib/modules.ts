@@ -119,7 +119,8 @@ export function resolveAllowedModules(
   } else {
     modules = [...ROLE_DEFAULT_MODULES[role]];
   }
-  // El manual de usuario está disponible para todos los roles de la org.
+  // Inicio (Dashboard) y manual están siempre disponibles para todos los roles.
+  if (!modules.includes("home")) modules.push("home");
   if (!modules.includes("manual")) modules.push("manual");
   return modules;
 }

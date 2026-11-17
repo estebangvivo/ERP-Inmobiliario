@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { OrganizationRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -132,6 +133,9 @@ export function UsersAdminPanel({
         role: String(fd.get("role") ?? "AGENT") as OrganizationRole,
         allowedModules: modules,
         phone: String(fd.get("phone") ?? "") || undefined,
+        phone2: String(fd.get("phone2") ?? "") || undefined,
+        birthDate: String(fd.get("birthDate") ?? "") || undefined,
+        address: String(fd.get("address") ?? "") || undefined,
         documentNumber: String(fd.get("documentNumber") ?? "") || undefined,
       });
       if (!result.ok) {
@@ -161,6 +165,9 @@ export function UsersAdminPanel({
         isActive: fd.get("isActive") === "on",
         password: String(fd.get("password") ?? "") || undefined,
         phone: String(fd.get("phone") ?? ""),
+        phone2: String(fd.get("phone2") ?? ""),
+        birthDate: String(fd.get("birthDate") ?? ""),
+        address: String(fd.get("address") ?? ""),
         documentNumber: String(fd.get("documentNumber") ?? ""),
       });
       if (!result.ok) {
@@ -265,6 +272,27 @@ export function UsersAdminPanel({
               label="Teléfono"
               name="phone"
               defaultValue={editing?.phone ?? ""}
+              required
+            />
+            <Field
+              label="Teléfono 2 (referencia)"
+              name="phone2"
+              defaultValue={editing?.phone2 ?? ""}
+            />
+            <div className="space-y-2">
+              <Label htmlFor="birthDate">Fecha de nacimiento</Label>
+              <DateInput
+                id="birthDate"
+                name="birthDate"
+                defaultValue={editing?.birthDate ?? ""}
+              />
+            </div>
+            <Field
+              label="Domicilio actual"
+              name="address"
+              defaultValue={editing?.address ?? ""}
+              required
+              placeholder="Calle, número, localidad"
             />
             <div className="space-y-2">
               <Label htmlFor="role">Rol</Label>
@@ -289,14 +317,19 @@ export function UsersAdminPanel({
             />
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
-            Si el DNI ya existe en la empresa, el sistema avisa para que busques
-            a esa persona en lugar de cargarla de nuevo.
+            Email, teléfono y domicilio son obligatorios. Si el DNI ya existe en
+            la empresa, el sistema avisa para que busques a esa persona.
           </p>
 
           <div className="space-y-2">
             <Label>Módulos permitidos</Label>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Dashboard (Inicio) y Manual quedan siempre habilitados.
+            </p>
             <div className="grid gap-2 sm:grid-cols-3">
-              {ORG_MODULE_KEYS.filter((k) => k !== "home").map((key) => (
+              {ORG_MODULE_KEYS.filter(
+                (k) => k !== "home" && k !== "manual",
+              ).map((key) => (
                 <label key={key} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

@@ -5,15 +5,27 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import { INDEX_PERIOD_OPTIONS } from "@/lib/index-periods";
-import { applyDueAdjustmentsFromIndexRates } from "@/server/services/billing";
-import type { ActionResult } from "@/server/actions/users";
+import {
+  applyDueAdjustmentsFromIndexRates,
+  type IndexAdjustmentReportRow,
+} from "@/server/services/billing";
 
 const RATE_INDEXES: AdjustmentIndex[] = ["IPC", "ICL", "CP"];
 
+export type IndexRatesActionResult =
+  | {
+      ok: true;
+      message?: string;
+      percent?: number;
+      effectiveLabel?: string;
+      adjustments?: IndexAdjustmentReportRow[];
+    }
+  | { ok: false; error: string };
+
 export async function upsertIndexRatesAction(
-  _prev: ActionResult | null,
+  _prev: IndexRatesActionResult | null,
   formData: FormData,
-): Promise<ActionResult> {
+): Promise<IndexRatesActionResult> {
   const session = await requireStaff();
   const periodYear = Number(formData.get("periodYear"));
   const periodMonth = Number(formData.get("periodMonth"));
@@ -86,6 +98,10 @@ export async function upsertIndexRatesAction(
     );
 
     let adjustMsg = "";
+    let adjustments: IndexAdjustmentReportRow[] = [];
+    let effectiveLabel: string | undefined;
+    let appliedPercent: number | undefined;
+
     if (rates.max != null && rates.max > 0) {
       const result = await applyDueAdjustmentsFromIndexRates({
         organizationId: session.organizationId,
@@ -94,6 +110,11 @@ export async function upsertIndexRatesAction(
         periodMonths,
         percent: rates.max,
       });
+      appliedPercent = result.percent;
+      adjustments = result.rows;
+      if (result.effective) {
+        effectiveLabel = `${String(result.effective.month).padStart(2, "0")}/${result.effective.year}`;
+      }
       if (result.applied > 0) {
         adjustMsg = ` Se aplicó ${result.percent}% (máx. IPC/ICL/CP) a ${result.applied} contrato${result.applied === 1 ? "" : "s"} desde ${result.effective!.month}/${result.effective!.year}.`;
       } else {
@@ -108,6 +129,9 @@ export async function upsertIndexRatesAction(
     return {
       ok: true,
       message: `Índices guardados para ${periodMonth}/${periodYear} · ${periodMonths} meses.${adjustMsg}`,
+      percent: appliedPercent,
+      effectiveLabel,
+      adjustments,
     };
   } catch (e) {
     return {

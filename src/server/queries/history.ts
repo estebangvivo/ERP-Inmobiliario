@@ -49,6 +49,8 @@ export type HistoryContractRow = {
   propertyId: string;
   propertyTitle: string;
   parties: HistoryParty[];
+  /** Rol de la persona consultada en este contrato (historial de persona). */
+  personRole?: PartyRole | null;
   billsPending: number;
   billsPaid: number;
 };
@@ -129,6 +131,9 @@ export type PersonHistory = {
     name: string;
     email: string;
     phone: string | null;
+    phone2: string | null;
+    birthDate: Date | null;
+    address: string | null;
     documentType: string | null;
     documentNumber: string | null;
     role: string | null;
@@ -614,7 +619,11 @@ export async function getPersonHistory(
       : Promise.resolve([]),
   ]);
 
-  const contractRows = contracts.map(mapContract);
+  const contractRows = contracts.map((c) => {
+    const row = mapContract(c);
+    const role = c.parties.find((p) => p.userId === userId)?.role ?? null;
+    return { ...row, personRole: role };
+  });
   const rentPrices = contracts
     .filter((c) => c.parties.some((p) => p.userId === userId && p.role === "TENANT"))
     .flatMap(rentPriceRowsFrom)
@@ -646,6 +655,17 @@ export async function getPersonHistory(
       detail: `${c.property.title}${role ? ` · ${PARTY_ROLE_LABELS[role]}` : ""}`,
       href: `/contratos/${c.id}`,
     });
+    if (c.status === "EXPIRED" || c.status === "TERMINATED") {
+      events.push({
+        at: c.endDate,
+        title:
+          c.status === "TERMINATED"
+            ? `Rescisión ${c.code}`
+            : `Fin de vigencia ${c.code}`,
+        detail: `${c.property.title}${role ? ` · ${PARTY_ROLE_LABELS[role]}` : ""}`,
+        href: `/contratos/${c.id}`,
+      });
+    }
   }
 
   return {
@@ -654,6 +674,9 @@ export async function getPersonHistory(
       name: person.name,
       email: person.email,
       phone: person.phone,
+      phone2: person.phone2,
+      birthDate: person.birthDate,
+      address: person.address,
       documentType: person.documentType,
       documentNumber: person.documentNumber,
       role: person.memberships[0]?.role ?? null,

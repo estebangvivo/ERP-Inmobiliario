@@ -28,12 +28,19 @@ import {
   dniAlreadyLoadedMessage,
   lookupOrgMemberByDni,
 } from "@/server/lib/org-dni";
+import { parseDateInput } from "@/lib/dates";
 
 const PARTY_ROLES_REQUIRING_DNI: OrganizationRole[] = [
   "OWNER",
   "TENANT",
   "GUARANTOR",
 ];
+
+function parseOptionalBirthDate(raw?: string | null): Date | null | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw?.trim()) return null;
+  return parseDateInput(raw.trim());
+}
 
 export type UserActionResult =
   | { ok: true; userId?: string }
@@ -49,6 +56,9 @@ export type OrganizationUserRow = {
   isActive: boolean;
   documentNumber: string | null;
   phone: string | null;
+  phone2: string | null;
+  birthDate: string | null;
+  address: string | null;
 };
 
 export type ListOrganizationUsersOptions = {
@@ -77,6 +87,9 @@ function mapMember(m: {
     isActive: boolean;
     documentNumber: string | null;
     phone: string | null;
+    phone2: string | null;
+    birthDate: Date | null;
+    address: string | null;
   };
 }): OrganizationUserRow {
   return {
@@ -89,6 +102,11 @@ function mapMember(m: {
     isActive: m.user.isActive,
     documentNumber: m.user.documentNumber,
     phone: m.user.phone,
+    phone2: m.user.phone2,
+    birthDate: m.user.birthDate
+      ? m.user.birthDate.toISOString().slice(0, 10)
+      : null,
+    address: m.user.address,
   };
 }
 
@@ -187,6 +205,9 @@ export async function createOrganizationUser(input: {
   role: OrganizationRole;
   allowedModules?: AppModuleKey[];
   phone?: string;
+  phone2?: string;
+  birthDate?: string;
+  address?: string;
   documentNumber?: string;
 }): Promise<UserActionResult> {
   try {
@@ -197,6 +218,10 @@ export async function createOrganizationUser(input: {
 
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
+    const phone = input.phone?.trim() || "";
+    const phone2 = input.phone2?.trim() || null;
+    const address = input.address?.trim() || "";
+    const birthDate = parseOptionalBirthDate(input.birthDate);
     if (
       isPlatformSuperadminEmail(email) &&
       !isPlatformSuperadminEmail(session.user.email)
@@ -209,6 +234,13 @@ export async function createOrganizationUser(input: {
     const pwdCheck = validatePasswordStrength(input.password);
     if (!pwdCheck.ok) return { ok: false, error: pwdCheck.error };
     if (name.length < 2) return { ok: false, error: "Nombre requerido." };
+    if (!phone) return { ok: false, error: "El teléfono es obligatorio." };
+    if (address.length < 3) {
+      return { ok: false, error: "Ingresá el domicilio actual." };
+    }
+    if (input.birthDate?.trim() && birthDate === null) {
+      return { ok: false, error: "Fecha de nacimiento inválida." };
+    }
 
     const requiresDni = PARTY_ROLES_REQUIRING_DNI.includes(input.role);
     const rawDni = input.documentNumber?.trim() ?? "";
@@ -234,6 +266,8 @@ export async function createOrganizationUser(input: {
     const modules = (input.allowedModules ?? []).filter((m) =>
       ORG_MODULE_KEYS.includes(m),
     );
+    if (!modules.includes("home")) modules.push("home");
+    if (!modules.includes("manual")) modules.push("manual");
 
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -242,7 +276,10 @@ export async function createOrganizationUser(input: {
           authId: `local:${email}`,
           email,
           name,
-          phone: input.phone?.trim() || null,
+          phone,
+          phone2,
+          birthDate: birthDate ?? null,
+          address,
           documentType: dni ? "DNI" : null,
           documentNumber: dni,
           passwordHash: await hashPassword(input.password),
@@ -253,7 +290,10 @@ export async function createOrganizationUser(input: {
         where: { id: user.id },
         data: {
           name,
-          phone: input.phone?.trim() || user.phone,
+          phone: phone || user.phone,
+          phone2: phone2 ?? user.phone2,
+          birthDate: birthDate === undefined ? user.birthDate : birthDate,
+          address: address || user.address,
           documentType: "DNI",
           documentNumber: dni,
         },
@@ -297,6 +337,9 @@ export async function updateOrganizationUser(input: {
   password?: string;
   documentNumber?: string;
   phone?: string;
+  phone2?: string;
+  birthDate?: string;
+  address?: string;
 }): Promise<UserActionResult> {
   try {
     const session = await requireAuthSession();
@@ -351,6 +394,17 @@ export async function updateOrganizationUser(input: {
       dni = null;
     }
 
+    const birthDate = parseOptionalBirthDate(input.birthDate);
+    if (input.birthDate !== undefined && input.birthDate.trim() && birthDate === null) {
+      return { ok: false, error: "Fecha de nacimiento inválida." };
+    }
+    if (input.phone !== undefined && !input.phone.trim()) {
+      return { ok: false, error: "El teléfono es obligatorio." };
+    }
+    if (input.address !== undefined && input.address.trim().length < 3) {
+      return { ok: false, error: "Ingresá el domicilio actual." };
+    }
+
     const userData: {
       name?: string;
       isActive?: boolean;
@@ -358,6 +412,9 @@ export async function updateOrganizationUser(input: {
       documentType?: string | null;
       documentNumber?: string | null;
       phone?: string | null;
+      phone2?: string | null;
+      birthDate?: Date | null;
+      address?: string | null;
     } = {};
     if (input.name) userData.name = input.name.trim();
     if (typeof input.isActive === "boolean") userData.isActive = input.isActive;
@@ -373,6 +430,15 @@ export async function updateOrganizationUser(input: {
     if (input.phone !== undefined) {
       userData.phone = input.phone.trim() || null;
     }
+    if (input.phone2 !== undefined) {
+      userData.phone2 = input.phone2.trim() || null;
+    }
+    if (input.birthDate !== undefined) {
+      userData.birthDate = birthDate ?? null;
+    }
+    if (input.address !== undefined) {
+      userData.address = input.address.trim() || null;
+    }
 
     if (Object.keys(userData).length > 0) {
       await prisma.user.update({
@@ -387,9 +453,12 @@ export async function updateOrganizationUser(input: {
     } = {};
     if (input.role) memberData.role = input.role;
     if (input.allowedModules) {
-      memberData.allowedModules = input.allowedModules.filter((m) =>
+      const nextModules = input.allowedModules.filter((m) =>
         ORG_MODULE_KEYS.includes(m),
       );
+      if (!nextModules.includes("home")) nextModules.push("home");
+      if (!nextModules.includes("manual")) nextModules.push("manual");
+      memberData.allowedModules = nextModules;
     }
 
     if (Object.keys(memberData).length > 0) {

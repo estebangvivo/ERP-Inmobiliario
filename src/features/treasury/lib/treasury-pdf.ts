@@ -90,15 +90,88 @@ export function treasuryPdfFilename(
   return `${prefix}-${number.replace(/[^\w-]+/g, "_")}.pdf`;
 }
 
-export async function buildTreasuryDocPdf(input: TreasuryPdfInput): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+function drawSignatureLines(
+  page: PDFPage,
+  font: PDFFont,
+  fontBold: PDFFont,
+  input: TreasuryPdfInput,
+  yStart: number,
+) {
+  let y = Math.min(yStart, 160);
+  const partyRole =
+    input.kind === "receipt" ? "Inquilino / pagador" : "Beneficiario";
+  const colW = (CONTENT_WIDTH - 24) / 2;
 
+  page.drawText("Conformidad y firmas", {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: fontBold,
+  });
+  y -= 28;
+
+  page.drawLine({
+    start: { x: MARGIN, y },
+    end: { x: MARGIN + colW, y },
+    thickness: 1,
+    color: rgb(0.15, 0.15, 0.15),
+  });
+  page.drawLine({
+    start: { x: MARGIN + colW + 24, y },
+    end: { x: MARGIN + CONTENT_WIDTH, y },
+    thickness: 1,
+    color: rgb(0.15, 0.15, 0.15),
+  });
+  y -= 14;
+
+  page.drawText("Firma de la inmobiliaria", {
+    x: MARGIN,
+    y,
+    size: 9,
+    font: fontBold,
+  });
+  page.drawText(`Firma del ${sanitizePdfText(partyRole).toLowerCase()}`, {
+    x: MARGIN + colW + 24,
+    y,
+    size: 9,
+    font: fontBold,
+  });
+  y -= 12;
+  page.drawText("Aclaracion / sello", {
+    x: MARGIN,
+    y,
+    size: 8,
+    font,
+    color: rgb(0.45, 0.45, 0.45),
+  });
+  page.drawText(sanitizePdfText(input.partyName), {
+    x: MARGIN + colW + 24,
+    y,
+    size: 8,
+    font,
+    color: rgb(0.45, 0.45, 0.45),
+  });
+}
+
+function drawTreasuryPage(
+  page: PDFPage,
+  font: PDFFont,
+  fontBold: PDFFont,
+  input: TreasuryPdfInput,
+  copyLabel: string,
+) {
   let y = PAGE_HEIGHT - MARGIN;
   const title =
     input.kind === "receipt" ? "RECIBO DE COBRO" : "ORDEN DE PAGO";
+
+  page.drawText(sanitizePdfText(copyLabel.toUpperCase()), {
+    x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(copyLabel.toUpperCase(), 8),
+    y,
+    size: 8,
+    font,
+    color: rgb(0.45, 0.45, 0.45),
+  });
+  y -= 18;
 
   page.drawText(sanitizePdfText(title), {
     x: MARGIN,
@@ -208,7 +281,7 @@ export async function buildTreasuryDocPdf(input: TreasuryPdfInput): Promise<Uint
 
   if (input.notes) {
     y -= 20;
-    drawWrappedText(
+    y = drawWrappedText(
       page,
       font,
       `Notas: ${input.notes}`,
@@ -217,6 +290,20 @@ export async function buildTreasuryDocPdf(input: TreasuryPdfInput): Promise<Uint
       CONTENT_WIDTH,
       8,
     );
+  }
+
+  drawSignatureLines(page, font, fontBold, input, y - 36);
+}
+
+/** Genera PDF con 2 ejemplares (original + duplicado) y espacio de firmas. */
+export async function buildTreasuryDocPdf(input: TreasuryPdfInput): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  for (const copyLabel of ["Original", "Duplicado"] as const) {
+    const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    drawTreasuryPage(page, font, fontBold, input, copyLabel);
   }
 
   return pdf.save();

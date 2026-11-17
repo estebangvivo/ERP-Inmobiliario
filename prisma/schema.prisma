@@ -513,6 +513,12 @@ model User {
   passwordHash            String?
   name                    String
   phone                   String?
+  /// Teléfono de referencia / secundario.
+  phone2                  String?
+  /// Fecha de nacimiento (solo fecha).
+  birthDate               DateTime?              @db.Date
+  /// Domicilio actual de la persona.
+  address                 String?
   documentType            String?
   documentNumber          String?
   isActive                Boolean                @default(true)

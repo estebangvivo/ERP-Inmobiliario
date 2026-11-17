@@ -22,6 +22,8 @@ export default async function NuevoContratoPage() {
       select: {
         id: true,
         title: true,
+        address: true,
+        city: true,
         price: true,
         rentPrice: true,
         currency: true,
@@ -50,6 +52,8 @@ export default async function NuevoContratoPage() {
           return {
             id: p.id,
             title: p.title,
+            address: p.address,
+            city: p.city,
             price: (p.rentPrice ?? p.price)?.toString() ?? null,
             currency: p.rentCurrency ?? p.currency,
             ownerId: primary?.owner.id ?? null,

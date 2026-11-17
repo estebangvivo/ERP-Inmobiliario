@@ -7,6 +7,7 @@ import { DataTable } from "@/components/erp/page-chrome";
 import { formatDate, formatDateOnly } from "@/lib/dates";
 import {
   CONTRACT_STATUS_LABELS,
+  PARTY_ROLE_LABELS,
   SALE_DEAL_STAGE_LABELS,
   SETTLEMENT_STATUS_LABELS,
   WORK_ORDER_STATUS_LABELS,
@@ -110,90 +111,193 @@ export function HistoryTimeline({ events }: { events: HistoryEvent[] }) {
   );
 }
 
-export function HistoryContractsTable({
+function ContractsTableBody({
   rows,
   showProperty,
+  showPersonRole,
 }: {
   rows: HistoryContractRow[];
   showProperty?: boolean;
+  showPersonRole?: boolean;
 }) {
   return (
-    <section className="space-y-3">
-      <h3 className="text-base font-semibold">Contratos de alquiler</h3>
-      <DataTable
-          headers={[
-            "Contrato",
-            ...(showProperty ? ["Propiedad"] : []),
-            "Período",
-            "Inquilino",
-            "Propietario",
-            "Alquiler",
-            "Cuotas",
-            "",
-          ]}
-          empty={rows.length === 0}
-        >
-          {rows.map((c) => {
-            const tenants = partiesByRole(c.parties, "TENANT");
-            const owners = partiesByRole(c.parties, "OWNER");
-            return (
-              <tr key={c.id} className="hover:bg-[var(--muted)]/40">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{c.code}</p>
-                  <Badge variant={contractStatusBadge(c.status)}>
-                    {CONTRACT_STATUS_LABELS[c.status]}
+    <DataTable
+      headers={[
+        "Contrato",
+        ...(showProperty ? ["Propiedad"] : []),
+        ...(showPersonRole ? ["Su rol"] : []),
+        "Período",
+        "Inquilino",
+        "Propietario",
+        "Garante",
+        "Alquiler",
+        "Cuotas",
+        "",
+      ]}
+      empty={rows.length === 0}
+    >
+      {rows.map((c) => {
+        const tenants = partiesByRole(c.parties, "TENANT");
+        const owners = partiesByRole(c.parties, "OWNER");
+        const guarantors = partiesByRole(c.parties, "GUARANTOR");
+        return (
+          <tr key={c.id} className="hover:bg-[var(--muted)]/40">
+            <td className="px-4 py-3">
+              <p className="font-medium">{c.code}</p>
+              <Badge variant={contractStatusBadge(c.status)}>
+                {CONTRACT_STATUS_LABELS[c.status]}
+              </Badge>
+            </td>
+            {showProperty ? (
+              <td className="px-4 py-3">
+                <PropertyHistoryLink id={c.propertyId} title={c.propertyTitle} />
+              </td>
+            ) : null}
+            {showPersonRole ? (
+              <td className="px-4 py-3 text-sm">
+                {c.personRole ? (
+                  <Badge
+                    variant={
+                      c.personRole === "GUARANTOR" ? "warning" : "secondary"
+                    }
+                  >
+                    {PARTY_ROLE_LABELS[c.personRole]}
                   </Badge>
-                </td>
-                {showProperty ? (
-                  <td className="px-4 py-3">
-                    <PropertyHistoryLink id={c.propertyId} title={c.propertyTitle} />
-                  </td>
-                ) : null}
-                <td className="px-4 py-3 text-sm tabular-nums">
-                  {formatDateOnly(c.startDate)} – {formatDateOnly(c.endDate)}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {tenants.length === 0
-                    ? "—"
-                    : tenants.map((p) => (
-                        <span key={p.userId} className="block">
-                          <PersonNameLink id={p.userId} name={p.name} />
-                        </span>
-                      ))}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {owners.length === 0
-                    ? "—"
-                    : owners.map((p) => (
-                        <span key={p.userId} className="block">
-                          <PersonNameLink id={p.userId} name={p.name} />
-                        </span>
-                      ))}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  <p className="font-medium">{money(c.currentRent, c.currency)}</p>
-                  {c.currentRent !== c.initialRent ? (
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Inicial {money(c.initialRent, c.currency)}
-                    </p>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--muted-foreground)]">
-                  {c.billsPaid} pagadas
-                  {c.billsPending > 0 ? ` · ${c.billsPending} abiertas` : ""}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link href={`/contratos/${c.id}`}>
-                    <Button size="sm" variant="outline">
-                      Ver
-                    </Button>
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </DataTable>
-    </section>
+                ) : (
+                  "—"
+                )}
+              </td>
+            ) : null}
+            <td className="px-4 py-3 text-sm tabular-nums">
+              {formatDateOnly(c.startDate)} – {formatDateOnly(c.endDate)}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              {tenants.length === 0
+                ? "—"
+                : tenants.map((p) => (
+                    <span key={p.userId} className="block">
+                      <PersonNameLink id={p.userId} name={p.name} />
+                    </span>
+                  ))}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              {owners.length === 0
+                ? "—"
+                : owners.map((p) => (
+                    <span key={p.userId} className="block">
+                      <PersonNameLink id={p.userId} name={p.name} />
+                    </span>
+                  ))}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              {guarantors.length === 0
+                ? "—"
+                : guarantors.map((p) => (
+                    <span key={p.userId} className="block">
+                      <PersonNameLink id={p.userId} name={p.name} />
+                    </span>
+                  ))}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              <p className="font-medium">{money(c.currentRent, c.currency)}</p>
+              {c.currentRent !== c.initialRent ? (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Inicial {money(c.initialRent, c.currency)}
+                </p>
+              ) : null}
+            </td>
+            <td className="px-4 py-3 text-xs text-[var(--muted-foreground)]">
+              {c.billsPaid} pagadas
+              {c.billsPending > 0 ? ` · ${c.billsPending} abiertas` : ""}
+            </td>
+            <td className="px-4 py-3 text-right">
+              <Link href={`/contratos/${c.id}`}>
+                <Button size="sm" variant="outline">
+                  Ver
+                </Button>
+              </Link>
+            </td>
+          </tr>
+        );
+      })}
+    </DataTable>
+  );
+}
+
+export function HistoryContractsTable({
+  rows,
+  showProperty,
+  showPersonRole,
+  splitByStatus,
+}: {
+  rows: HistoryContractRow[];
+  showProperty?: boolean;
+  /** Muestra el rol de la persona en cada contrato (historial de usuario). */
+  showPersonRole?: boolean;
+  /** Separa vigentes de finalizados/rescindidos. */
+  splitByStatus?: boolean;
+}) {
+  if (!splitByStatus) {
+    return (
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold">Contratos de alquiler</h3>
+        <ContractsTableBody
+          rows={rows}
+          showProperty={showProperty}
+          showPersonRole={showPersonRole}
+        />
+      </section>
+    );
+  }
+
+  const active = rows.filter((c) => c.status === "ACTIVE" || c.status === "DRAFT");
+  const finished = rows.filter(
+    (c) =>
+      c.status === "EXPIRED" ||
+      c.status === "TERMINATED" ||
+      c.status === "RENEWED",
+  );
+  const asGuarantor = rows.filter((c) => c.personRole === "GUARANTOR");
+
+  return (
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold">
+          Contratos vigentes ({active.length})
+        </h3>
+        <ContractsTableBody
+          rows={active}
+          showProperty={showProperty}
+          showPersonRole={showPersonRole}
+        />
+      </section>
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold">
+          Contratos finalizados / rescindidos ({finished.length})
+        </h3>
+        <ContractsTableBody
+          rows={finished}
+          showProperty={showProperty}
+          showPersonRole={showPersonRole}
+        />
+      </section>
+      {asGuarantor.length > 0 ? (
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold">
+            Donde figura como garante ({asGuarantor.length})
+          </h3>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Incluye vigentes y finalizados en los que esta persona es o fue
+            garante.
+          </p>
+          <ContractsTableBody
+            rows={asGuarantor}
+            showProperty={showProperty}
+            showPersonRole={showPersonRole}
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }
 

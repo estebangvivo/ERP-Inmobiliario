@@ -41,13 +41,55 @@ export type PrintReportData = {
   lines: PrintReportLine[];
 };
 
-export function TreasuryPrintReport({ data }: { data: PrintReportData }) {
+function SignatureBlock({
+  kind,
+  partyName,
+}: {
+  kind: PrintReportData["kind"];
+  partyName: string;
+}) {
+  const partyLabel =
+    kind === "receipt" ? "Inquilino / pagador" : "Beneficiario";
+
+  return (
+    <section className="mt-12 border-t border-[#d6d3d1] pt-8">
+      <p className="mb-6 text-xs uppercase tracking-wider text-[#78716c]">
+        Conformidad y firmas
+      </p>
+      <div className="grid gap-10 sm:grid-cols-2">
+        <div className="space-y-2">
+          <div className="h-14 border-b border-[#1c1917]" />
+          <p className="text-sm font-medium">Firma de la inmobiliaria</p>
+          <p className="text-xs text-[#78716c]">Aclaración / sello</p>
+        </div>
+        <div className="space-y-2">
+          <div className="h-14 border-b border-[#1c1917]" />
+          <p className="text-sm font-medium">Firma del {partyLabel.toLowerCase()}</p>
+          <p className="text-xs text-[#78716c]">{partyName}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReportCopy({
+  data,
+  copyLabel,
+}: {
+  data: PrintReportData;
+  copyLabel: string;
+}) {
   const title = data.kind === "receipt" ? "Recibo" : "Orden de pago";
   const partyLabel = data.kind === "receipt" ? "Inquilino" : "Beneficiario";
   const logoSrc = data.organizationLogoUrl?.split("?")[0] ?? null;
 
   return (
-    <article className="mx-auto max-w-3xl bg-white px-6 py-8 text-[#1c1917] shadow-sm print:max-w-none print:px-0 print:py-0 print:shadow-none">
+    <article className="mx-auto max-w-3xl bg-white px-6 py-8 text-[#1c1917] shadow-sm print:max-w-none print:break-after-page print:px-0 print:py-0 print:shadow-none last:print:break-after-auto">
+      <div className="mb-3 flex justify-end">
+        <span className="rounded border border-[#d6d3d1] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[#78716c]">
+          {copyLabel}
+        </span>
+      </div>
       <header className="flex items-start gap-4 border-b border-[#d6d3d1] pb-5">
         {logoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -198,6 +240,31 @@ export function TreasuryPrintReport({ data }: { data: PrintReportData }) {
           <p className="mt-1 text-sm text-[#57534e]">{data.notes}</p>
         </section>
       ) : null}
+
+      <SignatureBlock kind={data.kind} partyName={data.partyName} />
     </article>
+  );
+}
+
+export function TreasuryPrintReport({
+  data,
+  copies = 2,
+}: {
+  data: PrintReportData;
+  /** Cantidad de ejemplares al imprimir (por defecto 2). */
+  copies?: number;
+}) {
+  const count = Math.max(1, Math.min(copies, 4));
+  const labels =
+    count === 2
+      ? ["Original", "Duplicado"]
+      : Array.from({ length: count }, (_, i) => `Copia ${i + 1}`);
+
+  return (
+    <div className="space-y-8 print:space-y-0">
+      {labels.map((label) => (
+        <ReportCopy key={label} data={data} copyLabel={label} />
+      ))}
+    </div>
   );
 }

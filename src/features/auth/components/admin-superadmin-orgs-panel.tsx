@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BillingPlan, BillingStatus, OrganizationRole } from "@prisma/client";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
-import { Input } from "@/components/ui/input";
 import { formatDateAR } from "@/lib/format-date";
 import { toDateInputValue } from "@/lib/dates";
 import {
   updateOrganizationBillingBySuperadmin,
+  type AdminOrganizationMemberOverview,
   type AdminOrganizationOverview,
 } from "@/features/auth/actions/admin-panel-actions";
 import { switchOrganization } from "@/features/auth/actions/organization-actions";
@@ -20,6 +21,12 @@ import {
 import { ROLE_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { formatPresenceLabel } from "@/features/auth/lib/presence";
+
+const STAFF_ROLES: OrganizationRole[] = ["ADMIN", "AGENT"];
+
+function isStaffRole(role: OrganizationRole) {
+  return STAFF_ROLES.includes(role);
+}
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Activa" },
@@ -54,16 +61,103 @@ type AdminSuperadminOrgsPanelProps = {
   overview: AdminOrganizationOverview[];
 };
 
+function MembersTable({
+  members,
+}: {
+  members: AdminOrganizationMemberOverview[];
+}) {
+  if (members.length === 0) {
+    return (
+      <p className="px-4 py-3 text-sm text-[var(--muted-foreground)]">
+        Sin usuarios en este grupo.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+          <tr>
+            <th className="px-4 py-2 font-medium">Usuario</th>
+            <th className="px-4 py-2 font-medium">Rol</th>
+            <th className="px-4 py-2 font-medium">Cuenta</th>
+            <th className="px-4 py-2 font-medium">Conexión</th>
+            <th className="px-4 py-2 font-medium">Módulos</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--border)]">
+          {members.map((m) => (
+            <tr key={m.membershipId}>
+              <td className="px-4 py-3">
+                <p className="font-medium">{m.name || m.email}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {m.email}
+                </p>
+              </td>
+              <td className="px-4 py-3">
+                {ROLE_LABELS[m.role as OrganizationRole]}
+              </td>
+              <td className="px-4 py-3">
+                {m.isActive ? (
+                  <span className="text-[var(--muted-foreground)]">
+                    Habilitado
+                  </span>
+                ) : (
+                  <span className="text-[var(--destructive)]">
+                    Deshabilitado
+                  </span>
+                )}
+              </td>
+              <td className="px-4 py-3">
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      m.isOnline && m.isActive
+                        ? "bg-emerald-500"
+                        : "bg-[var(--muted-foreground)]/40",
+                    )}
+                  />
+                  {formatPresenceLabel(
+                    m.lastSeenAt,
+                    m.isOnline && m.isActive,
+                  )}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                {m.allowedModules.length}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function AdminSuperadminOrgsPanel({
   overview,
 }: AdminSuperadminOrgsPanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedOthers, setExpandedOthers] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<BillingStatus>("ACTIVE");
   const [plan, setPlan] = useState<BillingPlan | "NONE">("NONE");
   const [paidUntil, setPaidUntil] = useState("");
+
+  function toggleOthers(orgId: string) {
+    setExpandedOthers((prev) => {
+      const next = new Set(prev);
+      if (next.has(orgId)) next.delete(orgId);
+      else next.add(orgId);
+      return next;
+    });
+  }
 
   function openErp(organizationId: string) {
     setError(null);
@@ -131,6 +225,10 @@ export function AdminSuperadminOrgsPanel({
 
       {overview.map((org) => {
         const editing = editingId === org.id;
+        const staff = org.members.filter((m) => isStaffRole(m.role));
+        const others = org.members.filter((m) => !isStaffRole(m.role));
+        const staffOnline = staff.filter((m) => m.isOnline && m.isActive).length;
+        const othersExpanded = expandedOthers.has(org.id);
         return (
           <div
             key={org.id}
@@ -163,7 +261,8 @@ export function AdminSuperadminOrgsPanel({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm text-[var(--muted-foreground)]">
-                  {org.onlineCount}/{org.memberCount} conectados
+                  {staffOnline}/{staff.length} agentes/admin conectados
+                  {others.length > 0 ? ` · ${others.length} otros` : ""}
                 </p>
                 {!editing ? (
                   <>
@@ -253,64 +352,33 @@ export function AdminSuperadminOrgsPanel({
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Usuario</th>
-                    <th className="px-4 py-2 font-medium">Rol</th>
-                    <th className="px-4 py-2 font-medium">Cuenta</th>
-                    <th className="px-4 py-2 font-medium">Conexión</th>
-                    <th className="px-4 py-2 font-medium">Módulos</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {org.members.map((m) => (
-                    <tr key={m.membershipId}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{m.name || m.email}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          {m.email}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        {ROLE_LABELS[m.role as OrganizationRole]}
-                      </td>
-                      <td className="px-4 py-3">
-                        {m.isActive ? (
-                          <span className="text-[var(--muted-foreground)]">
-                            Habilitado
-                          </span>
-                        ) : (
-                          <span className="text-[var(--destructive)]">
-                            Deshabilitado
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "size-2 shrink-0 rounded-full",
-                              m.isOnline && m.isActive
-                                ? "bg-emerald-500"
-                                : "bg-[var(--muted-foreground)]/40",
-                            )}
-                          />
-                          {formatPresenceLabel(
-                            m.lastSeenAt,
-                            m.isOnline && m.isActive,
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                        {m.allowedModules.length}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="border-b border-[var(--border)] px-4 py-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                Agentes y administradores
+              </p>
             </div>
+            <MembersTable members={staff} />
+
+            {others.length > 0 ? (
+              <div className="border-t border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => toggleOthers(org.id)}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-[var(--muted-foreground)] hover:bg-[var(--muted)]/40"
+                >
+                  {othersExpanded ? (
+                    <ChevronDown className="size-4 shrink-0" />
+                  ) : (
+                    <ChevronRight className="size-4 shrink-0" />
+                  )}
+                  <span>
+                    {othersExpanded ? "Ocultar" : "Ver"} otros usuarios (
+                    {others.length}: inquilinos, propietarios, garantes, etc.)
+                  </span>
+                </button>
+                {othersExpanded ? <MembersTable members={others} /> : null}
+              </div>
+            ) : null}
           </div>
         );
       })}

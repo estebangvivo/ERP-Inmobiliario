@@ -13,6 +13,10 @@ import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import {
+  SearchableSelect,
+  type SearchableOption,
+} from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { PartyPersonSearchSelect } from "@/components/erp/party-person-search-select";
 import { useGuarantorDuplicateCheck } from "@/components/erp/guarantor-duplicate-modal";
@@ -41,6 +45,8 @@ type Person = { id: string; name: string; documentNumber?: string | null };
 type PropertyOpt = {
   id: string;
   title: string;
+  address?: string | null;
+  city?: string | null;
   price?: string | number | null;
   currency?: string | null;
   ownerId?: string | null;
@@ -390,26 +396,28 @@ export function ContractCreateForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="propertyId">Propiedad</Label>
-          <Select
+          <SearchableSelect
             id="propertyId"
             name="propertyId"
             required
             value={propertyId}
-            onChange={(e) => onPropertyChange(e.target.value)}
-          >
-            <option value="" disabled>
-              Seleccionar…
-            </option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-                {p.ownerName ? ` · ${p.ownerName}` : ""}
-              </option>
-            ))}
-          </Select>
+            onChange={onPropertyChange}
+            placeholder="Buscar propiedad…"
+            searchPlaceholder="Título, dirección o propietario…"
+            emptyLabel="Seleccionar…"
+            options={properties.map(
+              (p): SearchableOption => ({
+                value: p.id,
+                label: p.ownerName ? `${p.title} · ${p.ownerName}` : p.title,
+                keywords: [p.title, p.address, p.city, p.ownerName]
+                  .filter(Boolean)
+                  .join(" "),
+              }),
+            )}
+          />
           <p className="text-xs text-[var(--muted-foreground)]">
-            Al elegir la propiedad se completan propietario y alquiler inicial
-            si el sistema ya los conoce.
+            Escribí para filtrar. Al elegir se completan propietario y alquiler
+            inicial si el sistema ya los conoce.
           </p>
         </div>
         <div className="space-y-2">

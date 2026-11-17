@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -50,6 +51,16 @@ type Props = {
 
 type DraftMode = "create" | "edit" | null;
 
+const emptyDraft = {
+  name: "",
+  dni: "",
+  email: "",
+  phone: "",
+  phone2: "",
+  birthDate: "",
+  address: "",
+};
+
 export function PartyPersonSearchSelect({
   kind,
   name,
@@ -65,9 +76,7 @@ export function PartyPersonSearchSelect({
   const [extra, setExtra] = useState<PartyPersonOption[]>([]);
   const [draftMode, setDraftMode] = useState<DraftMode>(null);
   const [editPersonId, setEditPersonId] = useState<string | null>(null);
-  const [draftName, setDraftName] = useState("");
-  const [dni, setDni] = useState("");
-  const [phone, setPhone] = useState("");
+  const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState<string | null>(null);
   const [dniMatch, setDniMatch] = useState<OrgDniMatch | null>(null);
   const [checkingDni, setCheckingDni] = useState(false);
@@ -99,7 +108,7 @@ export function PartyPersonSearchSelect({
       return;
     }
 
-    const normalized = normalizeDni(dni);
+    const normalized = normalizeDni(draft.dni);
     if (!isValidDni(normalized)) {
       setDniMatch(null);
       setCheckingDni(false);
@@ -123,7 +132,7 @@ export function PartyPersonSearchSelect({
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [dni, panelOpen, draftMode, editPersonId]);
+  }, [draft.dni, panelOpen, draftMode, editPersonId]);
 
   function upsertExtra(person: PartyPersonOption) {
     setExtra((prev) => {
@@ -132,12 +141,15 @@ export function PartyPersonSearchSelect({
     });
   }
 
+  function patchDraft(patch: Partial<typeof emptyDraft>) {
+    setDraft((prev) => ({ ...prev, ...patch }));
+    setError(null);
+  }
+
   function openCreate(query: string) {
     setDraftMode("create");
     setEditPersonId(null);
-    setDraftName(query);
-    setDni("");
-    setPhone("");
+    setDraft({ ...emptyDraft, name: query });
     setError(null);
     setDniMatch(null);
   }
@@ -147,9 +159,12 @@ export function PartyPersonSearchSelect({
     const current = options.find((o) => o.id === value);
     setDraftMode("edit");
     setEditPersonId(value);
-    setDraftName(current?.name ?? "");
-    setDni(current?.documentNumber ?? "");
-    setPhone("");
+    setDraft({
+      ...emptyDraft,
+      name: current?.name ?? "",
+      dni: current?.documentNumber ?? "",
+      email: current?.email ?? "",
+    });
     setError(null);
     setDniMatch(null);
 
@@ -159,9 +174,15 @@ export function PartyPersonSearchSelect({
         setError(result.error);
         return;
       }
-      setDraftName(result.person.name);
-      setDni(result.person.documentNumber ?? "");
-      setPhone(result.person.phone ?? "");
+      setDraft({
+        name: result.person.name,
+        dni: result.person.documentNumber ?? "",
+        email: result.person.email,
+        phone: result.person.phone ?? "",
+        phone2: result.person.phone2 ?? "",
+        birthDate: result.person.birthDate ?? "",
+        address: result.person.address ?? "",
+      });
     });
   }
 
@@ -195,9 +216,13 @@ export function PartyPersonSearchSelect({
     startTransition(async () => {
       const result = await createPartyPersonAction({
         kind,
-        name: draftName,
-        dni,
-        phone: phone || undefined,
+        name: draft.name,
+        dni: draft.dni,
+        email: draft.email,
+        phone: draft.phone,
+        phone2: draft.phone2 || undefined,
+        birthDate: draft.birthDate || undefined,
+        address: draft.address,
       });
       if (!result.ok) {
         setError(result.error);
@@ -207,6 +232,7 @@ export function PartyPersonSearchSelect({
         id: result.person.id,
         name: result.person.name,
         documentNumber: result.person.documentNumber,
+        email: draft.email.trim().toLowerCase(),
       };
       upsertExtra(person);
       onChange(person.id, person);
@@ -226,9 +252,13 @@ export function PartyPersonSearchSelect({
     startTransition(async () => {
       const result = await updatePartyPersonAction({
         personId: editPersonId,
-        name: draftName,
-        dni,
-        phone: phone || undefined,
+        name: draft.name,
+        dni: draft.dni,
+        email: draft.email,
+        phone: draft.phone,
+        phone2: draft.phone2 || undefined,
+        birthDate: draft.birthDate || undefined,
+        address: draft.address,
       });
       if (!result.ok) {
         setError(result.error);
@@ -238,6 +268,7 @@ export function PartyPersonSearchSelect({
         id: result.person.id,
         name: result.person.name,
         documentNumber: result.person.documentNumber,
+        email: draft.email.trim().toLowerCase(),
       };
       upsertExtra(person);
       onChange(person.id, person);
@@ -293,8 +324,8 @@ export function PartyPersonSearchSelect({
             Alta completa en Usuarios
           </Link>
           {" · "}
-          Si no está en la lista, podés crearlo acá (con DNI obligatorio) o desde
-          el ABM.
+          Si no está en la lista, podés crearlo acá (con DNI y datos de contacto)
+          o desde el ABM.
         </p>
       ) : null}
 
@@ -304,15 +335,22 @@ export function PartyPersonSearchSelect({
             {draftMode === "edit" ? `Editar ${kindLabel}` : `Nuevo ${kindLabel}`}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor={`${name}-draft-name`}>Nombre</Label>
+              <Input
+                id={`${name}-draft-name`}
+                value={draft.name}
+                onChange={(e) => patchDraft({ name: e.target.value })}
+                required
+                autoFocus={draftMode === "edit"}
+              />
+            </div>
             <div className="space-y-1">
               <Label htmlFor={`${name}-draft-dni`}>DNI</Label>
               <Input
                 id={`${name}-draft-dni`}
-                value={dni}
-                onChange={(e) => {
-                  setDni(e.target.value);
-                  setError(null);
-                }}
+                value={draft.dni}
+                onChange={(e) => patchDraft({ dni: e.target.value })}
                 inputMode="numeric"
                 placeholder="Sin puntos"
                 required
@@ -320,21 +358,52 @@ export function PartyPersonSearchSelect({
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor={`${name}-draft-phone`}>Teléfono (opcional)</Label>
+              <Label htmlFor={`${name}-draft-email`}>Email</Label>
+              <Input
+                id={`${name}-draft-email`}
+                type="email"
+                value={draft.email}
+                onChange={(e) => patchDraft({ email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${name}-draft-phone`}>Teléfono</Label>
               <Input
                 id={`${name}-draft-phone`}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                value={draft.phone}
+                onChange={(e) => patchDraft({ phone: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${name}-draft-phone2`}>
+                Teléfono 2 (referencia)
+              </Label>
+              <Input
+                id={`${name}-draft-phone2`}
+                value={draft.phone2}
+                onChange={(e) => patchDraft({ phone2: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${name}-draft-birth`}>
+                Fecha de nacimiento (opcional)
+              </Label>
+              <DateInput
+                id={`${name}-draft-birth`}
+                value={draft.birthDate}
+                onChange={(iso) => patchDraft({ birthDate: iso })}
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor={`${name}-draft-name`}>Nombre</Label>
+              <Label htmlFor={`${name}-draft-address`}>Domicilio actual</Label>
               <Input
-                id={`${name}-draft-name`}
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
+                id={`${name}-draft-address`}
+                value={draft.address}
+                onChange={(e) => patchDraft({ address: e.target.value })}
                 required
-                autoFocus={draftMode === "edit"}
+                placeholder="Calle, número, localidad"
               />
             </div>
           </div>
@@ -368,8 +437,8 @@ export function PartyPersonSearchSelect({
             </div>
           ) : (
             <p className="text-xs text-[var(--muted-foreground)]">
-              El DNI es obligatorio. Si ya existe en el sistema, no se puede
-              crear de nuevo.
+              Email, teléfono y domicilio son obligatorios. El DNI no puede
+              repetirse en la inmobiliaria.
             </p>
           )}
 

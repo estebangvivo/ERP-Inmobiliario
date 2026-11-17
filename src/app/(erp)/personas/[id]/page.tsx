@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/erp/page-chrome";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatDateOnly } from "@/lib/dates";
 import { ROLE_LABELS } from "@/lib/labels";
 import { requireSession, isStaffRole } from "@/lib/session";
 import { getPersonHistory } from "@/server/queries/history";
@@ -96,7 +96,15 @@ export default async function PersonHistoryPage({
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <p>{person.email}</p>
-            {person.phone ? <p>{person.phone}</p> : null}
+            {person.phone ? <p>Tel: {person.phone}</p> : null}
+            {person.phone2 ? <p>Tel 2: {person.phone2}</p> : null}
+            {person.address ? <p>{person.address}</p> : null}
+            {person.birthDate ? (
+              <p>
+                <span className="text-[var(--muted-foreground)]">Nacimiento: </span>
+                {formatDateOnly(person.birthDate)}
+              </p>
+            ) : null}
             {person.documentNumber ? (
               <p>
                 {person.documentType ?? "Doc."} {person.documentNumber}
@@ -110,7 +118,14 @@ export default async function PersonHistoryPage({
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <p>{history.properties.length} propiedades a su nombre</p>
-            <p>{history.contracts.length} contratos</p>
+            <p>{history.contracts.length} contratos (todos los estados)</p>
+            <p>
+              {
+                history.contracts.filter((c) => c.personRole === "GUARANTOR")
+                  .length
+              }{" "}
+              como garante
+            </p>
             {history.settlements.length > 0 ? (
               <p>{history.settlements.length} rendiciones recientes</p>
             ) : null}
@@ -148,7 +163,12 @@ export default async function PersonHistoryPage({
           </DataTable>
       </section>
 
-      <HistoryContractsTable rows={history.contracts} showProperty />
+      <HistoryContractsTable
+        rows={history.contracts}
+        showProperty
+        showPersonRole
+        splitByStatus
+      />
       {history.rentPrices.length > 0 ? (
         <HistoryRentPricesTable rows={history.rentPrices} />
       ) : null}

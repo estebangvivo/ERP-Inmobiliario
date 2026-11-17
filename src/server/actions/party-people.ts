@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
-import { isValidDni, normalizeDni } from "@/lib/dni";
+import { parseDateInput } from "@/lib/dates";
 import { ROLE_DEFAULT_MODULES } from "@/features/auth/lib/modules";
 import { hashPassword } from "@/features/auth/lib/password";
 import {
@@ -22,12 +22,7 @@ const PARTY_PERSON_ROLES = [
   "SUPPLIER",
 ] as const satisfies readonly PartyPersonKind[];
 
-const PARTY_KIND_LABEL: Record<PartyPersonKind, string> = {
-  OWNER: "propietario",
-  TENANT: "inquilino",
-  GUARANTOR: "garante",
-  SUPPLIER: "proveedor",
-};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type CreatePartyPersonResult =
   | {
@@ -40,6 +35,29 @@ export type CheckPersonDniResult =
   | { ok: true; dni: string; match: null }
   | { ok: true; dni: string; match: OrgDniMatch }
   | { ok: false; error: string };
+
+function parseBirthDate(raw?: string | null): Date | null {
+  if (!raw?.trim()) return null;
+  return parseDateInput(raw.trim());
+}
+
+function validateContactFields(input: {
+  email?: string;
+  phone?: string;
+  address?: string;
+}): string | null {
+  const email = input.email?.trim().toLowerCase() || "";
+  if (!email || !EMAIL_RE.test(email)) {
+    return "Ingresá un email válido.";
+  }
+  if (!input.phone?.trim()) {
+    return "El teléfono es obligatorio.";
+  }
+  if (!input.address?.trim() || input.address.trim().length < 3) {
+    return "Ingresá el domicilio actual.";
+  }
+  return null;
+}
 
 /** Chequeo en vivo: ¿este DNI ya está en la organización? */
 export async function checkPersonDniAction(
@@ -61,23 +79,38 @@ export async function checkPersonDniAction(
 
 /**
  * Alta rápida de propietario, inquilino o garante desde selectores de búsqueda.
- * Exige DNI y bloquea si ya existe ese documento en la organización.
+ * Exige DNI, email, teléfono y domicilio.
  */
 export async function createPartyPersonAction(input: {
   kind: PartyPersonKind;
   name: string;
   dni: string;
-  phone?: string;
-  email?: string;
+  email: string;
+  phone: string;
+  phone2?: string;
+  birthDate?: string;
+  address: string;
 }): Promise<CreatePartyPersonResult> {
   try {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const phone = input.phone?.trim() || null;
+    const phone = input.phone.trim();
+    const phone2 = input.phone2?.trim() || null;
+    const address = input.address.trim();
+    const birthDate = parseBirthDate(input.birthDate);
 
     if (name.length < 2) {
       return { ok: false, error: "Ingresá el nombre completo." };
+    }
+    const contactError = validateContactFields({
+      email: input.email,
+      phone,
+      address,
+    });
+    if (contactError) return { ok: false, error: contactError };
+    if (input.birthDate?.trim() && !birthDate) {
+      return { ok: false, error: "Fecha de nacimiento inválida." };
     }
 
     const lookup = await lookupOrgMemberByDni(orgId, input.dni);
@@ -89,82 +122,45 @@ export async function createPartyPersonAction(input: {
       };
     }
     const dni = lookup.dni;
+    const email = input.email.trim().toLowerCase();
 
-    let email = input.email?.trim().toLowerCase() || "";
-    if (email) {
-      const taken = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true },
-      });
-      if (taken) {
-        return {
-          ok: false,
-          error: "Ese email ya está registrado. Dejalo vacío o usá otro.",
-        };
-      }
-    } else {
-      email = `${input.kind.toLowerCase()}.${dni}.${orgId.slice(-8)}@parties.local`;
+    const taken = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (taken) {
+      return {
+        ok: false,
+        error: "Ese email ya está registrado. Usá otro o buscá a la persona.",
+      };
     }
 
     const passwordHash = await hashPassword(randomBytes(24).toString("hex"));
 
-    let user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          authId: `local:${email}`,
-          email,
-          name,
-          phone,
-          documentType: "DNI",
-          documentNumber: dni,
-          passwordHash,
-          isActive: true,
-        },
-      });
-    } else {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          name,
-          phone: phone ?? user.phone,
-          documentType: "DNI",
-          documentNumber: dni,
-        },
-      });
-    }
-
-    const existingMember = await prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: { organizationId: orgId, userId: user.id },
+    const user = await prisma.user.create({
+      data: {
+        authId: `local:${email}`,
+        email,
+        name,
+        phone,
+        phone2,
+        birthDate,
+        address,
+        documentType: "DNI",
+        documentNumber: dni,
+        passwordHash,
+        isActive: true,
       },
     });
-    if (existingMember) {
-      if (PARTY_PERSON_ROLES.includes(existingMember.role as PartyPersonKind)) {
-        return {
-          ok: false,
-          error: `Esa persona ya está cargada como ${
-            PARTY_KIND_LABEL[existingMember.role as PartyPersonKind]
-          }. Buscala en la lista en lugar de cargarla de cero.`,
-        };
-      }
-      await prisma.organizationMember.update({
-        where: { id: existingMember.id },
-        data: {
-          role: input.kind,
-          allowedModules: ROLE_DEFAULT_MODULES[input.kind],
-        },
-      });
-    } else {
-      await prisma.organizationMember.create({
-        data: {
-          organizationId: orgId,
-          userId: user.id,
-          role: input.kind,
-          allowedModules: ROLE_DEFAULT_MODULES[input.kind],
-        },
-      });
-    }
+
+    await prisma.organizationMember.create({
+      data: {
+        organizationId: orgId,
+        userId: user.id,
+        role: input.kind,
+        allowedModules: ROLE_DEFAULT_MODULES[input.kind],
+      },
+    });
 
     revalidatePath("/contratos");
     revalidatePath("/contratos/nuevo");
@@ -193,7 +189,11 @@ export type PartyPersonDetails = {
   id: string;
   name: string;
   documentNumber: string | null;
+  email: string;
   phone: string | null;
+  phone2: string | null;
+  birthDate: string | null;
+  address: string | null;
 };
 
 export async function getPartyPersonAction(
@@ -213,7 +213,11 @@ export async function getPartyPersonAction(
             id: true,
             name: true,
             documentNumber: true,
+            email: true,
             phone: true,
+            phone2: true,
+            birthDate: true,
+            address: true,
           },
         },
       },
@@ -227,7 +231,13 @@ export async function getPartyPersonAction(
         id: member.user.id,
         name: member.user.name,
         documentNumber: member.user.documentNumber,
+        email: member.user.email,
         phone: member.user.phone,
+        phone2: member.user.phone2,
+        birthDate: member.user.birthDate
+          ? member.user.birthDate.toISOString().slice(0, 10)
+          : null,
+        address: member.user.address,
       },
     };
   } catch (error) {
@@ -243,21 +253,34 @@ export type UpdatePartyPersonResult =
     }
   | { ok: false; error: string };
 
-/** Actualiza datos básicos de propietario, inquilino o garante. */
+/** Actualiza datos de propietario, inquilino, garante o proveedor. */
 export async function updatePartyPersonAction(input: {
   personId: string;
   name: string;
   dni: string;
-  phone?: string;
+  email: string;
+  phone: string;
+  phone2?: string;
+  birthDate?: string;
+  address: string;
 }): Promise<UpdatePartyPersonResult> {
   try {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const phone = input.phone?.trim() || null;
+    const phone = input.phone.trim();
+    const phone2 = input.phone2?.trim() || null;
+    const address = input.address.trim();
+    const birthDate = parseBirthDate(input.birthDate);
+    const email = input.email.trim().toLowerCase();
 
     if (name.length < 2) {
       return { ok: false, error: "Ingresá el nombre completo." };
+    }
+    const contactError = validateContactFields({ email, phone, address });
+    if (contactError) return { ok: false, error: contactError };
+    if (input.birthDate?.trim() && !birthDate) {
+      return { ok: false, error: "Fecha de nacimiento inválida." };
     }
 
     const member = await prisma.organizationMember.findFirst({
@@ -282,11 +305,23 @@ export async function updatePartyPersonAction(input: {
     }
     const dni = lookup.dni;
 
+    const emailTaken = await prisma.user.findFirst({
+      where: { email, id: { not: input.personId } },
+      select: { id: true },
+    });
+    if (emailTaken) {
+      return { ok: false, error: "Ese email ya está registrado en otra persona." };
+    }
+
     const user = await prisma.user.update({
       where: { id: input.personId },
       data: {
         name,
+        email,
         phone,
+        phone2,
+        birthDate,
+        address,
         documentType: "DNI",
         documentNumber: dni,
       },

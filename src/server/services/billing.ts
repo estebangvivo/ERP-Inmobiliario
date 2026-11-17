@@ -837,6 +837,16 @@ function addMonths(year: number, month: number, delta: number) {
   };
 }
 
+export type IndexAdjustmentReportRow = {
+  contractId: string;
+  contractCode: string;
+  propertyTitle: string;
+  currency: string;
+  previousRent: number;
+  newRent: number;
+  percent: number;
+};
+
 /**
  * Al cargar índices de un mes, aplica el mayor % (IPC/ICL/CP) a contratos
  * activos cuyo próximo aumento cae el mes siguiente (ej. carga junio →
@@ -849,8 +859,15 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
   periodMonths: number;
   percent: number;
 }) {
+  const empty = {
+    applied: 0,
+    skipped: 0,
+    percent: input.percent,
+    effective: null as { year: number; month: number } | null,
+    rows: [] as IndexAdjustmentReportRow[],
+  };
   if (!(input.percent > 0)) {
-    return { applied: 0, skipped: 0, percent: input.percent };
+    return empty;
   }
 
   const effective = addMonths(input.periodYear, input.periodMonth, 1);
@@ -865,11 +882,13 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
     },
     include: {
       adjustments: { orderBy: { createdAt: "asc" } },
+      property: { select: { title: true } },
     },
   });
 
   let applied = 0;
   let skipped = 0;
+  const rows: IndexAdjustmentReportRow[] = [];
 
   for (const contract of contracts) {
     const policy = contract.adjustments[0];
@@ -912,6 +931,9 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
       continue;
     }
 
+    const previousRent = await getCurrentRent(contract.id);
+    const newRent = round2(previousRent * (1 + input.percent / 100));
+
     await applyContractAdjustment({
       contractId: contract.id,
       percent: input.percent,
@@ -920,9 +942,18 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
       notes: `Ajuste automático ${input.percent}% (máx. IPC/ICL/CP) · período ${input.periodMonths}m · carga ${input.periodMonth}/${input.periodYear} → vigencia ${effective.month}/${effective.year}`,
     });
     applied += 1;
+    rows.push({
+      contractId: contract.id,
+      contractCode: contract.code,
+      propertyTitle: contract.property.title,
+      currency: contract.currency,
+      previousRent,
+      newRent,
+      percent: input.percent,
+    });
   }
 
-  return { applied, skipped, percent: input.percent, effective };
+  return { applied, skipped, percent: input.percent, effective, rows };
 }
 
 export async function recordPayment(input: {

@@ -215,7 +215,7 @@ export function UsersAdminPanel({
         >
           <Input
             name="q"
-            placeholder="Buscar nombre o email"
+            placeholder="Buscar nombre, email o teléfono"
             defaultValue={list.q}
           />
           <Select name="role" defaultValue={list.role}>
@@ -375,7 +375,7 @@ export function UsersAdminPanel({
       )}
 
       <DataTable
-        headers={["Nombre", "Email", "Rol", "Módulos", "Estado", ""]}
+        headers={["Nombre", "Email", "Teléfono", "Rol", "Módulos", "Estado", ""]}
         empty={users.length === 0}
       >
         {users.map((user) => (
@@ -383,6 +383,9 @@ export function UsersAdminPanel({
             <td className="px-4 py-3 font-medium">{user.name}</td>
             <td className="px-4 py-3 text-[var(--muted-foreground)]">
               {user.email}
+            </td>
+            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+              {user.phone || user.phone2 || "—"}
             </td>
             <td className="px-4 py-3">
               <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>

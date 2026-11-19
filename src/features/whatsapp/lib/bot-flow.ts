@@ -65,10 +65,16 @@ async function tryAutoRoute(
   }
 }
 
-const PROSPECT_ROWS = [
-  { id: "intent_buy", title: "Comprar", description: "Busco comprar propiedad" },
+/** Menú comercial: Alquilar / Comprar / Tasar / Contactar asesor. */
+const CLIENT_COMMERCIAL_ROWS = [
   { id: "intent_rent", title: "Alquilar", description: "Busco alquilar" },
-  { id: "intent_appraise", title: "Tasar", description: "Quiero tasar mi inmueble" },
+  { id: "intent_buy", title: "Comprar", description: "Busco comprar" },
+  { id: "intent_appraise", title: "Tasar", description: "Tasar mi inmueble" },
+  {
+    id: "intent_agent",
+    title: "Contactar con un asesor",
+    description: "Elegir área",
+  },
 ] as const;
 
 function intentFromButtonId(id: string): WhatsAppIntent | null {
@@ -91,7 +97,9 @@ function clientActionFromButtonId(id: string): ClientMenuAction | null {
     case "client_debts":
     case "client_contracts":
     case "client_properties":
-    case "client_commercial":
+    case "intent_rent":
+    case "intent_buy":
+    case "intent_appraise":
     case "intent_agent":
       return id;
     default:
@@ -149,17 +157,13 @@ function buildClientMenuRows(profile: WhatsAppContactProfile) {
     });
   }
 
-  rows.push({
-    id: "client_commercial",
-    title: "Buscar propiedad",
-    description: "Comprar, alquilar o tasar",
-  });
-
-  rows.push({
-    id: "intent_agent",
-    title: "Hablar con asesor",
-    description: "Elegí el área",
-  });
+  for (const row of CLIENT_COMMERCIAL_ROWS) {
+    rows.push({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+    });
+  }
 
   return rows.slice(0, 10);
 }
@@ -333,8 +337,8 @@ async function sendSalesIntentMenu(
   await sendBotList(
     session,
     credentials,
-    "Perfecto. ¿Qué necesitás en Ventas / Alquileres?",
-    PROSPECT_ROWS.map((r) => ({
+    "Perfecto. ¿Qué necesitás?",
+    CLIENT_COMMERCIAL_ROWS.map((r) => ({
       id: r.id,
       title: r.title,
       description: r.description,
@@ -506,14 +510,18 @@ async function handleClientMenuAction(
     return;
   }
 
-  if (action === "client_commercial") {
-    const nextPayload: BotPayload = { ...payload, area: "SALES_RENTALS" };
-    await updateSessionBotState(session.id, {
-      botStep: "MAIN_MENU",
-      botPayload: nextPayload,
-      requestedArea: "SALES_RENTALS",
-    });
-    await sendSalesIntentMenu(session, credentials, nextPayload);
+  if (
+    action === "intent_rent" ||
+    action === "intent_buy" ||
+    action === "intent_appraise"
+  ) {
+    const intent = intentFromButtonId(action);
+    if (!intent) return;
+    const nextPayload: BotPayload = {
+      ...payload,
+      area: "SALES_RENTALS",
+    };
+    await startProspectFlow(session, credentials, nextPayload, intent);
     return;
   }
 
@@ -720,29 +728,31 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       choiceN != null
         ? clientActionFromButtonId(clientRows[choiceN - 1]?.id ?? "")
         : null;
-    const action =
-      clientAction ??
-      actionFromNumber ??
-      (textLower.includes("deuda") ||
+    const actionFromText: ClientMenuAction | null =
+      textLower.includes("deuda") ||
       textLower.includes("cuota") ||
       textLower.includes("saldo") ||
       textLower.includes("pago")
         ? "client_debts"
         : textLower.includes("contrato")
           ? "client_contracts"
-          : textLower.includes("propiedad") ||
-              textLower.includes("inmueble") ||
-              textLower.includes("alquilada") ||
-              textLower.includes("disponible")
-            ? "client_properties"
-            : textLower.includes("asesor") || textLower.includes("humano")
-              ? "intent_agent"
-              : textLower.includes("buscar") ||
-                  textLower.includes("comprar") ||
-                  textLower.includes("alquilar") ||
-                  textLower.includes("tasar")
-                ? "client_commercial"
-                : null);
+          : textLower.includes("alquil")
+            ? "intent_rent"
+            : textLower.includes("compr")
+              ? "intent_buy"
+              : textLower.includes("tasar") || textLower.includes("tasaci")
+                ? "intent_appraise"
+                : textLower.includes("asesor") ||
+                    textLower.includes("humano") ||
+                    textLower.includes("area") ||
+                    textLower.includes("área")
+                  ? "intent_agent"
+                  : textLower.includes("propiedad") ||
+                      textLower.includes("inmueble") ||
+                      textLower.includes("disponible")
+                    ? "client_properties"
+                    : null;
+    const action = clientAction ?? actionFromNumber ?? actionFromText;
 
     if (!action) {
       await sendClientMenu(session, credentials, payload, profile);
@@ -791,15 +801,26 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
 
   if (step === "MAIN_MENU") {
     const intentFromNumber = (() => {
-      const n = parseMenuChoiceNumber(text, PROSPECT_ROWS.length);
+      const n = parseMenuChoiceNumber(text, CLIENT_COMMERCIAL_ROWS.length);
       if (n == null) return null;
-      return intentFromButtonId(PROSPECT_ROWS[n - 1]?.id ?? "");
+      return intentFromButtonId(CLIENT_COMMERCIAL_ROWS[n - 1]?.id ?? "");
     })();
     const intent =
-      buttonIntent ?? intentFromNumber ?? matchSalesIntentFromFreeText(text);
+      buttonIntent ??
+      intentFromNumber ??
+      (textLower.includes("asesor") ||
+      textLower.includes("area") ||
+      textLower.includes("área")
+        ? ("AGENT" as const)
+        : matchSalesIntentFromFreeText(text));
 
     if (!intent) {
       await sendSalesIntentMenu(session, credentials, payload);
+      return;
+    }
+
+    if (intent === "AGENT") {
+      await sendAreaMenu(session, credentials, payload, profile);
       return;
     }
 

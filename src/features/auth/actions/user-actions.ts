@@ -148,6 +148,7 @@ export async function listOrganizationUsers(
   await assertCanManageUsers(orgId);
 
   const q = options.q?.trim() ?? "";
+  const qDigits = q.replace(/\D/g, "");
   const userWhere: Prisma.UserWhereInput = {
     ...excludePlatformSuperadminFromUser(),
     ...(q
@@ -156,6 +157,19 @@ export async function listOrganizationUsers(
             { name: { contains: q, mode: "insensitive" } },
             { email: { contains: q, mode: "insensitive" } },
             { documentNumber: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q, mode: "insensitive" } },
+            { phone2: { contains: q, mode: "insensitive" } },
+            ...(qDigits.length >= 4 && qDigits !== q
+              ? [
+                  { phone: { contains: qDigits, mode: "insensitive" as const } },
+                  {
+                    phone2: {
+                      contains: qDigits,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                ]
+              : []),
           ],
         }
       : {}),

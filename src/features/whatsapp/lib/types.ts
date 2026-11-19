@@ -23,7 +23,9 @@ export type ClientMenuAction =
   | "client_debts"
   | "client_contracts"
   | "client_properties"
-  | "client_commercial"
+  | "intent_rent"
+  | "intent_buy"
+  | "intent_appraise"
   | "intent_agent";
 
 export type BotPayload = {

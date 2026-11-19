@@ -199,19 +199,47 @@ async function sendBotList(
   step: BotStep,
   payload: BotPayload,
 ) {
-  const waId = await sendWhatsAppList({
-    credentials,
-    toPhone: session.waContactPhone,
+  const textFallback = [
     body,
-    buttonLabel: "Ver opciones",
-    rows,
-  });
+    "",
+    ...rows.map((r, i) => `${i + 1}. ${r.title}${r.description ? ` — ${r.description}` : ""}`),
+    "",
+    "Respondé con el número o el nombre de la opción.",
+  ].join("\n");
+
+  let waId: string | null = null;
+  let messageType: "interactive" | "text" = "interactive";
+  let recordedBody = body;
+
+  try {
+    waId = await sendWhatsAppList({
+      credentials,
+      toPhone: session.waContactPhone,
+      body,
+      buttonLabel: "Ver opciones",
+      rows,
+    });
+  } catch (err) {
+    console.warn(
+      "whatsapp list failed, falling back to text",
+      session.id,
+      err,
+    );
+    messageType = "text";
+    recordedBody = textFallback;
+    waId = await sendWhatsAppText({
+      credentials,
+      toPhone: session.waContactPhone,
+      body: textFallback,
+    });
+  }
+
   await recordOutboundBotMessage({
     sessionId: session.id,
     organizationId: session.organizationId,
-    body,
+    body: recordedBody,
     waMessageId: waId,
-    messageType: "interactive",
+    messageType,
   });
   await updateSessionBotState(session.id, {
     botStep: step,
@@ -590,7 +618,15 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "AREA_MENU") {
-    const area = buttonArea ?? matchAreaFromFreeText(text);
+    const areaFromNumber = (() => {
+      const n = Number(text.trim());
+      if (!Number.isInteger(n) || n < 1 || n > AREA_MENU_ROWS.length) {
+        return null;
+      }
+      return AREA_MENU_ROWS[n - 1]?.area ?? null;
+    })();
+    const area =
+      buttonArea ?? areaFromNumber ?? matchAreaFromFreeText(text);
 
     if (!area) {
       await sendAreaMenu(session, credentials, payload, profile);

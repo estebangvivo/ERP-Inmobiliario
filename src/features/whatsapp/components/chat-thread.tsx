@@ -143,7 +143,10 @@ export function ChatThread({
                 Tomar control
               </Button>
             ) : null}
-            {session.status === "AGENT_HANDLED" ? (
+            {session.status === "AGENT_HANDLED" ||
+            session.status === "WAITING_AGENT" ||
+            session.status === "CLOSED" ||
+            session.status === "BOT_ACTIVE" ? (
               <Button
                 type="button"
                 size="sm"
@@ -156,7 +159,9 @@ export function ChatThread({
                   })
                 }
               >
-                Devolver al bot
+                {session.status === "BOT_ACTIVE"
+                  ? "Reiniciar bot"
+                  : "Devolver al bot"}
               </Button>
             ) : null}
             <Link
@@ -225,9 +230,13 @@ export function ChatThread({
           name="body"
           placeholder={
             replyDisabled
-              ? session.status === "WAITING_AGENT"
-                ? "Tomá el control para responder"
-                : "Solo el agente asignado puede responder"
+              ? session.status === "BOT_ACTIVE"
+                ? "El bot está atendiendo esta conversación"
+                : session.status === "CLOSED"
+                  ? "Conversación cerrada — el cliente puede escribir para reabrir"
+                  : session.status === "WAITING_AGENT"
+                    ? "Tomá el control para responder"
+                    : "Solo el agente asignado puede responder"
               : "Escribí un mensaje…"
           }
           disabled={replyDisabled || pending}

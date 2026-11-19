@@ -111,27 +111,38 @@ async function handleInboundMessage(
 
   await markWhatsAppMessageRead(credentials, inbound.waMessageId);
 
-  // Tras "Cerrar", el próximo mensaje del cliente retoma el bot con el menú.
-  if (session.status === "CLOSED") {
+  // Charla cerrada, o en cola sin agente asignado: retomar el bot.
+  const waitingWithoutAgent =
+    session.status === "WAITING_AGENT" && !session.assignedAgentId;
+  if (session.status === "CLOSED" || waitingWithoutAgent) {
     const reopened = await reopenClosedSessionToBot({
       sessionId: session.id,
       organizationId,
     });
-    await startBotConversation(reopened, credentials);
+    try {
+      await startBotConversation(reopened, credentials);
+    } catch (err) {
+      console.error("whatsapp reopen bot conversation", session.id, err);
+      // Si falla el menú, igual dejamos BOT_ACTIVE para el próximo mensaje.
+    }
     return;
   }
 
   if (session.status === "BOT_ACTIVE") {
-    await processBotMessage({
-      session,
-      credentials,
-      body: inbound.body,
-      interactiveId: inbound.interactiveId,
-    });
+    try {
+      await processBotMessage({
+        session,
+        credentials,
+        body: inbound.body,
+        interactiveId: inbound.interactiveId,
+      });
+    } catch (err) {
+      console.error("whatsapp processBotMessage", session.id, err);
+    }
     return;
   }
 
-  // Inbox en tiempo real cuando el bot ya no atiende (espera / con agente).
+  // Inbox en tiempo real cuando hay agente atendiendo.
   publishWhatsAppInboxEvent({
     type: "session.updated",
     organizationId,

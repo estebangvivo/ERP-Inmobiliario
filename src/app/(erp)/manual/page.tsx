@@ -1,31 +1,49 @@
-import fs from "node:fs";
-import path from "node:path";
-import { marked } from "marked";
+import { PageHeader } from "@/components/erp/page-chrome";
+import { buttonVariants } from "@/components/ui/button";
+import { manualMarkdownForWeb } from "@/lib/manual";
 import { requireModule } from "@/lib/session";
+import { cn } from "@/lib/utils";
+import { marked } from "marked";
 
 export const dynamic = "force-dynamic";
 
-function loadManualHtml(): string {
-  const filePath = path.join(process.cwd(), "docs", "manual", "MANUAL-USUARIO.md");
-  const raw = fs.readFileSync(filePath, "utf8");
-  // Quitar el bloque de "créditos de capturas / regenerar script" del final (uso interno).
-  const withoutDevNotes = raw.replace(
-    /\n## Créditos de capturas[\s\S]*$/m,
-    "\n",
-  );
-  const withPublicImages = withoutDevNotes.replace(
-    /\]\(images\//g,
-    "](/manual/images/",
-  );
-  return marked.parse(withPublicImages, { async: false }) as string;
-}
-
 export default async function ManualPage() {
   await requireModule("manual");
-  const html = loadManualHtml();
+  const html = marked.parse(manualMarkdownForWeb(), {
+    async: false,
+  }) as string;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl space-y-4">
+      <PageHeader
+        title="Manual de usuario"
+        description="Guía operativa de SimpleInmo. Podés leerla acá, descargarla o imprimirla."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/api/manual/descargar?format=html"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Descargar HTML
+            </a>
+            <a
+              href="/api/manual/descargar?format=md"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Descargar Markdown
+            </a>
+            <a
+              href="/api/manual/descargar?format=html&inline=1&print=1"
+              target="_blank"
+              rel="noreferrer"
+              className={cn(buttonVariants())}
+            >
+              Imprimir / PDF
+            </a>
+          </div>
+        }
+      />
+
       <article
         className="manual-prose rounded-xl border border-[var(--border)] bg-[var(--card)] px-6 py-8 sm:px-10"
         dangerouslySetInnerHTML={{ __html: html }}

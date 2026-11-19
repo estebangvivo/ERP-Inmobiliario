@@ -2,8 +2,9 @@
 
 - **Manual completo:** [MANUAL-USUARIO.md](./MANUAL-USUARIO.md)
 - **Capturas:** carpeta [`images/`](./images/)
+- **En el ERP:** menú **Manual** (`/manual`), con descarga HTML/Markdown e impresión/PDF
 
-Incluye el módulo **Reportes** (flujo e pendientes, gastos a recuperar, morosidad).
+Incluye contratos (índices, próximos a vencer, renovación), cobros, tesorería, reportes, WhatsApp, portal, privacidad/condiciones y el resto de módulos operativos.
 
 ## Regenerar capturas
 

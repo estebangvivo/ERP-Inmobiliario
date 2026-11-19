@@ -1,8 +1,10 @@
 # Manual de usuario — SimpleInmo
 
-Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingreso hasta el portal público, pasando por propiedades, contratos, cobros, mantenimiento y atención comercial.
+Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingreso hasta el portal público, pasando por propiedades, contratos, cobros, mantenimiento, WhatsApp y atención comercial.
 
 > Este manual está pensado para el equipo de la **inmobiliaria** (administrador, agentes y roles operativos). No incluye funciones de administración técnica de la plataforma SaaS.
+
+> **Descarga e impresión:** en el menú **Manual** usá **Descargar HTML**, **Descargar Markdown** o **Imprimir / PDF**.
 
 ---
 
@@ -28,9 +30,10 @@ Guía completa para operar el ERP inmobiliario de punta a punta: desde el ingres
 18. [Agenda unificada](#18-agenda-unificada)
 19. [Ventas](#19-ventas)
 20. [Turnero](#20-turnero)
-21. [Portal público](#21-portal-público)
-22. [Flujo completo de ejemplo](#22-flujo-completo-de-ejemplo)
-23. [Preguntas frecuentes](#23-preguntas-frecuentes)
+21. [WhatsApp](#21-whatsapp)
+22. [Portal público](#22-portal-público)
+23. [Flujo completo de ejemplo](#23-flujo-completo-de-ejemplo)
+24. [Preguntas frecuentes](#24-preguntas-frecuentes)
 
 ---
 
@@ -50,11 +53,11 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 
 | Módulo | Para qué sirve |
 |--------|----------------|
-| Dashboard | Resumen del mes |
+| Dashboard | Resumen del día/mes (según rol) |
 | Propiedades | Portfolio de alquiler/venta |
 | Edificios | Edificios y unidades |
-| Contratos | Alquileres, índices y honorarios |
-| Cobros | Cuotas y pagos |
+| Contratos | Alquileres, índices, vencimientos y renovaciones |
+| Cobros | Cuotas, cuenta corriente e impresión de deuda |
 | Tesorería | Recibos, OP, caja, bancos |
 | Expensas | Prorrateo de gastos del edificio |
 | Servicios | Misma lógica que expensas + gasto común |
@@ -64,10 +67,14 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 | Consultas | Leads del portal |
 | Visitas | Agenda de visitas del portal |
 | Agenda | Visitas de la semana + turnero de hoy |
+| WhatsApp | Inbox del bot y atención por áreas |
 | Ventas | Pipeline de oportunidades de venta |
 | Turnero | Turnos presenciales en sucursal |
 | Usuarios | Alta de personas (solo admin) |
 | Ajustes | Datos de la inmobiliaria (solo admin) |
+| Manual | Esta guía (también descargable) |
+
+El menú lateral se agrupa por área (Inmuebles, Administración, Finanzas, Comercial, Atención, Sistema). Dashboard e Manual están disponibles para todos los roles.
 
 ---
 
@@ -139,8 +146,11 @@ Cada persona que opera el sistema (o figura como propietario/inquilino/proveedor
 
 1. Abrí **Usuarios** → **Nuevo usuario**.
 2. Completá nombre, email, contraseña y rol.
-3. Marcá los módulos a los que puede acceder (si aplica).
-4. Guardá.
+3. Completá datos de contacto útiles: teléfono, teléfono 2, fecha de nacimiento y domicilio (además del documento).
+4. Marcá los módulos a los que puede acceder (si aplica). WhatsApp y Reportes son opcionales por usuario.
+5. Guardá.
+
+Desde la ficha de la persona podés ver su **historial** (contratos como inquilino/garante, propiedades, etc.).
 
 ### Roles
 
@@ -186,14 +196,14 @@ Los **edificios** agrupan **unidades** (deptos, locales) con un **coeficiente** 
 ### Alta
 
 1. **Propiedades** → **Nueva propiedad**.
-2. Completá título, tipo, operación (Alquiler / Venta / Ambos), precio y ubicación. Si elegís **Alquiler y venta**, cargá **precio de alquiler** y **precio de venta**, cada uno con su moneda (lo habitual: alquiler en ARS y venta en USD).
+2. Completá título, tipo (incluye **Dúplex**, **Monoambiente**, **Cochera**, etc.), operación (Alquiler / Venta / Ambos), precio y ubicación. Si elegís **Alquiler y venta**, cargá **precio de alquiler** y **precio de venta**, cada uno con su moneda (lo habitual: alquiler en ARS y venta en USD).
 3. Asigná **propietario** y, si corresponde, la **unidad** del edificio.
 4. Definí el **estado** y, si querés mostrarla en el sitio público, marcá **Publicar en el portal**.
 5. Guardá. En la edición podés subir **fotos** y video. Las fotos quedan en la base de datos (si no se ven, eliminalas y volvé a subirlas).
 
 ### Filtros
 
-Usá búsqueda por título/dirección/ciudad, estado, operación o si está en el portal.
+Usá búsqueda por título/dirección/ciudad, estado, operación, **propietario** o si está en el portal.
 
 ### Relación con el portal
 
@@ -234,7 +244,17 @@ En la lista de Contratos (staff):
 3. El sistema guarda el registro y toma el **mayor %** entre los tres.
 4. Ese % se aplica a los contratos activos de ese período cuya **próxima actualización** sea el **mes siguiente** (ej.: inicio en enero, cada 6 meses → aumento en julio; se carga en junio).
 5. Las cuotas abiertas desde esa vigencia se recalculan con el nuevo alquiler.
-6. Usá **Ver índices cargados** para consultar/filtrar lo ya guardado (año, mes, período).
+6. Al aplicar, se muestra el **reporte de contratos ajustados** (alquiler anterior, nuevo y diferencia).
+7. Usá **Ver reporte de ajustes de este período** para **reabrir** ese listado más tarde (sin volver a aplicar índices).
+8. Usá **Ver índices cargados** para consultar/filtrar lo ya guardado (año, mes, período).
+
+### Próximos a vencer y renovación
+
+1. En Contratos, abrí **Próximos a vencer**.
+2. Elegí el rango de fechas (por defecto hoy + 90 días) y aplicá.
+3. Desde la lista (o desde el detalle del contrato) tocá **Renovar**.
+4. Se abre un formulario precargado (partes, alquiler vigente, honorarios, índice, servicios, etc.): **editá lo que haga falta** y confirmá.
+5. Se crea el contrato nuevo y el anterior pasa a estado **Renovado**.
 
 ### Detalle del contrato
 
@@ -243,6 +263,7 @@ En la lista de Contratos (staff):
 - Card de **Depósito / garantía**: en custodia, devolver, o **Aplicar a saldo**.
 - **Garantes:** en un contrato ya creado podés cambiar la cantidad, agregar, reemplazar o quitar garantes (y dar de alta uno nuevo con DNI).
 - **Archivos del contrato:** adjuntá o eliminá contrato escrito, DNI, recibos de sueldo u otros en cualquier momento.
+- Botón **Renovar** si el contrato está Activo o Vencido.
 - Al pasar a **Rescindido** o **Vencido**, la propiedad vuelve a Disponible (si no hay otro contrato activo).
 
 **Tips**
@@ -307,6 +328,7 @@ Staff puede **Exportar morosos** (CSV) desde Cobros o Cuenta corriente. El infor
 1. Abrí la cuenta del inquilino.
 2. En cada cuota podés tildar conceptos: **Alquiler**, **Expensas ordinarias/extraordinarias**, **Servicios**, **Honorarios**, **Mora**, etc.
 3. Solo se pueden tildar conceptos que entren en el monto a aplicar; el resto queda como saldo.
+4. Podés **imprimir / descargar PDF** del resumen de deuda (conceptos discriminados) para entregar al inquilino.
 
 ### Registrar un pago
 
@@ -335,13 +357,14 @@ Módulo operativo de dinero de la inmobiliaria (staff): recibos, órdenes de pag
 1. Abrí **Caja** y una sesión diaria (si vas a cobrar en efectivo).
 2. **Recibos → Nuevo**: inquilino o nombre libre, líneas (contrato/propiedad), medios de pago.
 3. Podés aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
-4. Imprimí o descargá el PDF del recibo.
+4. Imprimí o descargá el PDF del recibo: sale en **2 copias** con espacio para firmas.
 
 ### Flujo típico de pago
 
 1. **Órdenes de pago → Nueva**: proveedor o beneficiario, líneas y medios.
 2. Aplicá a facturas de mantenimiento o a **rendiciones** pendientes.
 3. Al imputar, se actualiza el estado de esas facturas/rendiciones.
+4. La impresión/PDF de la OP también trae **2 copias** con firmas.
 
 ### Bancos y cheques
 
@@ -503,7 +526,36 @@ Abrí según el dispositivo:
 
 ---
 
-## 21. Portal público
+## 21. WhatsApp
+
+> Requiere el módulo **WhatsApp** habilitado al usuario. La configuración Meta es del **administrador**.
+
+### Configuración (admin)
+
+1. **WhatsApp → Configuración**.
+2. Pegá el **token de acceso** de Meta, el **Phone Number ID** y el token de verificación del webhook.
+3. Preferí un **token permanente** (usuario del sistema en Business Manager) frente al temporal de “Paso 1. Probar”.
+4. Definí el modo de derivación: manual, round-robin o menos ocupado.
+5. En **Equipo**, configurá áreas y horarios de cada agente.
+
+### Inbox
+
+1. En **WhatsApp** ves la bandeja (izquierda) y el chat (derecha), con scroll independiente.
+2. El bot ofrece menú por **texto numerado** (1, 2, 3…) o por nombre de área.
+3. Áreas: Ventas/Alquileres, Obras, Contratos, Caja.
+4. Cuando deriva a un área, queda **esperando agente**. Un “gracias” no reinicia el menú.
+5. **Tomar control**: el bot **deja de responder** hasta que cierres o **Devuelvas al bot**.
+6. **Cerrar**: avisa al cliente; si escribe de nuevo, el bot retoma el menú.
+7. **Reiniciar bot** fuerza el menú otra vez (útil si quedó trabado).
+
+### Buenas prácticas
+
+- Si ves `[No se pudo responder por WhatsApp] Authentication Error`, renová el token en Configuración.
+- No compartas el token de Meta por chat o correo.
+
+---
+
+## 22. Portal público
 
 El portal es la cara web de tu inmobiliaria. El link se obtiene desde **Ajustes**.
 
@@ -525,7 +577,7 @@ Eso crea automáticamente:
 
 ---
 
-## 22. Flujo completo de ejemplo
+## 23. Flujo completo de ejemplo
 
 Caso típico de alquiler de un departamento:
 
@@ -543,7 +595,7 @@ Caso de venta: propiedad SALE → **Ventas** → seña (Reservada) → Vendida.
 
 ---
 
-## 23. Preguntas frecuentes
+## 24. Preguntas frecuentes
 
 **¿Por qué no veo una propiedad en el portal?**  
 Revisá que el estado sea Disponible o Reservada y que esté publicada. Borradores, inactivas o alquiladas no se muestran.
@@ -554,8 +606,8 @@ Necesitás contratos activos. Si incluyen expensas, cargalas antes del período.
 **¿Un agente no ve Usuarios o Ajustes?**  
 Es esperado: esas secciones son del administrador de la inmobiliaria.
 
-**¿Un agente no ve Reportes?**  
-El administrador debe tildarle el módulo **Reportes** en Usuarios (igual que con WhatsApp u otros módulos opcionales). Los administradores lo ven siempre.
+**¿Un agente no ve Reportes o WhatsApp?**  
+El administrador debe tildarle esos módulos en Usuarios. Los administradores los ven siempre.
 
 **¿Turnero, Visitas y Agenda son lo mismo?**  
 No. Visitas = agenda web del portal. Turnero = fila presencial. Agenda = vista unificada de apoyo.
@@ -569,20 +621,23 @@ Menú **Ventas**. Solo aplica a propiedades con operación Venta o Ambos.
 **¿Dónde veo lo pendiente de cobrar y pagar?**  
 En **Reportes → Flujo e pendientes**, con filtro de fechas. La morosidad detallada está en **Reportes → Morosidad**.
 
----
+**¿Cómo actualizo alquileres con IPC/ICL/CP?**  
+Cargá los % del período en Contratos y pulsá **Aplicar los índices**. Se usa el mayor entre IPC, ICL y CP. Después podés **reabrir el reporte** de contratos ajustados sin volver a aplicar.
 
+**¿Cómo renuevo un contrato por vencer?**  
+**Contratos → Próximos a vencer** (elegí fechas) → **Renovar**. Editá los datos y confirmá; el anterior queda Renovado.
 
-### ¿Cómo actualizo alquileres con IPC/ICL/CP?
-
-Cargá los % del período en Contratos y pulsá **Aplicar los índices**. Se usa el mayor entre IPC, ICL y CP, y se aplica a los contratos que deban aumentar el mes siguiente.
-
-### ¿Dónde veo los servicios en el cobro?
-
+**¿Dónde veo los servicios en el cobro?**  
 En la cuenta corriente del inquilino, al abrir la cuota, aparecen como **Servicios** (y **Servicios extraordinarios** si hay obras), aparte de las expensas.
 
-### ¿Puedo crear un inquilino al armar el contrato?
-
+**¿Puedo crear un inquilino al armar el contrato?**  
 Sí: en el buscador de inquilino/garante usá **Agregar nuevo** e ingresá el DNI. Si ya existe como inquilino o garante, el sistema lo avisa.
+
+**¿Dónde están la política de privacidad y las condiciones?**  
+En las URLs públicas `/privacidad` y `/condiciones` (también `/privacy` y `/terms`).
+
+**¿Cómo descargo o imprimo este manual?**  
+En el menú **Manual**: **Descargar HTML**, **Descargar Markdown** o **Imprimir / PDF** (el navegador puede guardar como PDF).
 
 ## Créditos de capturas
 

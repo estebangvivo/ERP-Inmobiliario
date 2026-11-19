@@ -156,26 +156,32 @@ export async function releaseChatSessionToBot(input: {
   const updated = await updateSessionStatus(input.sessionId, input.organizationId, {
     status: "BOT_ACTIVE",
     botStep: "AREA_MENU",
+    requestedArea: null,
     assignedAgent: { disconnect: true },
   });
 
   if (input.notifyCustomer !== false) {
     const credentials = await getOrganizationWhatsAppConfig(input.organizationId);
     if (credentials) {
+      // Texto simple acá para evitar import circular con bot-flow.
       const body =
-        "La conversación volvió al asistente automático. Escribí *menu* para ver las opciones.";
-      const waId = await sendWhatsAppText({
-        credentials,
-        toPhone: session.waContactPhone,
-        body,
-      });
-      await recordOutboundAgentMessage({
-        sessionId: session.id,
-        organizationId: session.organizationId,
-        body,
-        sentByUserId: null,
-        waMessageId: waId,
-      });
+        "La conversación volvió al asistente automático. Escribí *menu* o *hola* para ver las opciones.";
+      try {
+        const waId = await sendWhatsAppText({
+          credentials,
+          toPhone: session.waContactPhone,
+          body,
+        });
+        await recordOutboundAgentMessage({
+          sessionId: session.id,
+          organizationId: session.organizationId,
+          body,
+          sentByUserId: null,
+          waMessageId: waId,
+        });
+      } catch (err) {
+        console.error("whatsapp release to bot notify", session.id, err);
+      }
     }
   }
 

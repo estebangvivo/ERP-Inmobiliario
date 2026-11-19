@@ -38,6 +38,8 @@ function statusVariant(
 }
 
 function payloadPreview(s: SessionListItem): string | null {
+  // Solo si no hay preview del último mensaje real.
+  if (s.lastMessagePreview) return null;
   const p = s.botPayload;
   if (!p) return null;
   const parts: string[] = [];

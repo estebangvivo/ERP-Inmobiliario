@@ -16,6 +16,8 @@ import {
   getSessionForOrg,
   listInboxSessions,
 } from "@/features/whatsapp/services/session-service";
+import { getOrganizationWhatsAppConfig } from "@/features/whatsapp/lib/config";
+import { startBotConversation } from "@/features/whatsapp/lib/bot-flow";
 import { parseBotPayload } from "@/features/whatsapp/lib/lead-sync";
 import { listWhatsAppEligibleAgents } from "@/features/whatsapp/services/agent-eligibility";
 import { requireModule, requireStaff } from "@/lib/session";
@@ -143,10 +145,17 @@ export async function releaseWhatsAppSessionAction(
   try {
     const session = await requireModule("whatsapp");
     await requireStaff();
-    await releaseChatSessionToBot({
+    const chat = await releaseChatSessionToBot({
       sessionId,
       organizationId: session.organizationId,
+      notifyCustomer: false,
     });
+    const credentials = await getOrganizationWhatsAppConfig(
+      session.organizationId,
+    );
+    if (credentials) {
+      await startBotConversation(chat, credentials);
+    }
     return { ok: true, message: "Conversación devuelta al bot." };
   } catch {
     return { ok: false, error: "No se pudo devolver al bot." };

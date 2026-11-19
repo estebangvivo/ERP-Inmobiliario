@@ -199,19 +199,34 @@ async function sendBotList(
   step: BotStep,
   payload: BotPayload,
 ) {
-  const textFallback = [
+  // Texto primero: más fiable que listas interactivas de Meta en varios WABA.
+  const textBody = [
     body,
     "",
-    ...rows.map((r, i) => `${i + 1}. ${r.title}${r.description ? ` — ${r.description}` : ""}`),
+    ...rows.map(
+      (r, i) =>
+        `${i + 1}. ${r.title}${r.description ? ` — ${r.description}` : ""}`,
+    ),
     "",
     "Respondé con el número o el nombre de la opción.",
   ].join("\n");
 
   let waId: string | null = null;
-  let messageType: "interactive" | "text" = "interactive";
-  let recordedBody = body;
+  let messageType: "interactive" | "text" = "text";
+  let recordedBody = textBody;
 
   try {
+    waId = await sendWhatsAppText({
+      credentials,
+      toPhone: session.waContactPhone,
+      body: textBody,
+    });
+  } catch (textErr) {
+    console.warn(
+      "whatsapp text menu failed, trying interactive list",
+      session.id,
+      textErr,
+    );
     waId = await sendWhatsAppList({
       credentials,
       toPhone: session.waContactPhone,
@@ -219,19 +234,8 @@ async function sendBotList(
       buttonLabel: "Ver opciones",
       rows,
     });
-  } catch (err) {
-    console.warn(
-      "whatsapp list failed, falling back to text",
-      session.id,
-      err,
-    );
-    messageType = "text";
-    recordedBody = textFallback;
-    waId = await sendWhatsAppText({
-      credentials,
-      toPhone: session.waContactPhone,
-      body: textFallback,
-    });
+    messageType = "interactive";
+    recordedBody = body;
   }
 
   await recordOutboundBotMessage({

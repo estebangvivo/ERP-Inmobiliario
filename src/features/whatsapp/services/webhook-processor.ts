@@ -1,7 +1,9 @@
+import { prisma } from "@/lib/prisma";
 import type { WhatsAppCredentials } from "@/features/whatsapp/lib/config";
 import { resolveOrganizationForPhoneNumberId } from "@/features/whatsapp/lib/config";
 import {
   markWhatsAppMessageRead,
+  sendWhatsAppText,
 } from "@/features/whatsapp/lib/meta-client";
 import {
   processBotMessage,
@@ -10,7 +12,10 @@ import {
 import type { InboundWhatsAppMessage } from "@/features/whatsapp/lib/types";
 import { publishWhatsAppInboxEvent } from "@/features/whatsapp/lib/event-bus";
 import { reopenClosedSessionToBot } from "@/features/whatsapp/services/handoff-service";
-import { recordInboundCustomerMessage } from "@/features/whatsapp/services/message-service";
+import {
+  recordInboundCustomerMessage,
+  recordOutboundBotMessage,
+} from "@/features/whatsapp/services/message-service";
 import { getOrCreateChatSession } from "@/features/whatsapp/services/session-service";
 
 type MetaWebhookPayload = {
@@ -89,19 +94,50 @@ function extractInboundMessages(payload: MetaWebhookPayload): InboundWhatsAppMes
   return result;
 }
 
+function isGreetingOrMenu(body: string): boolean {
+  const t = body.trim().toLowerCase();
+  if (!t) return false;
+  if (t === "menu" || t === "menú") return true;
+  return /^(hola|holis|buen[oa]s?(\s+d[ií]as?|\s+tardes?|\s+noches?)?|hey|hi|hello)[\s!.]*$/i.test(
+    t,
+  );
+}
+
+async function sendLastResortBotHello(
+  sessionId: string,
+  organizationId: string,
+  phone: string,
+  credentials: WhatsAppCredentials,
+) {
+  const body =
+    "¡Hola! Soy el asistente de la inmobiliaria. Escribí *menu* para ver las opciones.";
+  const waId = await sendWhatsAppText({
+    credentials,
+    toPhone: phone,
+    body,
+  });
+  await recordOutboundBotMessage({
+    sessionId,
+    organizationId,
+    body,
+    waMessageId: waId,
+    messageType: "text",
+  });
+}
+
 async function handleInboundMessage(
   inbound: InboundWhatsAppMessage,
   credentials: WhatsAppCredentials,
   organizationId: string,
 ) {
-  const session = await getOrCreateChatSession({
+  const created = await getOrCreateChatSession({
     organizationId,
     waContactPhone: inbound.fromPhone,
     waContactName: inbound.contactName,
   });
 
   await recordInboundCustomerMessage({
-    sessionId: session.id,
+    sessionId: created.id,
     organizationId,
     waMessageId: inbound.waMessageId,
     body: inbound.body,
@@ -111,44 +147,71 @@ async function handleInboundMessage(
 
   await markWhatsAppMessageRead(credentials, inbound.waMessageId);
 
-  // Charla cerrada, o en cola sin agente asignado: retomar el bot.
-  const waitingWithoutAgent =
-    session.status === "WAITING_AGENT" && !session.assignedAgentId;
-  if (session.status === "CLOSED" || waitingWithoutAgent) {
-    const reopened = await reopenClosedSessionToBot({
-      sessionId: session.id,
+  // Estado fresco: evita ramas con datos viejos tras handoff/cierre.
+  let session = await prisma.whatsAppChatSession.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+
+  // Solo si un agente humano ya tomó la charla dejamos de contestar con el bot.
+  if (session.status === "AGENT_HANDLED" && session.assignedAgentId) {
+    publishWhatsAppInboxEvent({
+      type: "session.updated",
       organizationId,
+      sessionId: session.id,
+      payload: { status: session.status },
     });
-    try {
-      await startBotConversation(reopened, credentials);
-    } catch (err) {
-      console.error("whatsapp reopen bot conversation", session.id, err);
-      // Si falla el menú, igual dejamos BOT_ACTIVE para el próximo mensaje.
-    }
     return;
   }
 
-  if (session.status === "BOT_ACTIVE") {
-    try {
+  try {
+    const needsFreshBot =
+      session.status === "CLOSED" ||
+      session.status === "WAITING_AGENT" ||
+      !session.botStep ||
+      isGreetingOrMenu(inbound.body);
+
+    if (needsFreshBot) {
+      session = await reopenClosedSessionToBot({
+        sessionId: session.id,
+        organizationId,
+      });
+      await startBotConversation(session, credentials);
+      return;
+    }
+
+    if (session.status === "BOT_ACTIVE") {
       await processBotMessage({
         session,
         credentials,
         body: inbound.body,
         interactiveId: inbound.interactiveId,
       });
-    } catch (err) {
-      console.error("whatsapp processBotMessage", session.id, err);
+      return;
     }
-    return;
-  }
 
-  // Inbox en tiempo real cuando hay agente atendiendo.
-  publishWhatsAppInboxEvent({
-    type: "session.updated",
-    organizationId,
-    sessionId: session.id,
-    payload: { status: session.status },
-  });
+    publishWhatsAppInboxEvent({
+      type: "session.updated",
+      organizationId,
+      sessionId: session.id,
+      payload: { status: session.status },
+    });
+  } catch (err) {
+    console.error("whatsapp bot handle failed", session.id, err);
+    try {
+      session = await reopenClosedSessionToBot({
+        sessionId: session.id,
+        organizationId,
+      });
+      await sendLastResortBotHello(
+        session.id,
+        organizationId,
+        session.waContactPhone,
+        credentials,
+      );
+    } catch (err2) {
+      console.error("whatsapp last-resort send failed", session.id, err2);
+    }
+  }
 }
 
 export async function processWhatsAppWebhookPayload(

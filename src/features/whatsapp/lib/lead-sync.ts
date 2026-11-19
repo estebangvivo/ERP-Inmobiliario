@@ -113,6 +113,8 @@ export function parseBotPayload(value: Prisma.JsonValue | null): BotPayload {
         : undefined,
     zone: typeof o.zone === "string" ? o.zone : undefined,
     budget: typeof o.budget === "string" ? o.budget : undefined,
+    budgetRangeId:
+      typeof o.budgetRangeId === "string" ? o.budgetRangeId : undefined,
     propertyType:
       typeof o.propertyType === "string" ? o.propertyType : undefined,
     areaNote: typeof o.areaNote === "string" ? o.areaNote : undefined,

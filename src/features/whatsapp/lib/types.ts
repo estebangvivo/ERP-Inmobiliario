@@ -31,6 +31,8 @@ export type BotPayload = {
   area?: WhatsAppAgentArea;
   zone?: string;
   budget?: string;
+  /** Id del rango de presupuesto del menú (ej. budget_rent_0_500). */
+  budgetRangeId?: string;
   propertyType?: string;
   areaNote?: string;
   userId?: string;

@@ -34,6 +34,13 @@ import {
   buildClientDebtsMessage,
   buildClientPropertiesMessage,
 } from "@/features/whatsapp/services/client-self-service";
+import {
+  buildBudgetMenuRows,
+  countCatalogProperties,
+  formatCatalogWhatsAppMessage,
+  resolveBudgetRange,
+  searchCatalogProperties,
+} from "@/features/whatsapp/services/property-catalog-service";
 
 async function tryAutoRoute(
   sessionId: string,
@@ -122,15 +129,23 @@ function buildClientMenuRows(profile: WhatsAppContactProfile) {
     rows.push({
       id: "client_contracts",
       title: "Mis contratos",
-      description: "Estado y vigencia",
+      description: profile.isGuarantor
+        ? "Como inquilino / garante"
+        : "Estado y vigencia",
     });
   }
 
-  if (profile.isOwner || profile.rentedProperties.length > 0) {
+  if (
+    profile.isOwner ||
+    profile.ownedProperties.length > 0 ||
+    profile.rentedProperties.length > 0
+  ) {
     rows.push({
       id: "client_properties",
       title: profile.isOwner ? "Mis propiedades" : "Mi propiedad",
-      description: "Inmuebles vinculados",
+      description: profile.isOwner
+        ? "Disponibles, alquiladas y más"
+        : "Inmueble que alquilás",
     });
   }
 
@@ -258,7 +273,7 @@ function payloadFromProfile(
   payload: BotPayload,
   profile: WhatsAppContactProfile | null,
 ): BotPayload {
-  if (!profile) return payload;
+  if (!profile) return { ...payload, isClient: false };
   return {
     ...payload,
     userId: profile.userId,
@@ -272,20 +287,16 @@ async function resolveContact(
   session: WhatsAppChatSession,
   payload: BotPayload,
 ): Promise<{ payload: BotPayload; profile: WhatsAppContactProfile | null }> {
-  if (payload.userId && payload.isClient) {
-    const profile = await lookupWhatsAppContact(
-      session.organizationId,
-      session.waContactPhone,
-    );
-    if (profile?.userId === payload.userId) {
-      return { payload, profile };
-    }
-  }
-
   const profile = await lookupWhatsAppContact(
     session.organizationId,
     session.waContactPhone,
   );
+  if (profile && payload.userId && profile.userId === payload.userId) {
+    return {
+      payload: payloadFromProfile(payload, profile),
+      profile,
+    };
+  }
   return { payload: payloadFromProfile(payload, profile), profile };
 }
 
@@ -339,14 +350,22 @@ async function sendClientMenu(
   payload: BotPayload,
   profile: WhatsAppContactProfile,
 ) {
-  const body = `¡Hola ${profile.firstName}! ¿Qué querés consultar hoy?`;
+  const bits: string[] = [];
+  if (profile.isTenant) bits.push("inquilino");
+  if (profile.isOwner) bits.push("propietario");
+  if (profile.isGuarantor && !profile.isTenant && !profile.isOwner) {
+    bits.push("garante");
+  }
+  const roleHint =
+    bits.length > 0 ? ` Te reconocimos como ${bits.join(" y ")}.` : "";
+  const body = `¡Hola ${profile.firstName}! Encontramos tu número en el sistema.${roleHint} ¿Qué querés consultar?`;
   await sendBotList(
     session,
     credentials,
     body,
     buildClientMenuRows(profile),
     "CLIENT_MENU",
-    payload,
+    payloadFromProfile(payload, profile),
   );
 }
 
@@ -360,7 +379,12 @@ async function sendWelcomeMenu(
     await sendClientMenu(session, credentials, payload, profile);
     return;
   }
-  await sendAreaMenu(session, credentials, payload, profile);
+  await sendAreaMenu(
+    session,
+    credentials,
+    payloadFromProfile(payload, profile),
+    profile,
+  );
 }
 
 async function publishWaitingAgentEvent(input: {
@@ -521,6 +545,61 @@ async function handleClientMenuAction(
   });
 }
 
+async function sendCatalogMatches(
+  session: WhatsAppChatSession,
+  credentials: WhatsAppCredentials,
+  intent: "BUY" | "RENT",
+  filters: {
+    zone?: string | null;
+    budgetText?: string | null;
+    budgetRangeId?: string | null;
+    propertyTypeText?: string | null;
+  },
+  headline?: string,
+) {
+  try {
+    const result = await searchCatalogProperties({
+      organizationId: session.organizationId,
+      intent,
+      zone: filters.zone,
+      budgetText: filters.budgetText,
+      budgetRangeId: filters.budgetRangeId,
+      propertyTypeText: filters.propertyTypeText,
+    });
+    const message = formatCatalogWhatsAppMessage(intent, result, { headline });
+    if (message) {
+      await sendBotText(session, credentials, message);
+    }
+  } catch {
+    /* no bloquear el flujo comercial si falla el catálogo */
+  }
+}
+
+async function sendBudgetRangeMenu(
+  session: WhatsAppChatSession,
+  credentials: WhatsAppCredentials,
+  payload: BotPayload,
+  intent: "BUY" | "RENT",
+) {
+  const rows = await buildBudgetMenuRows({
+    organizationId: session.organizationId,
+    intent,
+    zone: payload.zone,
+  });
+  const body =
+    intent === "RENT"
+      ? "¿Cuál es tu presupuesto de alquiler? (valores en ARS)"
+      : "¿Cuál es tu presupuesto de compra? (valores en USD)";
+  await sendBotList(
+    session,
+    credentials,
+    body,
+    rows,
+    "COLLECT_BUDGET",
+    payload,
+  );
+}
+
 async function startProspectFlow(
   session: WhatsAppChatSession,
   credentials: WhatsAppCredentials,
@@ -543,15 +622,58 @@ async function startProspectFlow(
     return;
   }
 
+  if (intent === "APPRAISE") {
+    await updateSessionBotState(session.id, {
+      botStep: "COLLECT_ZONE",
+      botPayload: nextPayload,
+      requestedArea: nextPayload.area ?? "SALES_RENTALS",
+    });
+    await sendBotText(
+      session,
+      credentials,
+      "Genial. ¿En qué zona está el inmueble a tasar?",
+    );
+    return;
+  }
+
+  let intro =
+    intent === "RENT"
+      ? "Perfecto, te ayudo a buscar alquileres."
+      : "Perfecto, te ayudo a buscar propiedades en venta.";
+  let available = 0;
+  try {
+    available = await countCatalogProperties(session.organizationId, intent);
+    if (available > 0) {
+      intro += ` Ahora mismo tenemos *${available}* disponible${available === 1 ? "" : "s"} en el sistema.`;
+    } else {
+      intro +=
+        " Por ahora no hay disponibles con ese criterio; igual registramos tu búsqueda para un asesor.";
+    }
+  } catch {
+    /* ignore */
+  }
+
   await updateSessionBotState(session.id, {
     botStep: "COLLECT_ZONE",
     botPayload: nextPayload,
     requestedArea: nextPayload.area ?? "SALES_RENTALS",
   });
+  await sendBotText(session, credentials, intro);
+  if (available > 0) {
+    await sendCatalogMatches(
+      session,
+      credentials,
+      intent,
+      {},
+      intent === "RENT"
+        ? "Algunas opciones de alquiler disponibles:"
+        : "Algunas opciones en venta disponibles:",
+    );
+  }
   await sendBotText(
     session,
     credentials,
-    "Genial. ¿En qué zona o barrio estás buscando?",
+    "¿En qué zona o barrio estás buscando?",
   );
 }
 
@@ -601,17 +723,24 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     const action =
       clientAction ??
       actionFromNumber ??
-      (textLower.includes("deuda") || textLower.includes("cuota")
+      (textLower.includes("deuda") ||
+      textLower.includes("cuota") ||
+      textLower.includes("saldo") ||
+      textLower.includes("pago")
         ? "client_debts"
         : textLower.includes("contrato")
           ? "client_contracts"
-          : textLower.includes("propiedad") || textLower.includes("inmueble")
+          : textLower.includes("propiedad") ||
+              textLower.includes("inmueble") ||
+              textLower.includes("alquilada") ||
+              textLower.includes("disponible")
             ? "client_properties"
-            : textLower.includes("asesor")
+            : textLower.includes("asesor") || textLower.includes("humano")
               ? "intent_agent"
               : textLower.includes("buscar") ||
                   textLower.includes("comprar") ||
-                  textLower.includes("alquilar")
+                  textLower.includes("alquilar") ||
+                  textLower.includes("tasar")
                 ? "client_commercial"
                 : null);
 
@@ -623,7 +752,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     await handleClientMenuAction(
       session,
       credentials,
-      payload,
+      payloadFromProfile(payload, profile),
       profile,
       action,
     );
@@ -684,6 +813,24 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       return;
     }
     const nextPayload: BotPayload = { ...payload, zone: text };
+
+    if (payload.intent === "BUY" || payload.intent === "RENT") {
+      await updateSessionBotState(session.id, {
+        botStep: "COLLECT_BUDGET",
+        botPayload: nextPayload,
+      });
+      await sendCatalogMatches(session, credentials, payload.intent, {
+        zone: text,
+      });
+      await sendBudgetRangeMenu(
+        session,
+        credentials,
+        nextPayload,
+        payload.intent,
+      );
+      return;
+    }
+
     await updateSessionBotState(session.id, {
       botStep: "COLLECT_BUDGET",
       botPayload: nextPayload,
@@ -697,6 +844,43 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "COLLECT_BUDGET") {
+    if (payload.intent === "BUY" || payload.intent === "RENT") {
+      const range = resolveBudgetRange(payload.intent, {
+        interactiveId: input.interactiveId,
+        text,
+      });
+      if (!range) {
+        await sendBudgetRangeMenu(
+          session,
+          credentials,
+          payload,
+          payload.intent,
+        );
+        return;
+      }
+
+      const nextPayload: BotPayload = {
+        ...payload,
+        budget: range.title,
+        budgetRangeId: range.id,
+      };
+      await updateSessionBotState(session.id, {
+        botStep: "COLLECT_PROPERTY_TYPE",
+        botPayload: nextPayload,
+      });
+      await sendCatalogMatches(session, credentials, payload.intent, {
+        zone: payload.zone,
+        budgetRangeId: range.id,
+        budgetText: range.title,
+      });
+      await sendBotText(
+        session,
+        credentials,
+        "¿Qué tipo de inmueble buscás? (ej. departamento 2 ambientes, casa, local, cochera, galpón)",
+      );
+      return;
+    }
+
     if (!text) {
       await sendBotText(session, credentials, "Indicá un presupuesto aproximado.");
       return;
@@ -743,6 +927,21 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       leadId,
       requestedArea: nextPayload.area ?? "SALES_RENTALS",
     });
+
+    if (payload.intent === "BUY" || payload.intent === "RENT") {
+      await sendCatalogMatches(
+        session,
+        credentials,
+        payload.intent,
+        {
+          zone: payload.zone,
+          budgetText: payload.budget,
+          budgetRangeId: payload.budgetRangeId,
+          propertyTypeText: text,
+        },
+        "Con lo que me contaste, estas son las opciones más cercanas del inventario:",
+      );
+    }
 
     await sendBotText(
       session,
@@ -793,5 +992,15 @@ export async function startBotConversation(
     session,
     payload,
   );
+
+  // Si reconocemos a la persona, dejamos el nombre en la sesión del inbox.
+  if (profile?.name && profile.name !== session.waContactName) {
+    await prisma.whatsAppChatSession.update({
+      where: { id: session.id },
+      data: { waContactName: profile.name },
+    });
+    session = { ...session, waContactName: profile.name };
+  }
+
   await sendWelcomeMenu(session, credentials, resolvedPayload, profile);
 }

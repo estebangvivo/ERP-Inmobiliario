@@ -1,4 +1,4 @@
-import type { OrganizationRole, PartyRole } from "@prisma/client";
+import type { OrganizationRole, PartyRole, PropertyStatus } from "@prisma/client";
 import { phonesMatch } from "@/features/auth/lib/phone";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +16,9 @@ export type WhatsAppContactContract = {
 
 export type WhatsAppContactProperty = {
   title: string;
-  status: string;
+  status: PropertyStatus | string;
+  address?: string | null;
+  city?: string | null;
 };
 
 export type WhatsAppContactProfile = {
@@ -24,9 +26,13 @@ export type WhatsAppContactProfile = {
   name: string;
   firstName: string;
   orgRole: OrganizationRole;
+  /** Persona encontrada en la inmobiliaria por teléfono. */
+  isKnownPerson: boolean;
+  /** Tiene datos de cliente (inquilino / propietario / garante / contratos). */
   isClient: boolean;
   isTenant: boolean;
   isOwner: boolean;
+  isGuarantor: boolean;
   contracts: WhatsAppContactContract[];
   ownedProperties: WhatsAppContactProperty[];
   rentedProperties: WhatsAppContactProperty[];
@@ -37,70 +43,93 @@ function firstNameFrom(fullName: string): string {
   return part || fullName;
 }
 
+function memberMatchesPhone(
+  phone: string | null | undefined,
+  phone2: string | null | undefined,
+  waContactPhone: string,
+): boolean {
+  return (
+    phonesMatch(phone, waContactPhone) || phonesMatch(phone2, waContactPhone)
+  );
+}
+
 export async function lookupWhatsAppContact(
   organizationId: string,
   waContactPhone: string,
 ): Promise<WhatsAppContactProfile | null> {
+  if (!waContactPhone?.trim()) return null;
+
   const members = await prisma.organizationMember.findMany({
     where: {
       organizationId,
       user: {
         isActive: true,
-        phone: { not: null },
+        OR: [{ phone: { not: null } }, { phone2: { not: null } }],
         ...excludePlatformSuperadminFromUser(),
       },
     },
     include: {
-      user: { select: { id: true, name: true, phone: true } },
+      user: {
+        select: { id: true, name: true, phone: true, phone2: true },
+      },
     },
   });
 
-  const member = members.find((m) => phonesMatch(m.user.phone, waContactPhone));
+  const member = members.find((m) =>
+    memberMatchesPhone(m.user.phone, m.user.phone2, waContactPhone),
+  );
   if (!member) return null;
 
-  const parties = await prisma.contractParty.findMany({
-    where: {
-      userId: member.user.id,
-      contract: {
-        organizationId,
-        status: { in: ["ACTIVE", "EXPIRED", "RENEWED", "TERMINATED"] },
-      },
-    },
-    include: {
-      contract: {
-        select: {
-          code: true,
-          status: true,
-          startDate: true,
-          endDate: true,
-          initialRent: true,
-          currency: true,
-          property: { select: { title: true, status: true } },
+  const [parties, ownedProperties] = await Promise.all([
+    prisma.contractParty.findMany({
+      where: {
+        userId: member.user.id,
+        contract: {
+          organizationId,
+          status: { in: ["ACTIVE", "EXPIRED", "RENEWED", "TERMINATED"] },
         },
       },
-    },
-    orderBy: { contract: { startDate: "desc" } },
-    take: 10,
-  });
-
-  const ownedProperties =
-    member.role === "OWNER"
-      ? await prisma.property.findMany({
-          where: {
-            organizationId,
-            ownerships: { some: { ownerId: member.user.id } },
+      include: {
+        contract: {
+          select: {
+            code: true,
+            status: true,
+            startDate: true,
+            endDate: true,
+            initialRent: true,
+            currency: true,
+            property: {
+              select: { title: true, status: true, address: true, city: true },
+            },
           },
-          select: { title: true, status: true },
-          orderBy: { title: "asc" },
-          take: 10,
-        })
-      : [];
+        },
+      },
+      orderBy: { contract: { startDate: "desc" } },
+      take: 15,
+    }),
+    prisma.property.findMany({
+      where: {
+        organizationId,
+        ownerships: { some: { ownerId: member.user.id } },
+      },
+      select: {
+        title: true,
+        status: true,
+        address: true,
+        city: true,
+      },
+      orderBy: [{ status: "asc" }, { title: "asc" }],
+      take: 20,
+    }),
+  ]);
 
   const rentedProperties = parties
     .filter((p) => p.role === "TENANT")
     .map((p) => ({
       title: p.contract.property.title,
       status: p.contract.property.status,
+      address: p.contract.property.address,
+      city: p.contract.property.city,
     }));
 
   const isTenant =
@@ -109,16 +138,26 @@ export async function lookupWhatsAppContact(
     member.role === "OWNER" ||
     parties.some((p) => p.role === "OWNER") ||
     ownedProperties.length > 0;
-  const isClient = ["TENANT", "OWNER", "GUARANTOR"].includes(member.role);
+  const isGuarantor =
+    member.role === "GUARANTOR" ||
+    parties.some((p) => p.role === "GUARANTOR");
+  const isClient =
+    isTenant ||
+    isOwner ||
+    isGuarantor ||
+    parties.length > 0 ||
+    ownedProperties.length > 0;
 
   return {
     userId: member.user.id,
     name: member.user.name,
     firstName: firstNameFrom(member.user.name),
     orgRole: member.role,
+    isKnownPerson: true,
     isClient,
     isTenant,
     isOwner,
+    isGuarantor,
     contracts: parties.map((p) => ({
       code: p.contract.code,
       status: p.contract.status,

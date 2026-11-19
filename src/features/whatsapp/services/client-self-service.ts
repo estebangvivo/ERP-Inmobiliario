@@ -1,4 +1,4 @@
-import type { Currency } from "@prisma/client";
+import type { Currency, PropertyStatus } from "@prisma/client";
 import type { WhatsAppContactProfile } from "@/features/whatsapp/services/contact-lookup-service";
 import { formatDateOnly } from "@/lib/dates";
 import {
@@ -51,7 +51,7 @@ export function buildClientContractsMessage(
   }
 
   const lines = ["*Tus contratos:*", ""];
-  for (const c of profile.contracts.slice(0, 6)) {
+  for (const c of profile.contracts.slice(0, 8)) {
     const status =
       CONTRACT_STATUS_LABELS[
         c.status as keyof typeof CONTRACT_STATUS_LABELS
@@ -66,11 +66,29 @@ export function buildClientContractsMessage(
     );
   }
 
-  if (profile.contracts.length > 6) {
-    lines.push(`… y ${profile.contracts.length - 6} contrato(s) más.`);
+  if (profile.contracts.length > 8) {
+    lines.push(`… y ${profile.contracts.length - 8} contrato(s) más.`);
   }
 
   return lines.join("\n");
+}
+
+function statusLabel(status: string): string {
+  return (
+    PROPERTY_STATUS_LABELS[status as PropertyStatus] ?? status
+  );
+}
+
+function propertyLine(p: {
+  title: string;
+  status: string;
+  address?: string | null;
+  city?: string | null;
+}): string {
+  const place = [p.address, p.city].filter(Boolean).join(", ");
+  return place
+    ? `• *${p.title}* — ${statusLabel(p.status)}\n  ${place}`
+    : `• *${p.title}* — ${statusLabel(p.status)}`;
 }
 
 export function buildClientPropertiesMessage(
@@ -79,25 +97,44 @@ export function buildClientPropertiesMessage(
   const lines: string[] = [];
 
   if (profile.ownedProperties.length > 0) {
-    lines.push("*Propiedades en tu nombre (propietario):*", "");
-    for (const p of profile.ownedProperties.slice(0, 6)) {
-      const status =
-        PROPERTY_STATUS_LABELS[
-          p.status as keyof typeof PROPERTY_STATUS_LABELS
-        ] ?? p.status;
-      lines.push(`• ${p.title} — ${status}`);
+    const available = profile.ownedProperties.filter((p) =>
+      ["AVAILABLE", "RESERVED", "MAINTENANCE", "DRAFT"].includes(
+        String(p.status),
+      ),
+    );
+    const rented = profile.ownedProperties.filter(
+      (p) => String(p.status) === "RENTED",
+    );
+    const other = profile.ownedProperties.filter(
+      (p) =>
+        !["AVAILABLE", "RESERVED", "MAINTENANCE", "DRAFT", "RENTED"].includes(
+          String(p.status),
+        ),
+    );
+
+    lines.push("*Tus propiedades (como propietario):*", "");
+
+    if (available.length > 0) {
+      lines.push("_Disponibles / en cartera:_");
+      for (const p of available.slice(0, 8)) lines.push(propertyLine(p));
+      lines.push("");
     }
-    lines.push("");
+    if (rented.length > 0) {
+      lines.push("_Alquiladas:_");
+      for (const p of rented.slice(0, 8)) lines.push(propertyLine(p));
+      lines.push("");
+    }
+    if (other.length > 0) {
+      lines.push("_Otras:_");
+      for (const p of other.slice(0, 6)) lines.push(propertyLine(p));
+      lines.push("");
+    }
   }
 
   if (profile.rentedProperties.length > 0) {
     lines.push("*Propiedades que alquilás:*", "");
-    for (const p of profile.rentedProperties.slice(0, 6)) {
-      const status =
-        PROPERTY_STATUS_LABELS[
-          p.status as keyof typeof PROPERTY_STATUS_LABELS
-        ] ?? p.status;
-      lines.push(`• ${p.title} — ${status}`);
+    for (const p of profile.rentedProperties.slice(0, 8)) {
+      lines.push(propertyLine(p));
     }
     lines.push("");
   }

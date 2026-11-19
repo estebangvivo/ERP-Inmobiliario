@@ -25,11 +25,18 @@ export default async function CuentaPropietarioPage({ params }: PageProps) {
         title={stmt.partyName}
         description="Cuenta corriente del propietario"
         actions={
-          <Link href={`/personas/${ownerId}`}>
-            <Button variant="outline" size="sm">
-              Historial
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/tesoreria/cuentas/recuperables/${ownerId}`}>
+              <Button variant="outline" size="sm">
+                Gastos a recuperar
+              </Button>
+            </Link>
+            <Link href={`/personas/${ownerId}`}>
+              <Button variant="outline" size="sm">
+                Historial
+              </Button>
+            </Link>
+          </div>
         }
       />
       <p className="text-sm">

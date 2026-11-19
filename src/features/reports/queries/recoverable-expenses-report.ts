@@ -22,6 +22,7 @@ export type RecoverableInvoiceRow = {
   paidAt: string | null;
   paidToSupplier: boolean;
   pendingRecovery: boolean;
+  pendingRecoveryAmount: number;
   supplierName: string;
   workOrderCode: string;
   workOrderTitle: string;
@@ -80,6 +81,13 @@ export async function getRecoverableExpensesReport(
           select: { id: true },
           take: 1,
         },
+        recoverableCharges: {
+          select: {
+            amount: true,
+            recoveredAmount: true,
+            status: true,
+          },
+        },
       },
       orderBy: { invoiceDate: "desc" },
     }),
@@ -104,6 +112,15 @@ export async function getRecoverableExpensesReport(
   const rows: RecoverableInvoiceRow[] = invoices.map((inv) => {
     const paidToSupplier =
       Boolean(inv.paidAt) || inv.paymentOrderApps.length > 0;
+    const pendingFromLedger = inv.recoverableCharges.reduce((sum, c) => {
+      if (c.status === "RECOVERED" || c.status === "WRITTEN_OFF") return sum;
+      return sum + round2(toNumber(c.amount) - toNumber(c.recoveredAmount));
+    }, 0);
+    const pendingRecovery =
+      paidToSupplier &&
+      (inv.recoverableCharges.length === 0
+        ? true
+        : pendingFromLedger > 0.009);
     return {
       id: inv.id,
       workOrderId: inv.workOrderId,
@@ -113,7 +130,13 @@ export async function getRecoverableExpensesReport(
       currency: inv.currency,
       paidAt: inv.paidAt?.toISOString() ?? null,
       paidToSupplier,
-      pendingRecovery: paidToSupplier,
+      pendingRecovery,
+      pendingRecoveryAmount:
+        inv.recoverableCharges.length > 0
+          ? round2(pendingFromLedger)
+          : paidToSupplier
+            ? round2(toNumber(inv.amount))
+            : 0,
       supplierName: inv.supplier.name,
       workOrderCode: inv.workOrder.code,
       workOrderTitle: inv.workOrder.title,
@@ -139,7 +162,10 @@ export async function getRecoverableExpensesReport(
   const pendingRecoveryByCurrency = sumByCurrency(
     rows
       .filter((r) => r.pendingRecovery)
-      .map((r) => ({ currency: r.currency, amount: r.amount })),
+      .map((r) => ({
+        currency: r.currency,
+        amount: r.pendingRecoveryAmount,
+      })),
   );
 
   return {

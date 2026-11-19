@@ -546,7 +546,8 @@ export function TreasuryDocumentForm({
     });
   }
 
-  const partyLabel = kind === "receipt" ? "Inquilino" : "Proveedor";
+  const partyLabel =
+    kind === "receipt" ? "Inquilino / cobrado a" : "Proveedor / beneficiario";
   const linesDiff = Math.round((linesTotal - paymentsTotal) * 100) / 100;
 
   return (
@@ -625,13 +626,17 @@ export function TreasuryDocumentForm({
             <Plus className="size-4" /> Línea
           </Button>
         </div>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          El contrato es opcional: dejalo en &quot;Sin contrato (varios)&quot; para
+          ingresos o egresos varios. Completá descripción y monto.
+        </p>
         {lines.map((line) => (
           <div
             key={line.key}
             className="grid gap-2 rounded-md border border-[var(--border)] p-3 sm:grid-cols-4"
           >
             <div className="sm:col-span-2">
-              <Label>Contrato</Label>
+              <Label>Contrato (opcional)</Label>
               <Select
                 value={line.contractId ?? ""}
                 onChange={(e) =>
@@ -640,7 +645,7 @@ export function TreasuryDocumentForm({
                     : updateLine(line.key, { contractId: e.target.value })
                 }
               >
-                <option value="">Elegir…</option>
+                <option value="">Sin contrato (varios)</option>
                 {kind === "receipt" && partyId ? (
                   <option value={ALL_OPEN_CONTRACTS}>
                     Todos los contratos abiertos
@@ -657,6 +662,7 @@ export function TreasuryDocumentForm({
               <Label>Descripción</Label>
               <Input
                 required
+                placeholder="Ej. alquiler, honorarios, varios…"
                 value={line.description}
                 onChange={(e) =>
                   updateLine(line.key, { description: e.target.value })

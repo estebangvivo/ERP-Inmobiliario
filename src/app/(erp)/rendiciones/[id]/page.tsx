@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/erp/page-chrome";
 import { SettlementActions } from "@/components/erp/settlement-forms";
+import { SettlementRecoverablePanel } from "@/components/erp/settlement-recoverable-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { isStaffRole, requireModule } from "@/lib/session";
 import { settlementScopeWhere } from "@/lib/tenant-scope";
+import { getRecoverableAccountStatement } from "@/server/services/recoverable-charges";
 
 type Params = Promise<{ id: string }>;
 
@@ -25,14 +27,27 @@ export default async function RendicionDetailPage({ params }: { params: Params }
   });
   if (!settlement) notFound();
 
-  const bankAccounts = await prisma.bankAccount.findMany({
-    where: {
-      organizationId: session.organizationId!,
-      isActive: true,
-    },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, bankName: true, currency: true },
-  });
+  const [bankAccounts, recoverableStmt] = await Promise.all([
+    prisma.bankAccount.findMany({
+      where: {
+        organizationId: session.organizationId!,
+        isActive: true,
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, bankName: true, currency: true },
+    }),
+    staff
+      ? getRecoverableAccountStatement({
+          organizationId: session.organizationId!,
+          ownerId: settlement.ownerId,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const recoverableCharges =
+    recoverableStmt?.openCharges.filter(
+      (c) => c.currency === settlement.currency,
+    ) ?? [];
 
   return (
     <div className="space-y-6">
@@ -66,6 +81,22 @@ export default async function RendicionDetailPage({ params }: { params: Params }
             id: b.id,
             currency: b.currency,
             label: `${b.name} · ${b.bankName} (${b.currency})`,
+          }))}
+        />
+      ) : null}
+
+      {staff && recoverableCharges.length > 0 ? (
+        <SettlementRecoverablePanel
+          settlementId={settlement.id}
+          ownerId={settlement.ownerId}
+          status={settlement.status}
+          currency={settlement.currency}
+          charges={recoverableCharges.map((c) => ({
+            id: c.id,
+            propertyTitle: c.propertyTitle,
+            workOrderCode: c.workOrderCode,
+            workOrderTitle: c.workOrderTitle,
+            pending: c.pending,
           }))}
         />
       ) : null}

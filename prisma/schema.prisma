@@ -286,6 +286,7 @@ model OwnerSettlement {
   owner               User                 @relation(fields: [ownerId], references: [id])
   lines               SettlementLineItem[]
   paymentOrderApps    PaymentOrderSettlementApplication[]
+  recoverableRecoveries RecoverableRecovery[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, ownerId, periodYear, periodMonth, currency])
@@ -361,6 +362,7 @@ model Property {
   receiptLines        ReceiptLine[]
   paymentOrderLines   PaymentOrderLine[]
   checkRejectionFees  CheckRejectionFee[]
+  recoverableCharges  RecoverableCharge[]
 
   @@unique([organizationId, slug])
   @@index([city])
@@ -430,9 +432,77 @@ model SupplierInvoice {
   supplier           User                 @relation(fields: [supplierId], references: [id])
   workOrder          WorkOrder            @relation(fields: [workOrderId], references: [id])
   paymentOrderApps   PaymentOrderInvoiceApplication[]
+  recoverableCharges RecoverableCharge[]
 
   @@index([supplierId])
   @@index([workOrderId])
+}
+
+enum RecoverableChargeStatus {
+  OPEN
+  PARTIAL
+  RECOVERED
+  WRITTEN_OFF
+}
+
+enum RecoverableRecoveryMethod {
+  MANUAL
+  RECEIPT
+  SETTLEMENT
+}
+
+/// Gasto pagado por la inmobiliaria (AGENCY_RECOVERABLE) pendiente de recuperar del propietario.
+model RecoverableCharge {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  propertyId        String
+  ownerId           String
+  supplierInvoiceId String
+  workOrderId       String
+  amount            Decimal                 @db.Decimal(14, 2)
+  currency          Currency                @default(ARS)
+  recoveredAmount   Decimal                 @default(0) @db.Decimal(14, 2)
+  status            RecoverableChargeStatus @default(OPEN)
+  openedAt          DateTime                @default(now())
+  notes             String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property        Property             @relation(fields: [propertyId], references: [id])
+  owner           User                 @relation("RecoverableChargeOwner", fields: [ownerId], references: [id])
+  supplierInvoice SupplierInvoice      @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  workOrder       WorkOrder            @relation(fields: [workOrderId], references: [id])
+  recoveries      RecoverableRecovery[]
+
+  @@unique([supplierInvoiceId, ownerId])
+  @@index([organizationId, ownerId, status])
+  @@index([organizationId, propertyId, status])
+  @@index([workOrderId])
+  @@map("recoverable_charges")
+}
+
+model RecoverableRecovery {
+  id                   String                     @id @default(cuid())
+  chargeId             String
+  amount               Decimal                    @db.Decimal(14, 2)
+  recoveredAt          DateTime                   @db.Date
+  method               RecoverableRecoveryMethod
+  notes                String?
+  receiptId            String?
+  ownerSettlementId    String?
+  referenceWorkOrderId String?
+  createdAt            DateTime                   @default(now())
+
+  charge             RecoverableCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  receipt            Receipt?          @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  ownerSettlement    OwnerSettlement?  @relation(fields: [ownerSettlementId], references: [id], onDelete: SetNull)
+  referenceWorkOrder WorkOrder?        @relation("RecoverableRecoveryRefWo", fields: [referenceWorkOrderId], references: [id], onDelete: SetNull)
+
+  @@index([chargeId])
+  @@index([receiptId])
+  @@index([ownerSettlementId])
+  @@map("recoverable_recoveries")
 }
 
 enum TenantBillKind {
@@ -560,6 +630,7 @@ model User {
   agentDeskThreadsOwned   AgentDeskThread[]      @relation("AgentDeskThreadCreator")
   agentDeskParticipations AgentDeskParticipant[]
   agentDeskMessagesSent   AgentDeskMessage[]     @relation("AgentDeskMessageSender")
+  recoverableCharges      RecoverableCharge[]    @relation("RecoverableChargeOwner")
 
   @@index([documentNumber])
 }
@@ -584,6 +655,8 @@ model WorkOrder {
   contract       Contract?         @relation(fields: [contractId], references: [id])
   organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   property       Property          @relation(fields: [propertyId], references: [id])
+  recoverableCharges RecoverableCharge[]
+  recoverableRecoveryRefs RecoverableRecovery[] @relation("RecoverableRecoveryRefWo")
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -726,6 +799,7 @@ model Organization {
   checkRejectionFees       CheckRejectionFee[]
   whatsappChatSessions     WhatsAppChatSession[]
   agentDeskThreads         AgentDeskThread[]
+  recoverableCharges       RecoverableCharge[]
 
   /// ID del número de WhatsApp Cloud API (Meta) asociado a esta inmobiliaria.
   waPhoneNumberId          String?                 @unique
@@ -1314,6 +1388,7 @@ model Receipt {
   checks       CheckInstrument[]
   billApps     ReceiptBillApplication[]
   ledgerPayments Payment[]
+  recoverableRecoveries RecoverableRecovery[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])

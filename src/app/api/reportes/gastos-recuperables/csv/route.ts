@@ -54,7 +54,9 @@ export async function GET(request: Request) {
           r.supplierName,
           !r.paidToSupplier
             ? "Pendiente de pagar"
-            : "Pagado · pendiente recuperar",
+            : r.pendingRecovery
+              ? "Pagado · pendiente recuperar"
+              : "Pagado · recuperado",
           r.currency,
           r.amount.toFixed(2),
         ]),

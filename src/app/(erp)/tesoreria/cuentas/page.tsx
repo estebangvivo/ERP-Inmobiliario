@@ -10,6 +10,7 @@ import {
   listOwnerAccountSummaries,
   listSupplierAccountSummaries,
 } from "@/features/treasury/queries/account-statements";
+import { listRecoverableAccountSummaries } from "@/server/services/recoverable-charges";
 import { syncOverdueBills } from "@/server/services/billing";
 import { redirect } from "next/navigation";
 import {
@@ -24,6 +25,7 @@ type SearchParams = Promise<{
   page?: string;
   suppliersPage?: string;
   ownersPage?: string;
+  recoverablePage?: string;
   pageSize?: string;
 }>;
 
@@ -61,9 +63,10 @@ export default async function TesoreriaCuentasPage({
   );
   const tenantSlice = paginateArray(filteredTenants, tenantPage, pageSize);
 
-  const [suppliers, owners] = await Promise.all([
+  const [suppliers, owners, recoverable] = await Promise.all([
     listSupplierAccountSummaries(),
     listOwnerAccountSummaries(),
+    listRecoverableAccountSummaries(session.organizationId),
   ]);
 
   const suppliersPage = clampListPage(
@@ -76,14 +79,24 @@ export default async function TesoreriaCuentasPage({
     owners.length,
     pageSize,
   );
+  const recoverablePageNum = clampListPage(
+    parseListPage(params.recoverablePage),
+    recoverable.length,
+    pageSize,
+  );
   const supplierSlice = paginateArray(suppliers, suppliersPage, pageSize);
   const ownerSlice = paginateArray(owners, ownersPage, pageSize);
+  const recoverableSlice = paginateArray(
+    recoverable,
+    recoverablePageNum,
+    pageSize,
+  );
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Cuentas corrientes"
-        description="Inquilinos con deuda (mismo cobro que en Cobros) y saldos de proveedores/propietarios."
+        description="Inquilinos, proveedores, propietarios y gastos a recuperar (cuenta paralela)."
         actions={
           <Link href="/tesoreria">
             <Button variant="outline" size="sm">
@@ -177,6 +190,53 @@ export default async function TesoreriaCuentasPage({
         pageKey="ownersPage"
         href={(id) => `/tesoreria/cuentas/propietarios/${id}`}
       />
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Gastos a recuperar</h2>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Cuenta paralela por propiedad/propietario. No impacta liquidación ni
+          inquilino hasta que registres un recupero.
+        </p>
+        {recoverableSlice.total === 0 ? (
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Sin saldos pendientes de recuperar.
+          </p>
+        ) : (
+          <>
+            <ul className="divide-y divide-[var(--border)] border-y">
+              {recoverableSlice.items.map((row) => (
+                <li key={`${row.ownerId}:${row.propertyId}:${row.currency}`}>
+                  <Link
+                    href={`/tesoreria/cuentas/recuperables/${row.ownerId}?propertyId=${row.propertyId}`}
+                    className="flex flex-wrap items-center justify-between gap-2 py-3 hover:bg-[var(--muted)]/40"
+                  >
+                    <span>
+                      <span className="font-medium">{row.ownerName}</span>
+                      <span className="text-[var(--muted-foreground)]">
+                        {" "}
+                        · {row.propertyTitle}
+                      </span>
+                    </span>
+                    <span className="font-medium tabular-nums">
+                      {formatMoney(
+                        String(row.balance),
+                        row.currency as "ARS" | "USD" | "EUR",
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <ListPagination
+              page={recoverablePageNum}
+              pageSize={pageSize}
+              total={recoverableSlice.total}
+              params={listParams}
+              pageKey="recoverablePage"
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

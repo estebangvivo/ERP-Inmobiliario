@@ -148,9 +148,11 @@ export function WorkOrderStatusButtons({
 export function SupplierInvoiceForm({
   workOrderId,
   suppliers,
+  defaultCostBearer = "OWNER_DEDUCTIBLE",
 }: {
   workOrderId: string;
   suppliers: { id: string; name: string; documentNumber?: string | null; email?: string | null }[];
+  defaultCostBearer?: CostBearer;
 }) {
   const router = useRouter();
   const [supplierId, setSupplierId] = useState("");
@@ -189,7 +191,11 @@ export function SupplierInvoiceForm({
       </div>
       <div className="space-y-1">
         <Label htmlFor="costBearer">Cargo</Label>
-        <Select id="costBearer" name="costBearer" defaultValue="OWNER_DEDUCTIBLE">
+        <Select
+          id="costBearer"
+          name="costBearer"
+          defaultValue={defaultCostBearer}
+        >
           {(Object.keys(COST_BEARER_LABELS) as CostBearer[]).map((k) => (
             <option key={k} value={k}>
               {COST_BEARER_LABELS[k]}

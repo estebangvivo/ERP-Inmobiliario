@@ -93,7 +93,10 @@ export default async function NuevaOrdenPagoPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Nueva orden de pago" description="Registrar un pago." />
+      <PageHeader
+        title="Nueva orden de pago"
+        description="Pago a proveedor, liquidación o egreso varios (sin contrato)."
+      />
       <p className="text-sm">
         <Link
           href="/tesoreria/ordenes-pago"

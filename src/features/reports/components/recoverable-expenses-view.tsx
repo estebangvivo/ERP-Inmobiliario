@@ -15,9 +15,9 @@ export function RecoverableExpensesView({
   return (
     <div className="space-y-8">
       <p className="text-sm text-[var(--muted-foreground)]">
-        Gastos con cargo &quot;Gastos a recuperar por la inmobiliaria&quot;. Si
-        ya se pagó al proveedor, figuran como pendientes de recuperar del
-        propietario (la imputación en rendición es un paso aparte).
+        Gastos con cargo &quot;Gastos a recuperar por la inmobiliaria&quot;. Al
+        pagar al proveedor se abren en la cuenta paralela; el recupero es
+        manual, por recibo o deducción opcional en rendición.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -83,7 +83,9 @@ export function RecoverableExpensesView({
                     <td className="px-3 py-2">
                       {!r.paidToSupplier
                         ? "Pendiente de pagar"
-                        : "Pagado · pendiente recuperar"}
+                        : r.pendingRecovery
+                          ? "Pagado · pendiente recuperar"
+                          : "Pagado · recuperado"}
                     </td>
                     <td className="px-3 py-2 text-right font-medium">
                       {formatMoney(String(r.amount), r.currency as Currency)}

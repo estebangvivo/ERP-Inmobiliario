@@ -58,7 +58,7 @@ Una vez dentro vas a ver el menú a la izquierda. Los ítems disponibles depende
 | Edificios | Edificios y unidades |
 | Contratos | Alquileres, índices, vencimientos y renovaciones |
 | Cobros | Cuotas, cuenta corriente e impresión de deuda |
-| Tesorería | Recibos, OP, caja, bancos |
+| Tesorería | Recibos, OP, caja, bancos y cuentas (incl. gastos a recuperar) |
 | Expensas | Prorrateo de gastos del edificio |
 | Servicios | Misma lógica que expensas + gasto común |
 | Obras y Mantenimiento | Órdenes de trabajo |
@@ -355,16 +355,26 @@ Módulo operativo de dinero de la inmobiliaria (staff): recibos, órdenes de pag
 ### Flujo típico de cobro
 
 1. Abrí **Caja** y una sesión diaria (si vas a cobrar en efectivo).
-2. **Recibos → Nuevo**: inquilino o nombre libre, líneas (contrato/propiedad), medios de pago.
-3. Podés aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
-4. Imprimí o descargá el PDF del recibo: sale en **2 copias** con espacio para firmas.
+2. **Recibos → Nuevo**: inquilino o nombre libre, líneas, medios de pago.
+3. El **contrato es opcional**: si es un cobro de alquiler, elegilo; si es un **ingreso varios**, dejá **Sin contrato (varios)** y completá descripción y monto.
+4. Podés aplicar el recibo a **cuotas abiertas**; al imputar se generan pagos en Cobros.
+5. Imprimí o descargá el PDF del recibo: sale en **2 copias** con espacio para firmas.
 
 ### Flujo típico de pago
 
 1. **Órdenes de pago → Nueva**: proveedor o beneficiario, líneas y medios.
-2. Aplicá a facturas de mantenimiento o a **rendiciones** pendientes.
-3. Al imputar, se actualiza el estado de esas facturas/rendiciones.
-4. La impresión/PDF de la OP también trae **2 copias** con firmas.
+2. El **contrato es opcional**: usalo para pagos ligados a un alquiler; para un **egreso varios** dejá **Sin contrato (varios)**.
+3. Aplicá a facturas de mantenimiento, OT a cargo de la agencia/recuperables, o a **rendiciones** pendientes.
+4. Al imputar, se actualiza el estado de esas facturas/rendiciones. Si la factura es **gastos a recuperar**, se abre el saldo en la cuenta paralela (ver más abajo).
+5. La impresión/PDF de la OP también trae **2 copias** con firmas.
+
+### Cuentas corrientes (`/tesoreria/cuentas`)
+
+Desde Tesorería → **Cuentas corrientes** ves:
+
+- **Inquilinos** con deuda (enlace a su cuenta).
+- **Proveedores** y **Propietarios** (cuenta habitual de rendiciones/OP).
+- **Gastos a recuperar**: cuenta **paralela** por propietario/propiedad (no se mezcla con la liquidación habitual).
 
 ### Bancos y cheques
 
@@ -384,14 +394,30 @@ Gestioná **órdenes de trabajo** (reparaciones) y facturas de proveedores.
 
 1. Título y propiedad.
 2. Proveedor (usuario con rol Proveedor), si ya lo tenés.
-3. Quién asume el costo: deducible del propietario, del inquilino, a cargo de la agencia, o **gastos a recuperar por la inmobiliaria**.
+3. Quién asume el costo:
+   - **Deducible propietario** → baja en la rendición del período.
+   - **Inquilino** → etiqueta operativa (no genera cuota automática).
+   - **Agencia** → costo de la inmobiliaria.
+   - **Gastos a recuperar por la inmobiliaria** → la inmobiliaria paga al proveedor y lo gestiona en una **cuenta corriente paralela** (no entra solo a la liquidación ni al inquilino).
 4. Detalle del trabajo.
 
 ### Ciclo de vida
 
 `Abierta → Asignada → En curso → Completada` (o Cancelada).
 
-Los trabajos a cargo del propietario (deducible) suelen impactar la **rendición**. Los de cargo **a recuperar por la inmobiliaria** se siguen en **Reportes → Gastos a recuperar** (pagados al proveedor vs. pendientes de recuperar del propietario).
+Al cargar la **factura** del proveedor, el cargo por defecto es el de la OT. Pagala con una **orden de pago**.
+
+### Gastos a recuperar (cuenta paralela)
+
+Usá este cargo cuando la inmobiliaria paga un gasto que **no puede blanquear** al propietario en el momento (no va a la rendición ni al inquilino).
+
+1. OT y/o factura con cargo **Gastos a recuperar por la inmobiliaria**.
+2. Al **imputar la OP** (pago al proveedor), se abre el saldo en **Tesorería → Cuentas → Gastos a recuperar**, prorrateado por titularidad de la propiedad.
+3. Gestioná el recupero desde el detalle del propietario:
+   - **Registro manual** (notas / referencia a otra OT si lo cubrís “inflando” o blanqueando con otra obra).
+   - **Vínculo a un recibo** de tesorería.
+   - **Deducción opcional** en una rendición en borrador.
+4. El reporte **Reportes → Gastos a recuperar** muestra pendiente de pagar, pendiente de recuperar o ya recuperado.
 
 ---
 
@@ -401,16 +427,19 @@ Los trabajos a cargo del propietario (deducible) suelen impactar la **rendición
 
 Liquidación al propietario del período:
 
-**Alquiler cobrado − comisión − reparaciones − extraordinarias = neto a transferir.**
+**Alquiler cobrado − comisión − reparaciones deducibles − extraordinarias = neto a transferir.**
+
+Los **gastos a recuperar** **no** se descuentan solos. Si el propietario tiene saldo en la cuenta paralela, al generar o abrir la liquidación verás un **aviso**; en borrador podés **deducir** montos a elección.
 
 ### Pasos
 
-1. **Generar liquidación** (propietario, período, moneda).
+1. **Generar liquidación** (propietario, período, moneda). Si hay gastos a recuperar, el formulario te avisa.
 2. Revisá el detalle (bruto, comisión, neto y líneas).
-3. **Emitir** cuando esté correcta.
-4. **Marcar pagada** al hacer la transferencia (podés cargar referencia).
-5. Descargá el **PDF** para enviar al propietario.
-6. Staff: **Exportar CSV** de todas las rendiciones.
+3. Si corresponde, en el borrador usá el panel **Gastos a recuperar pendientes** para deducir parcial o total (queda registrado en la cuenta paralela).
+4. **Emitir** cuando esté correcta.
+5. **Marcar pagada** al hacer la transferencia (podés cargar referencia).
+6. Descargá el **PDF** para enviar al propietario.
+7. Staff: **Exportar CSV** de todas las rendiciones.
 
 El propietario también entra a sus rendiciones desde el dashboard y descarga el PDF.
 
@@ -436,10 +465,11 @@ Los KPI de arriba resumen ingresos, egresos, neto, a cobrar y a pagar.
 
 ### Gastos a recuperar (`/reportes/gastos-recuperables`)
 
-Lista facturas y órdenes de trabajo con cargo **Gastos a recuperar por la inmobiliaria**, filtradas por fechas.
+Lista facturas y órdenes de trabajo con cargo **Gastos a recuperar por la inmobiliaria**, filtradas por fechas. La gestión del saldo está en **Tesorería → Cuentas → Gastos a recuperar**.
 
 - **Pendiente de pagar:** aún no se pagó al proveedor.
-- **Pagado · pendiente recuperar:** ya se pagó al proveedor; la recuperación al propietario vía rendición es un paso operativo aparte.
+- **Pagado · pendiente recuperar:** ya se pagó al proveedor y sigue abierto en la cuenta paralela.
+- **Pagado · recuperado:** el saldo se cerró (manual, recibo o deducción en rendición).
 - También aparecen OT recuperables **sin factura** (gasto aún no documentado).
 
 ### Morosidad (`/reportes/morosidad`)
@@ -588,8 +618,9 @@ Caso típico de alquiler de un departamento:
 5. Un interesado agenda visita → aparece en **Visitas**, **Agenda** y **Consultas**. Contactalo y asigná un agente.
 6. Cuando concreten, creá el **Contrato** activo (depósito en custodia).
 7. Cada mes: cargá **Expensas** → **Cierre del mes** o generá cuotas en Cobros → registrá **pagos** → **Rendiciones**.
-8. Si hay una reparación: **Mantenimiento** → al cierre del mes, **Rendición** al propietario.
-9. Al terminar el alquiler: estado Rescindido/Vencido, devolvé o aplicá el **depósito**.
+8. Si hay una reparación deducible: **Mantenimiento** → al cierre del mes, **Rendición** al propietario.
+9. Si el gasto no se puede blanquear: cargo **a recuperar** → pagá al proveedor → gestioná el recupero en la **cuenta paralela** (o deducilo en una rendición cuando corresponda).
+10. Al terminar el alquiler: estado Rescindido/Vencido, devolvé o aplicá el **depósito**.
 
 Caso de venta: propiedad SALE → **Ventas** → seña (Reservada) → Vendida.
 
@@ -620,6 +651,12 @@ Menú **Ventas**. Solo aplica a propiedades con operación Venta o Ambos.
 
 **¿Dónde veo lo pendiente de cobrar y pagar?**  
 En **Reportes → Flujo e pendientes**, con filtro de fechas. La morosidad detallada está en **Reportes → Morosidad**.
+
+**¿Puedo cargar un ingreso o egreso sin contrato?**  
+Sí. En recibos y órdenes de pago el contrato es opcional: elegí **Sin contrato (varios)**, completá descripción, monto y medio de pago.
+
+**¿Qué son los “gastos a recuperar por la inmobiliaria”?**  
+Gastos que paga la inmobiliaria al proveedor y gestiona aparte: no bajan solos la liquidación ni impactan al inquilino. El saldo vive en **Tesorería → Cuentas → Gastos a recuperar**; el recupero puede ser manual, por recibo o deducción opcional en una rendición en borrador.
 
 **¿Cómo actualizo alquileres con IPC/ICL/CP?**  
 Cargá los % del período en Contratos y pulsá **Aplicar los índices**. Se usa el mayor entre IPC, ICL y CP. Después podés **reabrir el reporte** de contratos ajustados sin volver a aplicar.

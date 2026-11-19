@@ -45,7 +45,10 @@ export default async function NuevoReciboPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Nuevo recibo" description="Registrar un cobro." />
+      <PageHeader
+        title="Nuevo recibo"
+        description="Cobro de alquileres o ingreso varios (sin contrato)."
+      />
       <p className="text-sm">
         <Link href="/tesoreria/recibos" className="text-[var(--primary)] hover:underline">
           ← Recibos

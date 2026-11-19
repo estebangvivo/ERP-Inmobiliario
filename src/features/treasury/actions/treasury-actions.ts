@@ -251,12 +251,6 @@ export async function createReceipt(
     if (lines.length === 0) {
       return { ok: false, error: "Agregá al menos una línea con monto." };
     }
-    if (lines.some((l) => !l.contractId?.trim())) {
-      return {
-        ok: false,
-        error: "Cada línea del recibo debe tener un contrato.",
-      };
-    }
 
     await assertContractsInOrg(
       session.organizationId,
@@ -374,12 +368,6 @@ export async function createPaymentOrder(
     );
     if (lines.length === 0) {
       return { ok: false, error: "Agregá al menos una línea con monto." };
-    }
-    if (lines.some((l) => !l.contractId?.trim())) {
-      return {
-        ok: false,
-        error: "Cada línea de la orden de pago debe tener un contrato.",
-      };
     }
 
     await assertContractsInOrg(

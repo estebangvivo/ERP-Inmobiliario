@@ -305,6 +305,11 @@ export async function applyPaymentOrderInvoiceBalances(
   });
   if (apps.length === 0) return;
 
+  const {
+    openRecoverableChargesForInvoice,
+    reverseRecoverableChargesForInvoice,
+  } = await import("@/server/services/recoverable-charges");
+
   for (const app of apps) {
     const inv = await tx.supplierInvoice.findFirst({
       where: {
@@ -319,7 +324,13 @@ export async function applyPaymentOrderInvoiceBalances(
         where: { id: inv.id },
         data: { paidAt: inv.paidAt ?? new Date() },
       });
+      if (inv.costBearer === "AGENCY_RECOVERABLE") {
+        await openRecoverableChargesForInvoice(tx, organizationId, inv.id);
+      }
     } else {
+      if (inv.costBearer === "AGENCY_RECOVERABLE") {
+        await reverseRecoverableChargesForInvoice(tx, organizationId, inv.id);
+      }
       await tx.supplierInvoice.update({
         where: { id: inv.id },
         data: { paidAt: null },

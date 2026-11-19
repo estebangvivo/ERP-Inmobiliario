@@ -93,6 +93,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Params }
         <SupplierInvoiceForm
           workOrderId={workOrder.id}
           suppliers={suppliers}
+          defaultCostBearer={workOrder.costBearer}
         />
       ) : null}
 

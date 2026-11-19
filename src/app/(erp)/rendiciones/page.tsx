@@ -15,6 +15,8 @@ import {
 } from "@/lib/list-pagination";
 import { GenerateSettlementForm } from "@/components/erp/settlement-forms";
 import { excludePlatformSuperadminFromUser } from "@/features/auth/lib/platform-admin";
+import { listRecoverableAccountSummaries } from "@/server/services/recoverable-charges";
+import { formatMoneyByCurrency, sumByCurrency } from "@/config/currencies";
 
 export default async function RendicionesPage({
   searchParams,
@@ -30,7 +32,7 @@ export default async function RendicionesPage({
     pageSize: pageSize !== 10 ? String(pageSize) : undefined,
   };
 
-  const [owners, total] = await Promise.all([
+  const [owners, total, recoverableRows] = await Promise.all([
     staff
       ? prisma.organizationMember.findMany({
           where: {
@@ -46,7 +48,19 @@ export default async function RendicionesPage({
         })
       : Promise.resolve([]),
     prisma.ownerSettlement.count({ where: scope }),
+    staff
+      ? listRecoverableAccountSummaries(session.organizationId)
+      : Promise.resolve([]),
   ]);
+
+  const recoverableWarnings: Record<string, string> = {};
+  for (const row of recoverableRows) {
+    const prev = recoverableWarnings[row.ownerId];
+    const chunk = formatMoneyByCurrency(
+      sumByCurrency([{ currency: row.currency, amount: row.balance }]),
+    );
+    recoverableWarnings[row.ownerId] = prev ? `${prev} · ${chunk}` : chunk;
+  }
 
   const page = clampListPage(parseListPage(params.page), total, pageSize);
   const settlements = await prisma.ownerSettlement.findMany({
@@ -71,7 +85,10 @@ export default async function RendicionesPage({
       />
 
       {staff ? (
-        <GenerateSettlementForm owners={owners.map((o) => o.user)} />
+        <GenerateSettlementForm
+          owners={owners.map((o) => o.user)}
+          recoverableWarnings={recoverableWarnings}
+        />
       ) : null}
 
       <DataTable

@@ -21,6 +21,7 @@ const payInitial: DocActionResult | null = null;
 
 export function GenerateSettlementForm({
   owners,
+  recoverableWarnings = {},
 }: {
   owners: {
     id: string;
@@ -28,6 +29,8 @@ export function GenerateSettlementForm({
     documentNumber?: string | null;
     email?: string | null;
   }[];
+  /** ownerId → texto de saldo pendiente a recuperar */
+  recoverableWarnings?: Record<string, string>;
 }) {
   const router = useRouter();
   const now = new Date();
@@ -41,6 +44,8 @@ export function GenerateSettlementForm({
   useEffect(() => {
     if (state?.ok || batchState?.ok) router.refresh();
   }, [state, batchState, router]);
+
+  const warning = ownerId ? recoverableWarnings[ownerId] : undefined;
 
   return (
     <div className="space-y-3">
@@ -93,6 +98,20 @@ export function GenerateSettlementForm({
             <option value="EUR">EUR</option>
           </Select>
         </div>
+        {warning ? (
+          <div className="lg:col-span-5 rounded-md border border-amber-500/40 bg-amber-50/60 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+            Este propietario tiene gastos a recuperar ({warning}). No se
+            descuentan solos; podés deducirlos en el borrador de la rendición o
+            gestionarlos en{" "}
+            <a
+              href={`/tesoreria/cuentas/recuperables/${ownerId}`}
+              className="underline"
+            >
+              la cuenta paralela
+            </a>
+            .
+          </div>
+        ) : null}
         <div className="lg:col-span-5">
           <Button type="submit" disabled={pending} data-testid="generate-settlement-submit">
             {pending ? "Calculando…" : "Generar liquidación"}

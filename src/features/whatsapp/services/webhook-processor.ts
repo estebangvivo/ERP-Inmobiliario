@@ -103,6 +103,47 @@ function isGreetingOrMenu(body: string): boolean {
   );
 }
 
+/** Agradecimientos / confirmaciones / despedidas: no reinician el menú. */
+function isCourtesyOrFarewell(body: string): boolean {
+  const t = body
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+  if (!t) return false;
+  return /^(muchas?\s+gracias|gracias|mil\s+gracias|ok(ay)?|dale|perfecto|listo|buenisimo|excelente|genial|barbaro|de\s+acuerdo|entendido|chau|adios|hasta\s+luego|nos\s+vemos)([\s!,.]*)$/i.test(
+    t,
+  );
+}
+
+async function sendCourtesyAck(
+  sessionId: string,
+  organizationId: string,
+  phone: string,
+  credentials: WhatsAppCredentials,
+  waitingForAgent: boolean,
+) {
+  const body = waitingForAgent
+    ? "¡De nada! En breve te atiende un agente."
+    : "¡De nada! Si necesitás algo más, escribí *menu*.";
+  try {
+    const waId = await sendWhatsAppText({
+      credentials,
+      toPhone: phone,
+      body,
+    });
+    await recordOutboundBotMessage({
+      sessionId,
+      organizationId,
+      body,
+      waMessageId: waId,
+      messageType: "text",
+    });
+  } catch (err) {
+    console.warn("whatsapp courtesy ack failed", sessionId, err);
+  }
+}
+
 async function sendLastResortBotHello(
   sessionId: string,
   organizationId: string,
@@ -152,8 +193,18 @@ async function handleInboundMessage(
     where: { id: created.id },
   });
 
-  // Solo si un agente humano ya tomó la charla dejamos de contestar con el bot.
+  // Agente humano ya tomó la charla: no interviene el bot (salvo cortesía breve).
   if (session.status === "AGENT_HANDLED" && session.assignedAgentId) {
+    if (isCourtesyOrFarewell(inbound.body)) {
+      await sendCourtesyAck(
+        session.id,
+        organizationId,
+        session.waContactPhone,
+        credentials,
+        false,
+      );
+      return;
+    }
     publishWhatsAppInboxEvent({
       type: "session.updated",
       organizationId,
@@ -164,9 +215,53 @@ async function handleInboundMessage(
   }
 
   try {
+    // Tras derivar a un área: gracias/chau no reinician el menú.
+    if (session.status === "WAITING_AGENT") {
+      if (isCourtesyOrFarewell(inbound.body)) {
+        await sendCourtesyAck(
+          session.id,
+          organizationId,
+          session.waContactPhone,
+          credentials,
+          true,
+        );
+        return;
+      }
+      // Solo un saludo/menú explícito retoma el asistente (nueva consulta).
+      if (isGreetingOrMenu(inbound.body)) {
+        try {
+          session = await reopenClosedSessionToBot({
+            sessionId: session.id,
+            organizationId,
+          });
+        } catch (reopenErr) {
+          console.error("whatsapp reopen failed", session.id, reopenErr);
+        }
+        await startBotConversation(session, credentials);
+        return;
+      }
+      publishWhatsAppInboxEvent({
+        type: "session.updated",
+        organizationId,
+        sessionId: session.id,
+        payload: { status: session.status },
+      });
+      return;
+    }
+
+    if (session.status === "BOT_ACTIVE" && isCourtesyOrFarewell(inbound.body)) {
+      await sendCourtesyAck(
+        session.id,
+        organizationId,
+        session.waContactPhone,
+        credentials,
+        false,
+      );
+      return;
+    }
+
     const needsFreshBot =
       session.status === "CLOSED" ||
-      session.status === "WAITING_AGENT" ||
       !session.botStep ||
       isGreetingOrMenu(inbound.body);
 

@@ -171,10 +171,15 @@ async function handleInboundMessage(
       isGreetingOrMenu(inbound.body);
 
     if (needsFreshBot) {
-      session = await reopenClosedSessionToBot({
-        sessionId: session.id,
-        organizationId,
-      });
+      try {
+        session = await reopenClosedSessionToBot({
+          sessionId: session.id,
+          organizationId,
+        });
+      } catch (reopenErr) {
+        console.error("whatsapp reopen failed", session.id, reopenErr);
+        // Seguimos igual: intentamos saludar con el estado actual.
+      }
       await startBotConversation(session, credentials);
       return;
     }
@@ -198,18 +203,39 @@ async function handleInboundMessage(
   } catch (err) {
     console.error("whatsapp bot handle failed", session.id, err);
     try {
-      session = await reopenClosedSessionToBot({
-        sessionId: session.id,
-        organizationId,
-      });
       await sendLastResortBotHello(
         session.id,
         organizationId,
         session.waContactPhone,
         credentials,
       );
+      await prisma.whatsAppChatSession.update({
+        where: { id: session.id },
+        data: {
+          status: "BOT_ACTIVE",
+          botStep: "AREA_MENU",
+          lastMessageAt: new Date(),
+          ...(session.assignedAgentId
+            ? { assignedAgent: { disconnect: true } }
+            : {}),
+        },
+      });
     } catch (err2) {
+      const detail =
+        err2 instanceof Error ? err2.message : "Error desconocido al enviar";
       console.error("whatsapp last-resort send failed", session.id, err2);
+      // Deja rastro visible en la bandeja para diagnosticar Meta/token.
+      try {
+        await recordOutboundBotMessage({
+          sessionId: session.id,
+          organizationId,
+          body: `[No se pudo responder por WhatsApp] ${detail}`,
+          waMessageId: null,
+          messageType: "error",
+        });
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

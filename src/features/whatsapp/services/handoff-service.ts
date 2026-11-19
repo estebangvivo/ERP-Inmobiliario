@@ -98,7 +98,9 @@ export async function closeChatSession(input: {
     status: "CLOSED",
     botStep: null,
     requestedArea: null,
-    assignedAgent: { disconnect: true },
+    ...(session.assignedAgentId
+      ? { assignedAgent: { disconnect: true as const } }
+      : {}),
   });
 
   if (input.notifyCustomer !== false) {
@@ -134,11 +136,19 @@ export async function reopenClosedSessionToBot(input: {
   sessionId: string;
   organizationId: string;
 }) {
+  const session = await prisma.whatsAppChatSession.findFirst({
+    where: { id: input.sessionId, organizationId: input.organizationId },
+    select: { id: true, assignedAgentId: true },
+  });
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+
   return updateSessionStatus(input.sessionId, input.organizationId, {
     status: "BOT_ACTIVE",
     botStep: "AREA_MENU",
     requestedArea: null,
-    assignedAgent: { disconnect: true },
+    ...(session.assignedAgentId
+      ? { assignedAgent: { disconnect: true as const } }
+      : {}),
   });
 }
 
@@ -157,7 +167,9 @@ export async function releaseChatSessionToBot(input: {
     status: "BOT_ACTIVE",
     botStep: "AREA_MENU",
     requestedArea: null,
-    assignedAgent: { disconnect: true },
+    ...(session.assignedAgentId
+      ? { assignedAgent: { disconnect: true as const } }
+      : {}),
   });
 
   if (input.notifyCustomer !== false) {

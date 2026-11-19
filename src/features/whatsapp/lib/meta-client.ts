@@ -62,19 +62,54 @@ async function postMessage(
   return data;
 }
 
+function phoneCandidates(toPhone: string): string[] {
+  const digits = toPhone.replace(/\D/g, "");
+  const out: string[] = [];
+  const push = (v: string) => {
+    if (v && !out.includes(v)) out.push(v);
+  };
+  push(digits);
+  push(toPhone.trim());
+  // AR: a veces Meta entrega/espera con o sin el 9 tras el 54.
+  if (digits.startsWith("549") && digits.length >= 12) {
+    push(`54${digits.slice(3)}`);
+  } else if (
+    digits.startsWith("54") &&
+    !digits.startsWith("549") &&
+    digits.length >= 11
+  ) {
+    push(`549${digits.slice(2)}`);
+  }
+  return out;
+}
+
 export async function sendWhatsAppText({
   credentials,
   toPhone,
   body,
 }: SendTextInput): Promise<string | null> {
-  const data = await postMessage(credentials, {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: toPhone,
-    type: "text",
-    text: { preview_url: false, body },
-  });
-  return data.messages?.[0]?.id ?? null;
+  const candidates = phoneCandidates(toPhone);
+  let lastError: unknown;
+
+  for (const to of candidates) {
+    try {
+      const data = await postMessage(credentials, {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "text",
+        text: { preview_url: false, body },
+      });
+      return data.messages?.[0]?.id ?? null;
+    } catch (err) {
+      lastError = err;
+      console.warn("whatsapp send text failed for", to, err);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new WhatsAppApiError("No se pudo enviar el mensaje de WhatsApp", 500);
 }
 
 export async function sendWhatsAppButtons({

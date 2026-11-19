@@ -153,12 +153,31 @@ export async function releaseWhatsAppSessionAction(
     const credentials = await getOrganizationWhatsAppConfig(
       session.organizationId,
     );
-    if (credentials) {
+    if (!credentials) {
+      return {
+        ok: false,
+        error:
+          "WhatsApp no está configurado (token / phone number id). Revisá Configuración.",
+      };
+    }
+    try {
       await startBotConversation(chat, credentials);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Error de Meta";
+      return {
+        ok: false,
+        error: `Bot reactivado, pero Meta no envió el saludo: ${detail}`,
+      };
     }
     return { ok: true, message: "Conversación devuelta al bot." };
-  } catch {
-    return { ok: false, error: "No se pudo devolver al bot." };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "No se pudo devolver al bot.",
+    };
   }
 }
 

@@ -33,7 +33,15 @@ const PROTECTED_PREFIXES = [
   "/onboarding",
 ];
 
-const PUBLIC_EXACT = new Set(["/", "/login", "/sign-up"]);
+const PUBLIC_EXACT = new Set([
+  "/",
+  "/login",
+  "/sign-up",
+  "/privacidad",
+  "/condiciones",
+  "/privacy",
+  "/terms",
+]);
 const PUBLIC_PREFIXES = [
   "/propiedades",
   "/i",

@@ -86,13 +86,60 @@ export async function assignAgentToChatSession(input: {
 export async function closeChatSession(input: {
   sessionId: string;
   organizationId: string;
+  /** Avisa al cliente que puede escribir de nuevo. Default true. */
+  notifyCustomer?: boolean;
 }) {
+  const session = await prisma.whatsAppChatSession.findFirst({
+    where: { id: input.sessionId, organizationId: input.organizationId },
+  });
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+
   const updated = await updateSessionStatus(input.sessionId, input.organizationId, {
     status: "CLOSED",
     botStep: null,
+    requestedArea: null,
+    assignedAgent: { disconnect: true },
   });
+
+  if (input.notifyCustomer !== false) {
+    const credentials = await getOrganizationWhatsAppConfig(input.organizationId);
+    if (credentials) {
+      const body =
+        "Gracias por contactarnos. La consulta quedó cerrada. Si necesitás otra cosa, volvé a escribirnos y el asistente te va a atender.";
+      try {
+        const waId = await sendWhatsAppText({
+          credentials,
+          toPhone: session.waContactPhone,
+          body,
+        });
+        await recordOutboundAgentMessage({
+          sessionId: session.id,
+          organizationId: session.organizationId,
+          body,
+          sentByUserId: null,
+          waMessageId: waId,
+        });
+      } catch (err) {
+        console.error("whatsapp close notify", session.id, err);
+      }
+    }
+  }
+
   revalidatePath("/whatsapp");
   return updated;
+}
+
+/** Reactiva una charla cerrada para que el bot vuelva a atender. */
+export async function reopenClosedSessionToBot(input: {
+  sessionId: string;
+  organizationId: string;
+}) {
+  return updateSessionStatus(input.sessionId, input.organizationId, {
+    status: "BOT_ACTIVE",
+    botStep: "AREA_MENU",
+    requestedArea: null,
+    assignedAgent: { disconnect: true },
+  });
 }
 
 /** Devuelve la conversación al bot (menú de áreas). */

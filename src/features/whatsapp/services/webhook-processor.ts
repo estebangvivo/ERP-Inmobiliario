@@ -5,9 +5,11 @@ import {
 } from "@/features/whatsapp/lib/meta-client";
 import {
   processBotMessage,
+  startBotConversation,
 } from "@/features/whatsapp/lib/bot-flow";
 import type { InboundWhatsAppMessage } from "@/features/whatsapp/lib/types";
 import { publishWhatsAppInboxEvent } from "@/features/whatsapp/lib/event-bus";
+import { reopenClosedSessionToBot } from "@/features/whatsapp/services/handoff-service";
 import { recordInboundCustomerMessage } from "@/features/whatsapp/services/message-service";
 import { getOrCreateChatSession } from "@/features/whatsapp/services/session-service";
 
@@ -109,6 +111,16 @@ async function handleInboundMessage(
 
   await markWhatsAppMessageRead(credentials, inbound.waMessageId);
 
+  // Tras "Cerrar", el próximo mensaje del cliente retoma el bot con el menú.
+  if (session.status === "CLOSED") {
+    const reopened = await reopenClosedSessionToBot({
+      sessionId: session.id,
+      organizationId,
+    });
+    await startBotConversation(reopened, credentials);
+    return;
+  }
+
   if (session.status === "BOT_ACTIVE") {
     await processBotMessage({
       session,
@@ -119,7 +131,7 @@ async function handleInboundMessage(
     return;
   }
 
-  // Inbox en tiempo real cuando el bot ya no atiende.
+  // Inbox en tiempo real cuando el bot ya no atiende (espera / con agente).
   publishWhatsAppInboxEvent({
     type: "session.updated",
     organizationId,

@@ -41,7 +41,8 @@ export async function assignAgentToChatSession(input: {
   const updated = await updateSessionStatus(input.sessionId, input.organizationId, {
     status: "AGENT_HANDLED",
     assignedAgent: { connect: { id: input.agentUserId } },
-    botStep: null,
+    // Marca explícita: el webhook no debe reinterpretar null como “menú vacío”.
+    botStep: "HUMAN_AGENT",
   });
 
   if (session.leadId) {
@@ -243,6 +244,7 @@ export async function sendAgentWhatsAppMessage(input: {
     await updateSessionStatus(session.id, session.organizationId, {
       status: "AGENT_HANDLED",
       assignedAgent: { connect: { id: input.agentUserId } },
+      botStep: "HUMAN_AGENT",
     });
   }
 

@@ -193,18 +193,8 @@ async function handleInboundMessage(
     where: { id: created.id },
   });
 
-  // Agente humano ya tomó la charla: no interviene el bot (salvo cortesía breve).
-  if (session.status === "AGENT_HANDLED" && session.assignedAgentId) {
-    if (isCourtesyOrFarewell(inbound.body)) {
-      await sendCourtesyAck(
-        session.id,
-        organizationId,
-        session.waContactPhone,
-        credentials,
-        false,
-      );
-      return;
-    }
+  // Con agente humano: el bot no habla hasta Cerrar o Devolver al bot.
+  if (session.status === "AGENT_HANDLED" || session.assignedAgentId) {
     publishWhatsAppInboxEvent({
       type: "session.updated",
       organizationId,
@@ -215,7 +205,7 @@ async function handleInboundMessage(
   }
 
   try {
-    // Tras derivar a un área: gracias/chau no reinician el menú.
+    // Tras derivar (esperando agente): gracias/chau no reinician el menú.
     if (session.status === "WAITING_AGENT") {
       if (isCourtesyOrFarewell(inbound.body)) {
         await sendCourtesyAck(
@@ -227,7 +217,7 @@ async function handleInboundMessage(
         );
         return;
       }
-      // Solo un saludo/menú explícito retoma el asistente (nueva consulta).
+      // Solo hola/menu explícito retoma el asistente (nueva consulta).
       if (isGreetingOrMenu(inbound.body)) {
         try {
           session = await reopenClosedSessionToBot({
@@ -260,10 +250,11 @@ async function handleInboundMessage(
       return;
     }
 
+    // Nunca usar solo !botStep: tras handoff/agente botStep es null y reabría el menú.
     const needsFreshBot =
       session.status === "CLOSED" ||
-      !session.botStep ||
-      isGreetingOrMenu(inbound.body);
+      (session.status === "BOT_ACTIVE" &&
+        (!session.botStep || isGreetingOrMenu(inbound.body)));
 
     if (needsFreshBot) {
       try {

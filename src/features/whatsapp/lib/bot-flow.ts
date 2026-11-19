@@ -294,6 +294,7 @@ async function resolveContact(
   const profile = await lookupWhatsAppContact(
     session.organizationId,
     session.waContactPhone,
+    session.waContactName,
   );
   if (profile && payload.userId && profile.userId === payload.userId) {
     return {

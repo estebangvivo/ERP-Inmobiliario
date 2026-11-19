@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/session";
 import { parseDateInput } from "@/lib/dates";
 import { ROLE_DEFAULT_MODULES } from "@/features/auth/lib/modules";
 import { hashPassword } from "@/features/auth/lib/password";
+import { canonicalizeStoredPhone } from "@/features/auth/lib/phone";
 import {
   dniAlreadyLoadedMessage,
   lookupOrgMemberByDni,
@@ -95,8 +96,8 @@ export async function createPartyPersonAction(input: {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const phone = input.phone.trim();
-    const phone2 = input.phone2?.trim() || null;
+    const phone = canonicalizeStoredPhone(input.phone) ?? "";
+    const phone2 = canonicalizeStoredPhone(input.phone2);
     const address = input.address.trim();
     const birthDate = parseBirthDate(input.birthDate);
 
@@ -268,8 +269,8 @@ export async function updatePartyPersonAction(input: {
     const session = await requireStaff();
     const orgId = session.organizationId;
     const name = input.name.trim();
-    const phone = input.phone.trim();
-    const phone2 = input.phone2?.trim() || null;
+    const phone = canonicalizeStoredPhone(input.phone) ?? "";
+    const phone2 = canonicalizeStoredPhone(input.phone2);
     const address = input.address.trim();
     const birthDate = parseBirthDate(input.birthDate);
     const email = input.email.trim().toLowerCase();

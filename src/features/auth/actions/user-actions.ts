@@ -11,6 +11,7 @@ import {
   excludePlatformSuperadminFromUser,
   isPlatformSuperadminEmail,
 } from "@/features/auth/lib/platform-admin";
+import { canonicalizeStoredPhone } from "@/features/auth/lib/phone";
 import {
   hashPassword,
   validatePasswordStrength,
@@ -232,8 +233,8 @@ export async function createOrganizationUser(input: {
 
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
-    const phone = input.phone?.trim() || "";
-    const phone2 = input.phone2?.trim() || null;
+    const phone = canonicalizeStoredPhone(input.phone) ?? "";
+    const phone2 = canonicalizeStoredPhone(input.phone2);
     const address = input.address?.trim() || "";
     const birthDate = parseOptionalBirthDate(input.birthDate);
     if (
@@ -442,10 +443,10 @@ export async function updateOrganizationUser(input: {
       userData.documentNumber = dni;
     }
     if (input.phone !== undefined) {
-      userData.phone = input.phone.trim() || null;
+      userData.phone = canonicalizeStoredPhone(input.phone);
     }
     if (input.phone2 !== undefined) {
-      userData.phone2 = input.phone2.trim() || null;
+      userData.phone2 = canonicalizeStoredPhone(input.phone2);
     }
     if (input.birthDate !== undefined) {
       userData.birthDate = birthDate ?? null;

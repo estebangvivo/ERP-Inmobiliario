@@ -38,24 +38,71 @@ export type WhatsAppContactProfile = {
   rentedProperties: WhatsAppContactProperty[];
 };
 
-function firstNameFrom(fullName: string): string {
-  const part = fullName.trim().split(/\s+/)[0];
-  return part || fullName;
+/** Nombre para saludar: en fichas "APELLIDO NOMBRES" usa el primer nombre de pila. */
+export function greetingFirstName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fullName;
+  if (parts.length === 1) return parts[0]!;
+
+  const surname = parts[0]!;
+  // CAISUTTI INES NELLY → Ines (fichas importadas en mayúsculas)
+  if (
+    surname === surname.toUpperCase() &&
+    surname.length >= 3 &&
+    !/[a-záéíóúüñ]/.test(surname)
+  ) {
+    const given = parts[1]!;
+    return given.charAt(0) + given.slice(1).toLowerCase();
+  }
+
+  return parts[0]!;
 }
 
-function memberMatchesPhone(
-  phone: string | null | undefined,
-  phone2: string | null | undefined,
-  waContactPhone: string,
-): boolean {
-  return (
-    phonesMatch(phone, waContactPhone) || phonesMatch(phone2, waContactPhone)
-  );
+function rolePriority(role: OrganizationRole): number {
+  switch (role) {
+    case "OWNER":
+      return 5;
+    case "TENANT":
+      return 4;
+    case "GUARANTOR":
+      return 3;
+    case "AGENT":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function nameSimilarityScore(
+  userName: string,
+  waContactName: string | null | undefined,
+): number {
+  if (!waContactName?.trim()) return 0;
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  const u = norm(userName);
+  const w = norm(waContactName.trim());
+  if (!w) return 0;
+  if (u.includes(w) || w.includes(u)) return 6;
+  const uParts = u.split(/\s+/);
+  const wParts = w.split(/\s+/);
+  let hits = 0;
+  for (const wp of wParts) {
+    if (wp.length < 3) continue;
+    if (uParts.some((up) => up === wp || up.includes(wp) || wp.includes(up))) {
+      hits += 1;
+    }
+  }
+  return hits * 3;
 }
 
 export async function lookupWhatsAppContact(
   organizationId: string,
   waContactPhone: string,
+  waContactName?: string | null,
 ): Promise<WhatsAppContactProfile | null> {
   if (!waContactPhone?.trim()) return null;
 
@@ -64,21 +111,41 @@ export async function lookupWhatsAppContact(
       organizationId,
       user: {
         isActive: true,
-        OR: [{ phone: { not: null } }, { phone2: { not: null } }],
+        phone: { not: null },
         ...excludePlatformSuperadminFromUser(),
       },
     },
     include: {
       user: {
-        select: { id: true, name: true, phone: true, phone2: true },
+        select: { id: true, name: true, phone: true },
       },
     },
   });
 
-  const member = members.find((m) =>
-    memberMatchesPhone(m.user.phone, m.user.phone2, waContactPhone),
-  );
-  if (!member) return null;
+  type Scored = {
+    member: (typeof members)[number];
+    score: number;
+  };
+
+  // Solo teléfono principal: el 2 es referencia y no identifica al contacto de WhatsApp.
+  const scored: Scored[] = [];
+  for (const m of members) {
+    if (!phonesMatch(m.user.phone, waContactPhone)) continue;
+    const score =
+      20 +
+      rolePriority(m.role) +
+      nameSimilarityScore(m.user.name, waContactName);
+    scored.push({ member: m, score });
+  }
+
+  if (scored.length === 0) return null;
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.member.user.name.localeCompare(b.member.user.name, "es");
+  });
+
+  const member = scored[0]!.member;
 
   const [parties, ownedProperties] = await Promise.all([
     prisma.contractParty.findMany({
@@ -151,7 +218,7 @@ export async function lookupWhatsAppContact(
   return {
     userId: member.user.id,
     name: member.user.name,
-    firstName: firstNameFrom(member.user.name),
+    firstName: greetingFirstName(member.user.name),
     orgRole: member.role,
     isKnownPerson: true,
     isClient,

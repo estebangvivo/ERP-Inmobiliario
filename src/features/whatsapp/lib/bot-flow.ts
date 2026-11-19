@@ -8,6 +8,8 @@ import { parseBotPayload, upsertLeadFromWhatsAppBot } from "@/features/whatsapp/
 import {
   AREA_MENU_ROWS,
   areaFromButtonId,
+  matchAreaFromFreeText,
+  matchSalesIntentFromFreeText,
   WHATSAPP_AGENT_AREA_LABELS,
 } from "@/features/whatsapp/lib/areas";
 import type {
@@ -410,27 +412,28 @@ async function handleAreaSelection(
   const nextPayload: BotPayload = { ...payload, area };
 
   if (area === "SALES_RENTALS") {
+    // Enviar primero: si Meta falla, no dejamos el chat en un paso inconsistente.
+    await sendSalesIntentMenu(session, credentials, nextPayload);
     await updateSessionBotState(session.id, {
       botStep: "MAIN_MENU",
       botPayload: nextPayload,
       requestedArea: area,
       status: "BOT_ACTIVE",
     });
-    await sendSalesIntentMenu(session, credentials, nextPayload);
     return;
   }
 
+  await sendBotText(
+    session,
+    credentials,
+    `Contanos brevemente tu consulta de ${WHATSAPP_AGENT_AREA_LABELS[area]}:`,
+  );
   await updateSessionBotState(session.id, {
     botStep: "COLLECT_AREA_NOTE",
     botPayload: nextPayload,
     requestedArea: area,
     status: "BOT_ACTIVE",
   });
-  await sendBotText(
-    session,
-    credentials,
-    `Contanos brevemente tu consulta de ${WHATSAPP_AGENT_AREA_LABELS[area]}:`,
-  );
 }
 
 async function handleClientMenuAction(
@@ -587,20 +590,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "AREA_MENU") {
-    const area =
-      buttonArea ??
-      (textLower.includes("obra") || textLower.includes("manten")
-        ? "WORKS"
-        : textLower.includes("contrato")
-          ? "CONTRACTS"
-          : textLower.includes("caja") || textLower.includes("pago")
-            ? "CASH"
-            : textLower.includes("venta") ||
-                textLower.includes("alquiler") ||
-                textLower.includes("comprar") ||
-                textLower.includes("tas")
-              ? "SALES_RENTALS"
-              : null);
+    const area = buttonArea ?? matchAreaFromFreeText(text);
 
     if (!area) {
       await sendAreaMenu(session, credentials, payload, profile);
@@ -627,15 +617,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "MAIN_MENU") {
-    const intent =
-      buttonIntent ??
-      (textLower.includes("comprar")
-        ? "BUY"
-        : textLower.includes("alquilar")
-          ? "RENT"
-          : textLower.includes("tas")
-            ? "APPRAISE"
-            : null);
+    const intent = buttonIntent ?? matchSalesIntentFromFreeText(text);
 
     if (!intent) {
       await sendSalesIntentMenu(session, credentials, payload);

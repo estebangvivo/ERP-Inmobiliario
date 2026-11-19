@@ -75,25 +75,27 @@ export function WhatsAppInbox({
         </Link>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
-          <div className="border-b border-[var(--border)] px-4 py-3">
+      <div className="grid h-[min(72vh,820px)] min-h-[420px] gap-4 lg:grid-cols-[340px_1fr]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+          <div className="shrink-0 border-b border-[var(--border)] px-4 py-3">
             <p className="text-sm font-semibold">Bandeja</p>
             <p className="text-xs text-[var(--muted-foreground)]">
               {sessions.filter((s) => s.status === "WAITING_AGENT").length} en
               espera
             </p>
           </div>
-          <SessionList
-            sessions={sessions}
-            selectedId={selectedSessionId}
-            currentUserId={currentUserId}
-            eligibleAgents={eligibleAgents}
-            isAdmin={isAdmin}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SessionList
+              sessions={sessions}
+              selectedId={selectedSessionId}
+              currentUserId={currentUserId}
+              eligibleAgents={eligibleAgents}
+              isAdmin={isAdmin}
+            />
+          </div>
         </div>
 
-        <div>
+        <div className="min-h-0 min-w-0">
           {thread ? (
             <ChatThread
               session={thread.session}
@@ -102,7 +104,7 @@ export function WhatsAppInbox({
               currentUserId={currentUserId}
             />
           ) : (
-            <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-sm text-[var(--muted-foreground)]">
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-sm text-[var(--muted-foreground)]">
               Seleccioná una conversación de la bandeja.
             </div>
           )}

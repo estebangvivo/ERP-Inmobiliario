@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -92,6 +92,12 @@ export function ChatThread({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length, session.id]);
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
@@ -112,8 +118,8 @@ export function ChatThread({
     (session.status === "AGENT_HANDLED" && !isMine);
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col rounded-xl border border-[var(--border)] bg-[var(--card)]">
-      <div className="border-b border-[var(--border)] px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-semibold">
@@ -183,7 +189,10 @@ export function ChatThread({
         ) : null}
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div
+        ref={messagesScrollRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+      >
         {messages.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">
             Sin mensajes todavía.
@@ -219,11 +228,12 @@ export function ChatThread({
             );
           })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <form
         action={handleSubmit}
-        className="flex gap-2 border-t border-[var(--border)] p-3"
+        className="flex shrink-0 gap-2 border-t border-[var(--border)] p-3"
       >
         <input type="hidden" name="sessionId" value={session.id} />
         <Input

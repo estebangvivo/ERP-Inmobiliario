@@ -9,7 +9,9 @@ import {
   AREA_MENU_ROWS,
   areaFromButtonId,
   matchAreaFromFreeText,
+  matchAreaFromMenuChoice,
   matchSalesIntentFromFreeText,
+  parseMenuChoiceNumber,
   WHATSAPP_AGENT_AREA_LABELS,
 } from "@/features/whatsapp/lib/areas";
 import type {
@@ -590,8 +592,15 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "CLIENT_MENU" && profile?.isClient) {
+    const clientRows = buildClientMenuRows(profile);
+    const choiceN = parseMenuChoiceNumber(text, clientRows.length);
+    const actionFromNumber =
+      choiceN != null
+        ? clientActionFromButtonId(clientRows[choiceN - 1]?.id ?? "")
+        : null;
     const action =
       clientAction ??
+      actionFromNumber ??
       (textLower.includes("deuda") || textLower.includes("cuota")
         ? "client_debts"
         : textLower.includes("contrato")
@@ -622,15 +631,10 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "AREA_MENU") {
-    const areaFromNumber = (() => {
-      const n = Number(text.trim());
-      if (!Number.isInteger(n) || n < 1 || n > AREA_MENU_ROWS.length) {
-        return null;
-      }
-      return AREA_MENU_ROWS[n - 1]?.area ?? null;
-    })();
     const area =
-      buttonArea ?? areaFromNumber ?? matchAreaFromFreeText(text);
+      buttonArea ??
+      matchAreaFromMenuChoice(text) ??
+      matchAreaFromFreeText(text);
 
     if (!area) {
       await sendAreaMenu(session, credentials, payload, profile);
@@ -657,7 +661,13 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "MAIN_MENU") {
-    const intent = buttonIntent ?? matchSalesIntentFromFreeText(text);
+    const intentFromNumber = (() => {
+      const n = parseMenuChoiceNumber(text, PROSPECT_ROWS.length);
+      if (n == null) return null;
+      return intentFromButtonId(PROSPECT_ROWS[n - 1]?.id ?? "");
+    })();
+    const intent =
+      buttonIntent ?? intentFromNumber ?? matchSalesIntentFromFreeText(text);
 
     if (!intent) {
       await sendSalesIntentMenu(session, credentials, payload);

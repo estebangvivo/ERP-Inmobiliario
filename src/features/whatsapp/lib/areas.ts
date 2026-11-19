@@ -110,3 +110,47 @@ export function matchSalesIntentFromFreeText(
   if (/\b(tasar|tasacion|valuar|valuacion)\b/.test(t)) return "APPRAISE";
   return null;
 }
+
+/**
+ * Interpreta respuestas tipo "3", "3.", "3️⃣", "opcion 2" para menús numerados.
+ * Devuelve el índice 1-based o null.
+ */
+export function parseMenuChoiceNumber(
+  text: string,
+  maxOptions: number,
+): number | null {
+  if (maxOptions < 1) return null;
+  const raw = text.trim();
+  if (!raw) return null;
+
+  const emoji = raw.match(/([1-9])\uFE0F?\u20E3/);
+  if (emoji?.[1]) {
+    const n = Number(emoji[1]);
+    return n >= 1 && n <= maxOptions ? n : null;
+  }
+
+  const normalized = normalizeWhatsAppMatchText(raw);
+  const explicit = normalized.match(
+    /^(?:opcion(?:\s+n(?:umero|ro|\.?))?\s*|n(?:umero|ro|\.?)\s*)?([1-9])(?:\s*[.)\-:】]|\s+|$)/i,
+  );
+  if (explicit?.[1]) {
+    const n = Number(explicit[1]);
+    return n >= 1 && n <= maxOptions ? n : null;
+  }
+
+  // Solo dígito(s) sueltos: "3", "03"
+  if (/^[0-9]{1,2}$/.test(normalized)) {
+    const n = Number(normalized);
+    return n >= 1 && n <= maxOptions ? n : null;
+  }
+
+  return null;
+}
+
+export function matchAreaFromMenuChoice(
+  text: string,
+): WhatsAppAgentArea | null {
+  const n = parseMenuChoiceNumber(text, AREA_MENU_ROWS.length);
+  if (n == null) return null;
+  return AREA_MENU_ROWS[n - 1]?.area ?? null;
+}

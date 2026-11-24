@@ -34,14 +34,6 @@ import {
   buildClientDebtsMessage,
   buildClientPropertiesMessage,
 } from "@/features/whatsapp/services/client-self-service";
-import {
-  buildBudgetMenuRows,
-  countCatalogProperties,
-  formatCatalogWhatsAppMessage,
-  resolveBudgetRange,
-  searchCatalogProperties,
-} from "@/features/whatsapp/services/property-catalog-service";
-
 async function tryAutoRoute(
   sessionId: string,
   organizationId: string,
@@ -554,58 +546,53 @@ async function handleClientMenuAction(
   });
 }
 
-async function sendCatalogMatches(
-  session: WhatsAppChatSession,
-  credentials: WhatsAppCredentials,
-  intent: "BUY" | "RENT",
-  filters: {
-    zone?: string | null;
-    budgetText?: string | null;
-    budgetRangeId?: string | null;
-    propertyTypeText?: string | null;
-  },
-  headline?: string,
-) {
-  try {
-    const result = await searchCatalogProperties({
-      organizationId: session.organizationId,
-      intent,
-      zone: filters.zone,
-      budgetText: filters.budgetText,
-      budgetRangeId: filters.budgetRangeId,
-      propertyTypeText: filters.propertyTypeText,
-    });
-    const message = formatCatalogWhatsAppMessage(intent, result, { headline });
-    if (message) {
-      await sendBotText(session, credentials, message);
-    }
-  } catch {
-    /* no bloquear el flujo comercial si falla el catálogo */
+async function resolvePublicCatalogUrl(
+  organizationId: string,
+): Promise<string> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { website: true },
+  });
+  const website = org?.website?.trim();
+  if (website) {
+    return website.endsWith("/") ? website : `${website}/`;
   }
+  // Fallback del catálogo público de Poblar cuando la org no tiene website cargado.
+  return "https://inmobiliariapoblar.com.ar/";
 }
 
-async function sendBudgetRangeMenu(
+function catalogRedirectMessage(catalogUrl: string, intent: "BUY" | "RENT"): string {
+  const advisor =
+    intent === "RENT" ? "Alquileres" : "Ventas";
+  return [
+    "Para consultar propiedades disponibles, por favor dirigite a:",
+    catalogUrl,
+    "",
+    `Si alguna de las propiedades es de tu interés, decime la dirección y te derivo con un asesor de *${advisor}*.`,
+  ].join("\n");
+}
+
+async function sendCatalogRedirect(
   session: WhatsAppChatSession,
   credentials: WhatsAppCredentials,
   payload: BotPayload,
   intent: "BUY" | "RENT",
 ) {
-  const rows = await buildBudgetMenuRows({
-    organizationId: session.organizationId,
+  const catalogUrl = await resolvePublicCatalogUrl(session.organizationId);
+  const nextPayload: BotPayload = {
+    ...payload,
     intent,
-    zone: payload.zone,
+    area: payload.area ?? "SALES_RENTALS",
+  };
+  await updateSessionBotState(session.id, {
+    botStep: "COLLECT_PROPERTY_INTEREST",
+    botPayload: nextPayload,
+    requestedArea: nextPayload.area ?? "SALES_RENTALS",
   });
-  const body =
-    intent === "RENT"
-      ? "¿Cuál es tu presupuesto de alquiler? (valores en ARS)"
-      : "¿Cuál es tu presupuesto de compra? (valores en USD)";
-  await sendBotList(
+  await sendBotText(
     session,
     credentials,
-    body,
-    rows,
-    "COLLECT_BUDGET",
-    payload,
+    catalogRedirectMessage(catalogUrl, intent),
   );
 }
 
@@ -645,45 +632,7 @@ async function startProspectFlow(
     return;
   }
 
-  let intro =
-    intent === "RENT"
-      ? "Perfecto, te ayudo a buscar alquileres."
-      : "Perfecto, te ayudo a buscar propiedades en venta.";
-  let available = 0;
-  try {
-    available = await countCatalogProperties(session.organizationId, intent);
-    if (available > 0) {
-      intro += ` Ahora mismo tenemos *${available}* disponible${available === 1 ? "" : "s"} en el sistema.`;
-    } else {
-      intro +=
-        " Por ahora no hay disponibles con ese criterio; igual registramos tu búsqueda para un asesor.";
-    }
-  } catch {
-    /* ignore */
-  }
-
-  await updateSessionBotState(session.id, {
-    botStep: "COLLECT_ZONE",
-    botPayload: nextPayload,
-    requestedArea: nextPayload.area ?? "SALES_RENTALS",
-  });
-  await sendBotText(session, credentials, intro);
-  if (available > 0) {
-    await sendCatalogMatches(
-      session,
-      credentials,
-      intent,
-      {},
-      intent === "RENT"
-        ? "Algunas opciones de alquiler disponibles:"
-        : "Algunas opciones en venta disponibles:",
-    );
-  }
-  await sendBotText(
-    session,
-    credentials,
-    "¿En qué zona o barrio estás buscando?",
-  );
+  await sendCatalogRedirect(session, credentials, nextPayload, intent);
 }
 
 export type BotProcessInput = {
@@ -829,6 +778,34 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     return;
   }
 
+  if (step === "COLLECT_PROPERTY_INTEREST") {
+    if (!text) {
+      await sendBotText(
+        session,
+        credentials,
+        "Si te interesa alguna propiedad, escribí la dirección. También podés escribir *menu* para volver al inicio.",
+      );
+      return;
+    }
+
+    const intent = payload.intent === "BUY" || payload.intent === "RENT"
+      ? payload.intent
+      : "RENT";
+    const nextPayload: BotPayload = {
+      ...payload,
+      intent,
+      area: payload.area ?? "SALES_RENTALS",
+      areaNote: `Propiedad de interés: ${text}`,
+    };
+    await requestHumanHandoff(
+      session,
+      credentials,
+      nextPayload,
+      nextPayload.area,
+    );
+    return;
+  }
+
   if (step === "COLLECT_ZONE") {
     if (!text) {
       await sendBotText(session, credentials, "Por favor indicá la zona o barrio.");
@@ -836,20 +813,9 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     }
     const nextPayload: BotPayload = { ...payload, zone: text };
 
+    // Sesiones viejas de alquiler/venta: redirigir al catálogo web.
     if (payload.intent === "BUY" || payload.intent === "RENT") {
-      await updateSessionBotState(session.id, {
-        botStep: "COLLECT_BUDGET",
-        botPayload: nextPayload,
-      });
-      await sendCatalogMatches(session, credentials, payload.intent, {
-        zone: text,
-      });
-      await sendBudgetRangeMenu(
-        session,
-        credentials,
-        nextPayload,
-        payload.intent,
-      );
+      await sendCatalogRedirect(session, credentials, nextPayload, payload.intent);
       return;
     }
 
@@ -867,39 +833,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
 
   if (step === "COLLECT_BUDGET") {
     if (payload.intent === "BUY" || payload.intent === "RENT") {
-      const range = resolveBudgetRange(payload.intent, {
-        interactiveId: input.interactiveId,
-        text,
-      });
-      if (!range) {
-        await sendBudgetRangeMenu(
-          session,
-          credentials,
-          payload,
-          payload.intent,
-        );
-        return;
-      }
-
-      const nextPayload: BotPayload = {
-        ...payload,
-        budget: range.title,
-        budgetRangeId: range.id,
-      };
-      await updateSessionBotState(session.id, {
-        botStep: "COLLECT_PROPERTY_TYPE",
-        botPayload: nextPayload,
-      });
-      await sendCatalogMatches(session, credentials, payload.intent, {
-        zone: payload.zone,
-        budgetRangeId: range.id,
-        budgetText: range.title,
-      });
-      await sendBotText(
-        session,
-        credentials,
-        "¿Qué tipo de inmueble buscás? (ej. departamento 2 ambientes, casa, local, cochera, galpón)",
-      );
+      await sendCatalogRedirect(session, credentials, payload, payload.intent);
       return;
     }
 
@@ -921,6 +855,11 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "COLLECT_PROPERTY_TYPE") {
+    if (payload.intent === "BUY" || payload.intent === "RENT") {
+      await sendCatalogRedirect(session, credentials, payload, payload.intent);
+      return;
+    }
+
     if (!text) {
       await sendBotText(
         session,
@@ -949,21 +888,6 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
       leadId,
       requestedArea: nextPayload.area ?? "SALES_RENTALS",
     });
-
-    if (payload.intent === "BUY" || payload.intent === "RENT") {
-      await sendCatalogMatches(
-        session,
-        credentials,
-        payload.intent,
-        {
-          zone: payload.zone,
-          budgetText: payload.budget,
-          budgetRangeId: payload.budgetRangeId,
-          propertyTypeText: text,
-        },
-        "Con lo que me contaste, estas son las opciones más cercanas del inventario:",
-      );
-    }
 
     await sendBotText(
       session,

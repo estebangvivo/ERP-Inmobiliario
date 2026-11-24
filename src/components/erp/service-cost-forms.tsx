@@ -39,15 +39,26 @@ export function ServiceCostForm({
   complexes,
   properties,
   ledger = "EXPENSES",
+  bankAccounts = [],
+  suppliers = [],
 }: {
   complexes: { id: string; name: string }[];
   properties: { id: string; title: string }[];
   ledger?: CostLedger;
+  bankAccounts?: { id: string; label: string; currency: string }[];
+  suppliers?: {
+    id: string;
+    name: string;
+    documentNumber?: string | null;
+  }[];
 }) {
   const router = useRouter();
   const now = new Date();
   const [scope, setScope] = useState<"complex" | "property">("complex");
   const [propertyId, setPropertyId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
+  const [supplierId, setSupplierId] = useState("");
+  const [partyName, setPartyName] = useState("");
   const [state, formAction, pending] = useActionState(
     createServiceCostAction,
     initial,
@@ -167,15 +178,89 @@ export function ServiceCostForm({
         <Label htmlFor="amount">Monto</Label>
         <Input id="amount" name="amount" type="number" step="0.01" required />
       </div>
+      <div className="space-y-1">
+        <Label htmlFor="supplierId">Proveedor (opcional)</Label>
+        <Select
+          id="supplierId"
+          name="supplierId"
+          value={supplierId}
+          onChange={(e) => {
+            const id = e.target.value;
+            setSupplierId(id);
+            const found = suppliers.find((s) => s.id === id);
+            if (found) setPartyName(found.name);
+          }}
+        >
+          <option value="">Sin catálogo / otro</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {s.documentNumber ? ` · ${s.documentNumber}` : ""}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="partyName">Pagado a</Label>
+        <Input
+          id="partyName"
+          name="partyName"
+          required
+          value={partyName}
+          onChange={(e) => setPartyName(e.target.value)}
+          placeholder="Ej. AYSA, Edenor, consorcio…"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="paymentMethod">Medio de pago</Label>
+        <Select
+          id="paymentMethod"
+          name="paymentMethod"
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          required
+        >
+          <option value="BANK_TRANSFER">Transferencia</option>
+          <option value="CASH">Efectivo</option>
+          <option value="CHECK">Cheque</option>
+          <option value="OTHER">Otro</option>
+        </Select>
+      </div>
+      {paymentMethod === "BANK_TRANSFER" ? (
+        <div className="space-y-1">
+          <Label htmlFor="bankAccountId">Cuenta bancaria</Label>
+          <Select id="bankAccountId" name="bankAccountId" required defaultValue="">
+            <option value="" disabled>
+              Elegí…
+            </option>
+            {bankAccounts.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
+      <div className="space-y-1">
+        <Label htmlFor="paymentReference">Ref. pago</Label>
+        <Input
+          id="paymentReference"
+          name="paymentReference"
+          placeholder="Opcional"
+        />
+      </div>
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="notes">Notas</Label>
         <Input id="notes" name="notes" placeholder="Opcional" />
       </div>
-      <div className="flex items-end">
+      <div className="flex items-end sm:col-span-2 lg:col-span-1">
         <Button type="submit" disabled={pending} className="w-full">
-          {pending ? "Guardando…" : "Cargar gasto"}
+          {pending ? "Guardando…" : "Cargar gasto y emitir OP"}
         </Button>
       </div>
+      <p className="text-xs text-[var(--muted-foreground)] sm:col-span-full">
+        Al guardar se emite automáticamente la orden de pago con el medio elegido.
+      </p>
       {state && !state.ok ? (
         <p className="text-sm text-[var(--destructive)] sm:col-span-full">
           {state.error}

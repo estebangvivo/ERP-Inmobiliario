@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireModule, isStaffRole } from "@/lib/session";
 import {
@@ -20,6 +21,8 @@ import {
   GenerateFromCostsForm,
   ServiceCostForm,
 } from "@/components/erp/service-cost-forms";
+import { listActiveBankAccountsForPayment } from "@/features/treasury/queries/bank-queries";
+import { listSuppliersForTreasury } from "@/features/treasury/queries/list-treasury";
 
 export default async function ServiciosPage({
   searchParams,
@@ -40,20 +43,23 @@ export default async function ServiciosPage({
   };
   const expWhere = { AND: [expenseScopeWhere(session), { ledger: "SERVICES" as const }] };
 
-  const [complexes, properties, costsTotal, expTotal] = await Promise.all([
-    prisma.complex.findMany({
-      where: complexScopeWhere(session),
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.property.findMany({
-      where: propertyScopeWhere(session),
-      orderBy: { title: "asc" },
-      select: { id: true, title: true },
-    }),
-    prisma.serviceCost.count({ where: costsWhere }),
-    prisma.expense.count({ where: expWhere }),
-  ]);
+  const [complexes, properties, costsTotal, expTotal, bankAccounts, suppliers] =
+    await Promise.all([
+      prisma.complex.findMany({
+        where: complexScopeWhere(session),
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.property.findMany({
+        where: propertyScopeWhere(session),
+        orderBy: { title: "asc" },
+        select: { id: true, title: true },
+      }),
+      prisma.serviceCost.count({ where: costsWhere }),
+      prisma.expense.count({ where: expWhere }),
+      staff ? listActiveBankAccountsForPayment() : Promise.resolve([]),
+      staff ? listSuppliersForTreasury() : Promise.resolve([]),
+    ]);
 
   const costsPageNum = clampListPage(
     parseListPage(params.costsPage),
@@ -69,6 +75,7 @@ export default async function ServiciosPage({
           include: {
             complex: { select: { name: true } },
             property: { select: { title: true } },
+            paymentOrder: { select: { id: true, number: true, status: true } },
           },
           orderBy: [
             { periodYear: "desc" },
@@ -97,7 +104,7 @@ export default async function ServiciosPage({
     <div className="space-y-8">
       <PageHeader
         title="Servicios"
-        description="Misma lógica que Expensas, con la categoría extra Gasto común. Se prorratean por m² sobre el total del edificio."
+        description="Misma lógica que Expensas (con Gasto común): al cargar se emite la OP y luego prorrateás por m²."
       />
 
       {staff ? (
@@ -105,14 +112,16 @@ export default async function ServiciosPage({
           <div>
             <h3 className="text-base font-semibold">Gastos del período</h3>
             <p className="text-sm text-[var(--muted-foreground)]">
-              Agua, gas, luz, tasa, obras, gasto común u otros. Aplicá a un
-              edificio (se prorratea por m²) o a una propiedad (solo esa unidad).
+              Agua, gas, luz, tasa, obras, gasto común u otros. Indicá a quién se
+              paga y el medio: al guardar se emite la orden de pago.
             </p>
           </div>
           <ServiceCostForm
             complexes={complexes}
             properties={properties}
             ledger="SERVICES"
+            bankAccounts={bankAccounts}
+            suppliers={suppliers}
           />
           <DataTable
             headers={[
@@ -121,6 +130,7 @@ export default async function ServiciosPage({
               "Categoría",
               "Concepto",
               "Monto",
+              "OP",
               "",
             ]}
             empty={costsTotal === 0}
@@ -153,6 +163,18 @@ export default async function ServiciosPage({
                 <td className="px-4 py-3">{c.concept}</td>
                 <td className="px-4 py-3">
                   {formatMoney(c.amount.toString(), c.currency)}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {c.paymentOrder ? (
+                    <Link
+                      href={`/tesoreria/ordenes-pago/${c.paymentOrder.id}`}
+                      className="text-[var(--primary)] hover:underline"
+                    >
+                      {c.paymentOrder.number}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <DeleteServiceCostButton id={c.id} />

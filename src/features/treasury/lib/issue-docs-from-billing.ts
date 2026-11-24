@@ -182,3 +182,57 @@ export async function issuePaymentOrderForSupplierInvoice(input: {
     ],
   });
 }
+
+/** Emite OP al cargar un gasto de expensas/servicios. */
+export async function issuePaymentOrderForServiceCost(input: {
+  partyName: string;
+  supplierId?: string;
+  propertyId?: string | null;
+  amount: number;
+  currency: string;
+  method: string;
+  bankAccountId?: string;
+  reference?: string;
+  concept: string;
+  description: string;
+  notes?: string;
+}): Promise<TreasuryActionResult> {
+  const treasuryMethod = toTreasuryPaymentMethod(input.method);
+  if (treasuryMethod === "TRANSFER" && !input.bankAccountId?.trim()) {
+    return {
+      ok: false,
+      error: "Elegí la cuenta bancaria para la transferencia.",
+    };
+  }
+
+  const notes = [
+    input.notes?.trim(),
+    input.reference?.trim() ? `Ref. ${input.reference.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return createPaymentOrder({
+    issueDate: toDateInputValue(new Date()),
+    supplierId: input.supplierId,
+    partyName: input.partyName,
+    currency: input.currency,
+    concept: input.concept,
+    notes: notes || undefined,
+    lines: [
+      {
+        propertyId: input.propertyId || undefined,
+        description: input.description,
+        amount: input.amount,
+      },
+    ],
+    payments: [
+      {
+        method: treasuryMethod,
+        amount: input.amount,
+        bankAccountId:
+          treasuryMethod === "TRANSFER" ? input.bankAccountId : undefined,
+      },
+    ],
+  });
+}

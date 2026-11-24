@@ -280,7 +280,8 @@ Cargás los **gastos del período** (agua, gas, luz, tasa, obras u otros) aplica
 
 1. Elegí alcance: **edificio** (se prorratea por m²) o **propiedad** (solo esa unidad).
 2. Categoría, concepto, período y monto.
-3. Confirmá la carga.
+3. Indicá **a quién se paga** (proveedor del catálogo o nombre libre) y el **medio de pago** (efectivo, transferencia, cheque u otro). Si es transferencia, elegí la cuenta bancaria.
+4. Al guardar se **emite automáticamente la orden de pago** en Tesorería (queda vinculada al gasto; la ves en la columna OP).
 
 ### Generar expensas
 
@@ -298,7 +299,7 @@ Obras van como **extraordinarias**; el resto como **ordinarias**. Si ya hay docu
 
 Misma lógica que **Expensas**, con la categoría extra **Gasto común**.
 
-1. Cargá gastos del período (incluye gasto común) a edificio o propiedad.
+1. Cargá gastos del período (incluye gasto común) a edificio o propiedad, con **medio de pago**: se emite la OP automáticamente.
 2. Generá servicios por edificio, por propiedad o **todas las pendientes**.
 3. Al generar, se actualizan las cuotas abiertas del período.
 4. En Cobros, los montos de servicios aparecen como conceptos **Servicios** / **Servicios extraordinarios**, separados de las expensas.

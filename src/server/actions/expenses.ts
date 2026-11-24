@@ -2,6 +2,7 @@
 
 import { CostLedger, ServiceCostCategory } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import {
   createServiceCost,
@@ -10,6 +11,8 @@ import {
   generateExpensesForProperty,
   generateExpensesFromServiceCosts,
 } from "@/server/services/expenses";
+import { issuePaymentOrderForServiceCost } from "@/features/treasury/lib/issue-docs-from-billing";
+import { SERVICE_COST_CATEGORY_LABELS } from "@/lib/labels";
 import type { ActionResult } from "@/server/actions/users";
 
 function pathForLedger(ledger: CostLedger) {
@@ -35,13 +38,47 @@ export async function createServiceCostAction(
   const ledger = (String(formData.get("ledger") ?? "EXPENSES") === "SERVICES"
     ? "SERVICES"
     : "EXPENSES") as CostLedger;
+  const paymentMethod = String(formData.get("paymentMethod") ?? "").trim();
+  const bankAccountId = String(formData.get("bankAccountId") ?? "").trim();
+  const partyName = String(formData.get("partyName") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
+  const paymentReference = String(formData.get("paymentReference") ?? "").trim();
 
   if (!concept || !periodYear || !periodMonth || !(amount > 0)) {
     return { ok: false, error: "Completá concepto, período y monto." };
   }
+  if (!paymentMethod) {
+    return { ok: false, error: "Elegí el medio de pago." };
+  }
+  if (!partyName && !supplierId) {
+    return { ok: false, error: "Indicá a quién se paga (proveedor o nombre)." };
+  }
+  if (paymentMethod === "BANK_TRANSFER" && !bankAccountId) {
+    return { ok: false, error: "Elegí la cuenta bancaria para la transferencia." };
+  }
 
   try {
-    await createServiceCost({
+    let resolvedPartyName = partyName;
+    if (supplierId) {
+      const supplier = await prisma.user.findFirst({
+        where: {
+          id: supplierId,
+          memberships: {
+            some: {
+              organizationId: session.organizationId,
+              role: "SUPPLIER",
+            },
+          },
+        },
+        select: { name: true },
+      });
+      if (!supplier) {
+        return { ok: false, error: "Proveedor no encontrado." };
+      }
+      if (!resolvedPartyName) resolvedPartyName = supplier.name;
+    }
+
+    const cost = await createServiceCost({
       organizationId: session.organizationId,
       complexId: scope === "complex" ? complexId : null,
       propertyId: scope === "property" ? propertyId : null,
@@ -53,8 +90,51 @@ export async function createServiceCostAction(
       notes: notes || undefined,
       ledger,
     });
+
+    const ledgerLabel = ledger === "SERVICES" ? "Servicios" : "Expensas";
+    const categoryLabel =
+      SERVICE_COST_CATEGORY_LABELS[category] ?? category;
+    const periodLabel = `${String(periodMonth).padStart(2, "0")}/${periodYear}`;
+
+    const op = await issuePaymentOrderForServiceCost({
+      partyName: resolvedPartyName,
+      supplierId: supplierId || undefined,
+      propertyId: scope === "property" ? propertyId : null,
+      amount,
+      currency: cost.currency,
+      method: paymentMethod,
+      bankAccountId: bankAccountId || undefined,
+      reference: paymentReference || undefined,
+      concept: `Pago ${ledgerLabel.toLowerCase()} · ${periodLabel}`,
+      description: `${categoryLabel} · ${concept} · ${periodLabel}`,
+      notes: notes || undefined,
+    });
+
+    if (!op.ok) {
+      await prisma.serviceCost.delete({ where: { id: cost.id } }).catch(() => {});
+      return {
+        ok: false,
+        error: `No se pudo emitir la orden de pago: ${op.error}`,
+      };
+    }
+
+    await prisma.serviceCost.update({
+      where: { id: cost.id },
+      data: { paymentOrderId: op.id },
+    });
+
     revalidatePath(pathForLedger(ledger));
-    return { ok: true, message: "Gasto cargado." };
+    revalidatePath("/tesoreria");
+    revalidatePath("/tesoreria/ordenes-pago");
+    revalidatePath(`/tesoreria/ordenes-pago/${op.id}`);
+
+    const postHint = op.postError
+      ? ` OP ${op.number} en borrador: ${op.postError}`
+      : ` OP ${op.number} emitida.`;
+    return {
+      ok: true,
+      message: `Gasto cargado.${postHint}`,
+    };
   } catch (e) {
     return {
       ok: false,

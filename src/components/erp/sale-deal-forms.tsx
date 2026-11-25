@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { SaleDealStage } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,25 @@ import type { ActionResult } from "@/server/actions/users";
 
 const initial: ActionResult | null = null;
 const STAGES = Object.keys(SALE_DEAL_STAGE_LABELS) as SaleDealStage[];
+
+function ActionFeedback({ state }: { state: ActionResult | null }) {
+  if (!state) return null;
+  if (!state.ok) {
+    return (
+      <p className="text-sm text-[var(--destructive)] sm:col-span-2">
+        {state.error}
+      </p>
+    );
+  }
+  if (state.message) {
+    return (
+      <p className="text-sm text-amber-700 dark:text-amber-400 sm:col-span-2">
+        {state.message}
+      </p>
+    );
+  }
+  return null;
+}
 
 export function CreateSaleDealForm({
   properties,
@@ -56,6 +75,12 @@ export function CreateSaleDealForm({
             </option>
           ))}
         </Select>
+        {properties.length === 0 ? (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            No hay propiedades disponibles (las reservadas o vendidas no se
+            listan).
+          </p>
+        ) : null}
       </div>
       <div className="space-y-1">
         <Label htmlFor="buyerName">Comprador</Label>
@@ -120,11 +145,7 @@ export function CreateSaleDealForm({
           {pending ? "Creando…" : "Crear oportunidad"}
         </Button>
       </div>
-      {state && !state.ok ? (
-        <p className="text-sm text-[var(--destructive)] sm:col-span-2">
-          {state.error}
-        </p>
-      ) : null}
+      <ActionFeedback state={state} />
     </form>
   );
 }
@@ -253,11 +274,7 @@ export function SaleDealEditForm({
           {pending ? "Guardando…" : "Guardar"}
         </Button>
       </div>
-      {state && !state.ok ? (
-        <p className="text-sm text-[var(--destructive)] sm:col-span-2">
-          {state.error}
-        </p>
-      ) : null}
+      <ActionFeedback state={state} />
     </form>
   );
 }
@@ -271,25 +288,50 @@ export function SaleStageButtons({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [feedback, setFeedback] = useState<{
+    tone: "error" | "warn";
+    text: string;
+  } | null>(null);
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {STAGES.map((s) => (
-        <Button
-          key={s}
-          size="sm"
-          variant={s === current ? "default" : "outline"}
-          disabled={pending || s === current}
-          onClick={() =>
-            start(async () => {
-              await updateSaleDealStageAction(dealId, s);
-              router.refresh();
-            })
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {STAGES.map((s) => (
+          <Button
+            key={s}
+            size="sm"
+            variant={s === current ? "default" : "outline"}
+            disabled={pending || s === current}
+            onClick={() =>
+              start(async () => {
+                setFeedback(null);
+                const result = await updateSaleDealStageAction(dealId, s);
+                if (!result.ok) {
+                  setFeedback({ tone: "error", text: result.error });
+                  return;
+                }
+                if (result.message) {
+                  setFeedback({ tone: "warn", text: result.message });
+                }
+                router.refresh();
+              })
+            }
+          >
+            {SALE_DEAL_STAGE_LABELS[s]}
+          </Button>
+        ))}
+      </div>
+      {feedback ? (
+        <p
+          className={
+            feedback.tone === "error"
+              ? "text-sm text-[var(--destructive)]"
+              : "text-sm text-amber-700 dark:text-amber-400"
           }
         >
-          {SALE_DEAL_STAGE_LABELS[s]}
-        </Button>
-      ))}
+          {feedback.text}
+        </p>
+      ) : null}
     </div>
   );
 }

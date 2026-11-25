@@ -137,6 +137,33 @@ export async function updatePropertyAction(
     return { ok: false, error: "Propiedad no encontrada." };
   }
 
+  const activeContract = await prisma.contract.findFirst({
+    where: { propertyId: d.id, status: "ACTIVE" },
+    select: { id: true, code: true },
+  });
+
+  const nextUnitId = emptyToUndef(d.unitId) ?? null;
+  if (activeContract) {
+    if (d.status !== existing.status && d.status !== "RENTED") {
+      return {
+        ok: false,
+        error: `Hay contrato activo (${activeContract.code}). No podés cambiar el estado de la propiedad; rescindí o vencé el contrato primero.`,
+      };
+    }
+    if (nextUnitId !== existing.unitId) {
+      return {
+        ok: false,
+        error: `Hay contrato activo (${activeContract.code}). No podés cambiar la unidad vinculada.`,
+      };
+    }
+    if (d.ownerId) {
+      return {
+        ok: false,
+        error: `Hay contrato activo (${activeContract.code}). No podés reemplazar propietarios desde acá (afecta rendiciones y recuperables).`,
+      };
+    }
+  }
+
   const amenities = (d.amenities ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -149,7 +176,7 @@ export async function updatePropertyAction(
       description: emptyToUndef(d.description) ?? null,
       propertyType: d.propertyType,
       operationType: d.operationType,
-      status: d.status,
+      status: activeContract ? "RENTED" : d.status,
       price: d.price,
       rentPrice:
         d.operationType === "BOTH" && typeof d.rentPrice === "number"
@@ -165,14 +192,14 @@ export async function updatePropertyAction(
       areaM2: typeof d.areaM2 === "number" ? d.areaM2 : null,
       amenities,
       videoUrl: emptyToUndef(d.videoUrl) ?? null,
-      unitId: emptyToUndef(d.unitId) ?? null,
+      unitId: nextUnitId,
       publishedAt: d.listedPublic
         ? existing.publishedAt ?? new Date()
         : null,
     },
   });
 
-  if (d.ownerId) {
+  if (d.ownerId && !activeContract) {
     await prisma.propertyOwnership.deleteMany({ where: { propertyId: d.id } });
     await prisma.propertyOwnership.create({
       data: {

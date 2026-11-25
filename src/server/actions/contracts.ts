@@ -339,6 +339,10 @@ export async function updateContractAction(
     return { ok: false, error: "Contrato no encontrado." };
   }
 
+  const becomingClosed =
+    (d.status === "TERMINATED" || d.status === "EXPIRED") &&
+    existing.status === "ACTIVE";
+
   await prisma.contract.update({
     where: { id: d.id },
     data: {
@@ -357,12 +361,35 @@ export async function updateContractAction(
     },
   });
 
+  if (becomingClosed) {
+    const endY = endDate.getUTCFullYear();
+    const endM = endDate.getUTCMonth() + 1;
+    await prisma.tenantBill.updateMany({
+      where: {
+        contractId: d.id,
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+        OR: [
+          { dueDate: { gt: endDate } },
+          { periodYear: { gt: endY } },
+          { periodYear: endY, periodMonth: { gt: endM } },
+        ],
+      },
+      data: { status: "CANCELLED" },
+    });
+  }
+
   await syncPropertyStatusForContract(existing.propertyId, d.status, d.id);
 
   revalidatePath("/contratos");
   revalidatePath(`/contratos/${d.id}`);
   revalidatePath("/gestion/propiedades");
-  return { ok: true };
+  revalidatePath("/cobros");
+  return {
+    ok: true,
+    message: becomingClosed
+      ? "Contrato actualizado. Se cancelaron las cuotas futuras abiertas."
+      : undefined,
+  };
 }
 
 export async function updateContractGuarantorsAction(
@@ -509,46 +536,66 @@ export async function applyDepositToBalanceAction(
     return { ok: false, error: "No hay depósito en custodia para aplicar." };
   }
 
-  const bill = await prisma.tenantBill.findFirst({
+  const bills = await prisma.tenantBill.findMany({
     where: {
       contractId,
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
     },
     orderBy: [{ periodYear: "asc" }, { periodMonth: "asc" }],
   });
-  if (!bill) {
+  if (bills.length === 0) {
     return { ok: false, error: "No hay cuotas abiertas para aplicar el depósito." };
   }
 
-  const balance = Number(bill.totalAmount) - Number(bill.paidAmount);
-  if (balance <= 0) {
-    return { ok: false, error: "La cuota abierta no tiene saldo." };
+  let remaining = Math.round(Number(contract.depositAmount) * 100) / 100;
+  let appliedTotal = 0;
+  const appliedLabels: string[] = [];
+
+  for (const bill of bills) {
+    if (remaining <= 0.009) break;
+    const balance =
+      Math.round(
+        (Number(bill.totalAmount) - Number(bill.paidAmount)) * 100,
+      ) / 100;
+    if (balance <= 0.009) continue;
+    const applyAmount = Math.min(remaining, balance);
+    await recordPayment({
+      tenantBillId: bill.id,
+      amount: applyAmount,
+      method: "OTHER",
+      reference: `Depósito contrato ${contract.code}`,
+      notes: "Aplicación de garantía/depósito",
+      recordedById: session.user.id,
+    });
+    remaining = Math.round((remaining - applyAmount) * 100) / 100;
+    appliedTotal = Math.round((appliedTotal + applyAmount) * 100) / 100;
+    appliedLabels.push(`${bill.periodMonth}/${bill.periodYear}`);
+    revalidatePath(`/cobros/${bill.id}`);
   }
 
-  const applyAmount = Math.min(Number(contract.depositAmount), balance);
-  await recordPayment({
-    tenantBillId: bill.id,
-    amount: applyAmount,
-    method: "OTHER",
-    reference: `Depósito contrato ${contract.code}`,
-    notes: "Aplicación de garantía/depósito",
-    recordedById: session.user.id,
-  });
+  if (appliedTotal <= 0.009) {
+    return { ok: false, error: "Las cuotas abiertas no tienen saldo." };
+  }
 
   await prisma.contract.update({
     where: { id: contractId },
     data: {
-      depositHeld: false,
-      notes: `${contract.notes ? `${contract.notes}\n` : ""}[Depósito] Aplicado $${applyAmount} a cuota ${bill.periodMonth}/${bill.periodYear}`,
+      depositAmount: remaining,
+      depositHeld: remaining > 0.009,
+      notes: `${contract.notes ? `${contract.notes}\n` : ""}[Depósito] Aplicado $${appliedTotal} a cuota(s) ${appliedLabels.join(", ")}${
+        remaining > 0.009 ? ` · remanente $${remaining}` : ""
+      }`,
     },
   });
 
   revalidatePath(`/contratos/${contractId}`);
-  revalidatePath(`/cobros/${bill.id}`);
   revalidatePath("/cobros");
   return {
     ok: true,
-    message: `Se aplicaron $${applyAmount} a la cuota ${bill.periodMonth}/${bill.periodYear}.`,
+    message:
+      remaining > 0.009
+        ? `Se aplicaron $${appliedTotal}. Queda $${remaining} de depósito en custodia.`
+        : `Se aplicaron $${appliedTotal} (depósito agotado).`,
   };
 }
 

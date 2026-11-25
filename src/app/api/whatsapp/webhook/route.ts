@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
   const challenge = request.nextUrl.searchParams.get("hub.challenge");
 
   if (mode !== "subscribe" || !token || !challenge) {
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
 
   const valid = await verifyWhatsAppWebhookToken(token);
   if (!valid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
   return new NextResponse(challenge, {

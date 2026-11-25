@@ -45,19 +45,26 @@ export async function GET(
         select: {
           publishedAt: true,
           status: true,
+          organizationId: true,
         },
       },
     },
   });
 
   if (!image) {
-    return new NextResponse("Not found", { status: 404 });
+    return new NextResponse("No encontrado", { status: 404 });
   }
 
   if (!canShowPublicly(image.property)) {
     const session = await getOrganizationSession().catch(() => null);
     if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return new NextResponse("No autorizado", { status: 401 });
+    }
+    if (
+      !image.property.organizationId ||
+      session.organizationId !== image.property.organizationId
+    ) {
+      return new NextResponse("Sin permiso", { status: 403 });
     }
   }
 

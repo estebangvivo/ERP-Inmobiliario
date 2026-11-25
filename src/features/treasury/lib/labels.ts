@@ -1,9 +1,11 @@
 import type {
   CheckStatus,
+  Currency,
   TreasuryPaymentMethod,
   TreasuryDocStatus,
 } from "@prisma/client";
 import { normalizeCurrency } from "@/config/currencies";
+import { formatMoney as formatMoneyBase } from "@/lib/money";
 
 export const TREASURY_STATUS_LABEL: Record<TreasuryDocStatus, string> = {
   DRAFT: "Borrador",
@@ -55,10 +57,8 @@ export const PAYMENT_METHOD_LABEL: Record<TreasuryPaymentMethod, string> = {
   OTHER: "Otro",
 };
 
-export function formatMoney(value: number, currency = "ARS") {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: normalizeCurrency(currency),
-    maximumFractionDigits: 2,
-  }).format(value);
+/** Wrapper unificado: misma lógica que `@/lib/money`. */
+export function formatMoney(value: number | string, currency = "ARS") {
+  const code = normalizeCurrency(currency) as Currency;
+  return formatMoneyBase(value, code);
 }

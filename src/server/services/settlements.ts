@@ -195,21 +195,31 @@ export async function generateOwnerSettlement(input: {
   const code = `REN-${input.periodYear}-${String(input.periodMonth).padStart(2, "0")}-${input.ownerId.slice(-4).toUpperCase()}`;
 
   if (existing) {
-    await prisma.settlementLineItem.deleteMany({
-      where: { settlementId: existing.id },
-    });
-    return prisma.ownerSettlement.update({
-      where: { id: existing.id },
-      data: {
-        grossRent,
-        commissionAmount,
-        deductionsAmount,
-        extraordinaryAmount,
-        netPayout,
-        status: "DRAFT",
-        lines: { create: lines },
-      },
-      include: { lines: true, owner: true },
+    return prisma.$transaction(async (tx) => {
+      const { reverseRecoveriesForSettlement } = await import(
+        "@/server/services/recoverable-charges"
+      );
+      await reverseRecoveriesForSettlement(
+        tx,
+        input.organizationId,
+        existing.id,
+      );
+      await tx.settlementLineItem.deleteMany({
+        where: { settlementId: existing.id },
+      });
+      return tx.ownerSettlement.update({
+        where: { id: existing.id },
+        data: {
+          grossRent,
+          commissionAmount,
+          deductionsAmount,
+          extraordinaryAmount,
+          netPayout,
+          status: "DRAFT",
+          lines: { create: lines },
+        },
+        include: { lines: true, owner: true },
+      });
     });
   }
 

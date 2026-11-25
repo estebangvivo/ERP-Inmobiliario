@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { SaleDealStage } from "@prisma/client";
-import { parseDateInput } from "@/lib/dates";
+import type { Currency, SaleDealStage } from "@prisma/client";
+import { toDateInputValue, parseDateInput } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
 import type { ActionResult } from "@/server/actions/users";
@@ -14,6 +14,135 @@ const STAGES: SaleDealStage[] = [
   "SOLD",
   "LOST",
 ];
+
+function saleDealMarker(dealId: string, kind: "reservation" | "commission") {
+  return `saleDeal:${dealId}:${kind}`;
+}
+
+type EnsureReceiptResult = {
+  number: string | null;
+  warning?: string;
+};
+
+async function ensureSaleDealReceipt(input: {
+  organizationId: string;
+  dealId: string;
+  kind: "reservation" | "commission";
+  partyName: string;
+  amount: number;
+  currency: Currency;
+  propertyId: string;
+  description: string;
+  concept: string;
+}): Promise<EnsureReceiptResult> {
+  if (!(input.amount > 0)) return { number: null };
+
+  const label = input.kind === "reservation" ? "seña" : "comisión";
+  const marker = saleDealMarker(input.dealId, input.kind);
+  const existing = await prisma.receipt.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      notes: { contains: marker },
+      status: { not: "CANCELLED" },
+    },
+    select: { id: true, number: true, status: true },
+  });
+  if (existing) {
+    if (existing.status === "DRAFT") {
+      return {
+        number: existing.number,
+        warning: `El recibo de ${label} ${existing.number} quedó en borrador. Abrí caja en ${input.currency} e imputalo en Tesorería.`,
+      };
+    }
+    return { number: existing.number };
+  }
+
+  const { createReceipt } = await import(
+    "@/features/treasury/actions/treasury-actions"
+  );
+  const result = await createReceipt({
+    issueDate: toDateInputValue(new Date()),
+    partyName: input.partyName,
+    concept: input.concept,
+    currency: input.currency,
+    // Efectivo: no exige cuenta bancaria; el usuario puede reimputar después.
+    paymentMethod: "CASH",
+    notes: marker,
+    lines: [
+      {
+        propertyId: input.propertyId,
+        description: input.description,
+        amount: input.amount,
+      },
+    ],
+  });
+  if (!result.ok) {
+    console.warn("SaleDeal receipt failed", input.kind, result.error);
+    return {
+      number: null,
+      warning: `No se pudo emitir el recibo de ${label}: ${result.error}`,
+    };
+  }
+  if (result.postError) {
+    return {
+      number: result.number,
+      warning: `Se emitió el recibo de ${label} ${result.number} en borrador: ${result.postError}. Imputalo en Tesorería cuando haya caja abierta en ${input.currency}.`,
+    };
+  }
+  return { number: result.number };
+}
+
+async function syncSaleDealTreasury(deal: {
+  id: string;
+  organizationId: string;
+  buyerName: string;
+  propertyId: string;
+  currency: Currency;
+  reservationPaid: boolean;
+  reservationAmount: { toString(): string } | null;
+  commissionAmount: { toString(): string } | null;
+  stage: SaleDealStage;
+}) {
+  const warnings: string[] = [];
+
+  if (deal.reservationPaid && deal.reservationAmount) {
+    const amount = Number(deal.reservationAmount);
+    if (amount > 0) {
+      const result = await ensureSaleDealReceipt({
+        organizationId: deal.organizationId,
+        dealId: deal.id,
+        kind: "reservation",
+        partyName: deal.buyerName,
+        amount,
+        currency: deal.currency,
+        propertyId: deal.propertyId,
+        concept: "Seña de venta",
+        description: `Seña · oportunidad ${deal.id.slice(-6)}`,
+      });
+      if (result.warning) warnings.push(result.warning);
+    }
+  }
+
+  if (deal.stage === "SOLD" && deal.commissionAmount) {
+    const amount = Number(deal.commissionAmount);
+    if (amount > 0) {
+      const result = await ensureSaleDealReceipt({
+        organizationId: deal.organizationId,
+        dealId: deal.id,
+        kind: "commission",
+        partyName: deal.buyerName,
+        amount,
+        currency: deal.currency,
+        propertyId: deal.propertyId,
+        concept: "Comisión por venta",
+        description: `Comisión venta · oportunidad ${deal.id.slice(-6)}`,
+      });
+      if (result.warning) warnings.push(result.warning);
+    }
+  }
+
+  return warnings;
+}
 
 async function syncPropertyForStage(
   propertyId: string,
@@ -99,6 +228,17 @@ export async function createSaleDealAction(
   if (!property) {
     return { ok: false, error: "Propiedad de venta no encontrada." };
   }
+  if (
+    property.status === "RESERVED" ||
+    property.status === "SOLD" ||
+    property.status === "INACTIVE"
+  ) {
+    return {
+      ok: false,
+      error:
+        "Esa propiedad no está disponible (reservada, vendida o inactiva). Elegí otra.",
+    };
+  }
 
   const parsedDeedDate = deedDate ? parseDateInput(deedDate) : null;
   if (deedDate && !parsedDeedDate) {
@@ -133,9 +273,14 @@ export async function createSaleDealAction(
   });
 
   await syncPropertyForStage(propertyId, stage, deal.id);
+  const warnings = await syncSaleDealTreasury(deal);
 
   revalidatePath("/ventas");
   revalidatePath("/gestion/propiedades");
+  revalidatePath("/tesoreria");
+  if (warnings.length > 0) {
+    return { ok: true, message: warnings.join(" ") };
+  }
   return { ok: true };
 }
 
@@ -153,7 +298,7 @@ export async function updateSaleDealStageAction(
   });
   if (!deal) return { ok: false, error: "Oportunidad no encontrada." };
 
-  await prisma.saleDeal.update({
+  const updated = await prisma.saleDeal.update({
     where: { id: dealId },
     data: {
       stage,
@@ -165,10 +310,15 @@ export async function updateSaleDealStageAction(
   });
 
   await syncPropertyForStage(deal.propertyId, stage, dealId);
+  const warnings = await syncSaleDealTreasury(updated);
 
   revalidatePath("/ventas");
   revalidatePath(`/ventas/${dealId}`);
   revalidatePath("/gestion/propiedades");
+  revalidatePath("/tesoreria");
+  if (warnings.length > 0) {
+    return { ok: true, message: warnings.join(" ") };
+  }
   return { ok: true };
 }
 
@@ -209,7 +359,7 @@ export async function updateSaleDealAction(
     return { ok: false, error: "Fecha de boleto inválida." };
   }
 
-  await prisma.saleDeal.update({
+  const updated = await prisma.saleDeal.update({
     where: { id },
     data: {
       buyerName,
@@ -235,9 +385,14 @@ export async function updateSaleDealAction(
   });
 
   await syncPropertyForStage(deal.propertyId, stage, id);
+  const warnings = await syncSaleDealTreasury(updated);
 
   revalidatePath("/ventas");
   revalidatePath(`/ventas/${id}`);
   revalidatePath("/gestion/propiedades");
+  revalidatePath("/tesoreria");
+  if (warnings.length > 0) {
+    return { ok: true, message: warnings.join(" ") };
+  }
   return { ok: true };
 }

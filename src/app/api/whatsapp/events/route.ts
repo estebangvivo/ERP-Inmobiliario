@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     (session.organizationRole !== "ADMIN" &&
       !hasModule(session.allowedModules, "whatsapp"))
   ) {
-    return new Response("Unauthorized", { status: 401 });
+    return new Response("No autorizado", { status: 401 });
   }
 
   const organizationId = session.organizationId;

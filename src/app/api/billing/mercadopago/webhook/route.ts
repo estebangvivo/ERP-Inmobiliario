@@ -6,9 +6,10 @@ import { getMercadoPagoAccessToken } from "@/features/billing/lib/platform-billi
 export const dynamic = "force-dynamic";
 
 /**
- * Stub webhook Mercado Pago.
+ * Webhook Mercado Pago.
  * Cuando llega un pago aprobado con external_reference = BillingPayment.id,
  * activa el plan. Sin token configurado responde 503.
+ * Si falla el fetch a MP responde 502 para que reintente.
  */
 export async function POST(request: NextRequest) {
   const token = await getMercadoPagoAccessToken();
@@ -69,7 +70,10 @@ export async function POST(request: NextRequest) {
 
     if (!res.ok) {
       console.warn("MP webhook: fetch payment failed", paymentId, res.status);
-      return NextResponse.json({ ok: true, fetchFailed: true });
+      return NextResponse.json(
+        { ok: false, fetchFailed: true },
+        { status: 502 },
+      );
     }
 
     const mp = (await res.json()) as {

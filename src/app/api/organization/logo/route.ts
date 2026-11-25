@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getOrganizationSession().catch(() => null);
   if (!session) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return new NextResponse("No autorizado", { status: 401 });
   }
 
   const org = await prisma.organization.findUnique({
@@ -21,7 +21,7 @@ export async function GET() {
 
   const logoUrl = org?.logoUrl;
   if (!logoUrl) {
-    return new NextResponse("Not found", { status: 404 });
+    return new NextResponse("No encontrado", { status: 404 });
   }
 
   if (logoUrl.startsWith("data:")) {
@@ -53,5 +53,5 @@ export async function GET() {
     return NextResponse.redirect(logoUrl);
   }
 
-  return new NextResponse("Not found", { status: 404 });
+  return new NextResponse("No encontrado", { status: 404 });
 }

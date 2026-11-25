@@ -594,9 +594,15 @@ export async function applyLateFee(billId: string) {
     });
   }
 
-  const base = Number(bill.totalAmount) - Number(bill.lateFeeAmount);
-  const lateFee = round2(base * dailyRate * overdue);
-  const totalAmount = round2(base + lateFee);
+  // Mora sobre saldo impago (excluye mora previa), no sobre el total bruto.
+  const principal =
+    Number(bill.totalAmount) - Number(bill.lateFeeAmount);
+  const unpaidPrincipal = Math.max(
+    0,
+    principal - Number(bill.paidAmount),
+  );
+  const lateFee = round2(unpaidPrincipal * dailyRate * overdue);
+  const totalAmount = round2(principal + lateFee);
   const status = computeBillStatus(
     totalAmount,
     Number(bill.paidAmount),
@@ -628,8 +634,8 @@ export async function syncOverdueBills(organizationId: string) {
         lateFeeAmount: true,
         contract: { select: { lateFeeDailyRatePct: true } },
       },
-      take: 80,
       orderBy: { dueDate: "asc" },
+      take: 500,
     });
 
     let updated = 0;
@@ -848,25 +854,36 @@ export type IndexAdjustmentReportRow = {
 };
 
 /**
- * Al cargar índices de un mes, aplica el mayor % (IPC/ICL/CP) a contratos
- * activos cuyo próximo aumento cae el mes siguiente (ej. carga junio →
- * aumenta julio si el contrato ajusta cada 6 meses desde enero).
+ * Al cargar índices de un mes, aplica el % según la política de cada contrato
+ * (IPC / ICL / CP / mayor entre ellos) a contratos activos cuyo próximo
+ * aumento cae el mes siguiente (ej. carga junio → julio).
  */
 export async function applyDueAdjustmentsFromIndexRates(input: {
   organizationId: string;
   periodYear: number;
   periodMonth: number;
   periodMonths: number;
-  percent: number;
+  /** @deprecated Se resuelve por política; se mantiene por compatibilidad del caller. */
+  percent?: number;
 }) {
   const empty = {
     applied: 0,
     skipped: 0,
-    percent: input.percent,
+    percent: input.percent ?? 0,
     effective: null as { year: number; month: number } | null,
     rows: [] as IndexAdjustmentReportRow[],
   };
-  if (!(input.percent > 0)) {
+
+  const { getMaxIndexPercent, getIndexPercent } = await import(
+    "@/server/actions/index-rates"
+  );
+  const rates = await getMaxIndexPercent(
+    input.organizationId,
+    input.periodYear,
+    input.periodMonth,
+    input.periodMonths,
+  );
+  if (rates.max == null || !(rates.max > 0)) {
     return empty;
   }
 
@@ -889,6 +906,7 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
   let applied = 0;
   let skipped = 0;
   const rows: IndexAdjustmentReportRow[] = [];
+  let lastPercent = rates.max;
 
   for (const contract of contracts) {
     const policy = contract.adjustments[0];
@@ -931,15 +949,40 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
       continue;
     }
 
+    let percent: number | null = null;
+    let appliedIndexType = policy.indexType;
+    if (policy.indexType === "MAX_ICL_IPC_CP") {
+      percent = rates.max;
+    } else if (
+      policy.indexType === "IPC" ||
+      policy.indexType === "ICL" ||
+      policy.indexType === "CP"
+    ) {
+      percent = await getIndexPercent(
+        input.organizationId,
+        policy.indexType,
+        input.periodYear,
+        input.periodMonth,
+        input.periodMonths,
+      );
+      appliedIndexType = policy.indexType;
+    }
+
+    if (percent == null || !(percent > 0)) {
+      skipped += 1;
+      continue;
+    }
+
     const previousRent = await getCurrentRent(contract.id);
-    const newRent = round2(previousRent * (1 + input.percent / 100));
+    const newRent = round2(previousRent * (1 + percent / 100));
+    lastPercent = percent;
 
     await applyContractAdjustment({
       contractId: contract.id,
-      percent: input.percent,
+      percent,
       effectiveFrom,
-      indexType: "MAX_ICL_IPC_CP",
-      notes: `Ajuste automático ${input.percent}% (máx. IPC/ICL/CP) · período ${input.periodMonths}m · carga ${input.periodMonth}/${input.periodYear} → vigencia ${effective.month}/${effective.year}`,
+      indexType: appliedIndexType,
+      notes: `Ajuste automático ${percent}% (${appliedIndexType}) · período ${input.periodMonths}m · carga ${input.periodMonth}/${input.periodYear} → vigencia ${effective.month}/${effective.year}`,
     });
     applied += 1;
     rows.push({
@@ -949,11 +992,11 @@ export async function applyDueAdjustmentsFromIndexRates(input: {
       currency: contract.currency,
       previousRent,
       newRent,
-      percent: input.percent,
+      percent,
     });
   }
 
-  return { applied, skipped, percent: input.percent, effective, rows };
+  return { applied, skipped, percent: lastPercent, effective, rows };
 }
 
 /**

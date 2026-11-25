@@ -64,7 +64,7 @@ export type NavSection =
 
 export const erpNavItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "Inicio",
     href: "/dashboard",
     icon: LayoutDashboard,
     module: "home",

@@ -109,7 +109,6 @@ export async function upsertIndexRatesAction(
         periodYear,
         periodMonth,
         periodMonths,
-        percent: rates.max,
       });
       appliedPercent = result.percent;
       adjustments = result.rows;
@@ -117,7 +116,7 @@ export async function upsertIndexRatesAction(
         effectiveLabel = `${String(result.effective.month).padStart(2, "0")}/${result.effective.year}`;
       }
       if (result.applied > 0) {
-        adjustMsg = ` Se aplicó ${result.percent}% (máx. IPC/ICL/CP) a ${result.applied} contrato${result.applied === 1 ? "" : "s"} desde ${result.effective!.month}/${result.effective!.year}.`;
+        adjustMsg = ` Se aplicó el índice según la política de cada contrato a ${result.applied} contrato${result.applied === 1 ? "" : "s"} desde ${result.effective!.month}/${result.effective!.year}.`;
       } else {
         adjustMsg =
           " No había contratos pendientes de aumento para el mes siguiente con ese período.";

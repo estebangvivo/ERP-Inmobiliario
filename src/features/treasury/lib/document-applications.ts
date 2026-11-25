@@ -309,6 +309,10 @@ export async function applyPaymentOrderInvoiceBalances(
     openRecoverableChargesForInvoice,
     reverseRecoverableChargesForInvoice,
   } = await import("@/server/services/recoverable-charges");
+  const {
+    openTenantChargeForSupplierInvoice,
+    reverseTenantChargeForSupplierInvoice,
+  } = await import("@/server/services/tenant-work-order-charges");
 
   for (const app of apps) {
     const inv = await tx.supplierInvoice.findFirst({
@@ -327,9 +331,15 @@ export async function applyPaymentOrderInvoiceBalances(
       if (inv.costBearer === "AGENCY_RECOVERABLE") {
         await openRecoverableChargesForInvoice(tx, organizationId, inv.id);
       }
+      if (inv.costBearer === "TENANT") {
+        await openTenantChargeForSupplierInvoice(tx, organizationId, inv.id);
+      }
     } else {
       if (inv.costBearer === "AGENCY_RECOVERABLE") {
         await reverseRecoverableChargesForInvoice(tx, organizationId, inv.id);
+      }
+      if (inv.costBearer === "TENANT") {
+        await reverseTenantChargeForSupplierInvoice(tx, organizationId, inv.id);
       }
       await tx.supplierInvoice.update({
         where: { id: inv.id },

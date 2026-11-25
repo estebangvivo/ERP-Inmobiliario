@@ -32,7 +32,8 @@ export default async function VentasPage({
       where: {
         organizationId: session.organizationId,
         operationType: { in: ["SALE", "BOTH"] },
-        status: { notIn: ["SOLD", "INACTIVE"] },
+        // No ofrecer ya reservadas/vendidas/inactivas (evita doble reserva).
+        status: { notIn: ["SOLD", "INACTIVE", "RESERVED"] },
       },
       select: { id: true, title: true },
       orderBy: { title: "asc" },

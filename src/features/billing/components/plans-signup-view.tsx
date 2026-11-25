@@ -23,7 +23,10 @@ export function PlansSignupView() {
   const [error, setError] = useState<string | null>(null);
   const [cycle, setCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
 
-  function choose(plan: BillingPlanId, method: "TRIAL" | "TRANSFER") {
+  function choose(
+    plan: BillingPlanId,
+    method: "TRIAL" | "TRANSFER" | "MERCADOPAGO",
+  ) {
     startTransition(async () => {
       setError(null);
       const result = await startTrialOrPaidCheckout({
@@ -34,6 +37,10 @@ export function PlansSignupView() {
       });
       if (!result.ok) {
         setError(result.error);
+        return;
+      }
+      if (result.redirectTo && method === "MERCADOPAGO") {
+        window.location.href = result.redirectTo;
         return;
       }
       if (method === "TRIAL" || plan === "TRIAL") {
@@ -114,13 +121,23 @@ export function PlansSignupView() {
                     /{cycle === "MONTHLY" ? "mes" : "año"}
                   </span>
                 </p>
-                <Button
-                  className="w-full"
-                  disabled={pending || !companyName.trim()}
-                  onClick={() => choose(planId, "TRANSFER")}
-                >
-                  Continuar
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="w-full"
+                    disabled={pending || !companyName.trim()}
+                    onClick={() => choose(planId, "MERCADOPAGO")}
+                  >
+                    Pagar con Mercado Pago
+                  </Button>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    disabled={pending || !companyName.trim()}
+                    onClick={() => choose(planId, "TRANSFER")}
+                  >
+                    Transferencia bancaria
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           );

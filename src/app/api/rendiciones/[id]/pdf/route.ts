@@ -14,7 +14,7 @@ export async function GET(
 ) {
   const session = await getOrganizationSession();
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   if (
     session.organizationRole !== "ADMIN" &&
@@ -33,7 +33,7 @@ export async function GET(
   });
 
   if (!settlement) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
   const buffer = await renderToBuffer(

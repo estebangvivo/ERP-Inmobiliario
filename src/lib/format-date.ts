@@ -1,19 +1,14 @@
-/** Fecha visible en UI: DD/MM/AAAA (zona local). */
+import {
+  formatDateOnly,
+  toDateInputValue as toDateInputValueFromDates,
+} from "@/lib/dates";
+
+/**
+ * Fecha visible en UI: DD/MM/AAAA.
+ * Delega en formatDateOnly (UTC para @db.Date) para evitar día corrido.
+ */
 export function formatDateAR(value: Date | string | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const date =
-    value instanceof Date
-      ? value
-      : new Date(
-          typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-            ? `${value}T12:00:00`
-            : value,
-        );
-  if (Number.isNaN(date.getTime())) return "—";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  return formatDateOnly(value);
 }
 
 /** Fecha y hora visibles: DD/MM/AAAA HH:mm (zona local). */
@@ -34,13 +29,7 @@ export function formatDateTimeAR(
 export function toDateInputValue(
   value: Date | string | null | undefined,
 ): string {
-  if (!value) return "";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.slice(0, 10);
-  }
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return toDateInputValueFromDates(value);
 }
 
 export function isoToDateAR(iso: string): string {

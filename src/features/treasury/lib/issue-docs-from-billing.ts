@@ -145,7 +145,8 @@ export async function issuePaymentOrderForSupplierInvoice(input: {
   invoiceId: string;
   supplierId: string;
   supplierName: string;
-  contractId: string;
+  contractId?: string | null;
+  propertyId?: string | null;
   amount: number;
   currency: string;
   method?: string;
@@ -166,7 +167,8 @@ export async function issuePaymentOrderForSupplierInvoice(input: {
     notes: input.reference ? `Ref. ${input.reference}` : undefined,
     lines: [
       {
-        contractId: input.contractId,
+        contractId: input.contractId || undefined,
+        propertyId: input.propertyId || undefined,
         description: input.description,
         amount: input.amount,
       },

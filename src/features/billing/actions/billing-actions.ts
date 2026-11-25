@@ -129,15 +129,141 @@ export async function createTransferPayment(input: {
   }
 }
 
+export async function createMercadoPagoCheckout(input: {
+  planId: BillingPlanId;
+  companyName: string;
+  companySlug?: string;
+}): Promise<BillingActionResult> {
+  try {
+    const session = await requireAuthSession();
+    const plan = normalizeBillingPlanId(input.planId);
+    if (!plan || plan === "TRIAL") {
+      return { ok: false, error: "Plan inválido para Mercado Pago." };
+    }
+
+    const companyName = input.companyName.trim();
+    if (companyName.length < 2) {
+      return { ok: false, error: "Indicá el nombre de la inmobiliaria." };
+    }
+
+    const { getMercadoPagoAccessToken } = await import(
+      "@/features/billing/lib/platform-billing-settings"
+    );
+    const token = await getMercadoPagoAccessToken();
+    if (!token) {
+      return {
+        ok: false,
+        error: "Mercado Pago no está configurado. Usá transferencia o contactá soporte.",
+      };
+    }
+
+    const def = BILLING_PLANS[plan];
+    const payment = await prisma.billingPayment.create({
+      data: {
+        userId: session.user.id,
+        plan: plan as BillingPlan,
+        method: "MERCADOPAGO",
+        currency: "USD",
+        amount: def.priceUsd,
+        companyName,
+        companySlug: normalizeOrgSlug(
+          input.companySlug?.trim() || companyName,
+        ),
+        status: "PENDING",
+      },
+    });
+
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+      "http://localhost:3001";
+
+    const preferenceRes = await fetch(
+      "https://api.mercadopago.com/checkout/preferences",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          external_reference: payment.id,
+          items: [
+            {
+              title: `SimpleInmo · ${def.label}`,
+              quantity: 1,
+              currency_id: "USD",
+              unit_price: def.priceUsd,
+            },
+          ],
+          back_urls: {
+            success: `${appUrl}/onboarding/pago?mp=success&paymentId=${payment.id}`,
+            pending: `${appUrl}/onboarding/pago?mp=pending&paymentId=${payment.id}`,
+            failure: `${appUrl}/onboarding/pago?mp=failure&paymentId=${payment.id}`,
+          },
+          auto_return: "approved",
+          notification_url: `${appUrl}/api/billing/mercadopago/webhook`,
+        }),
+      },
+    );
+
+    if (!preferenceRes.ok) {
+      const detail = await preferenceRes.text().catch(() => "");
+      console.error("MP preference failed", preferenceRes.status, detail);
+      await prisma.billingPayment.update({
+        where: { id: payment.id },
+        data: { status: "REJECTED", notes: "Fallo al crear preference MP" },
+      });
+      return {
+        ok: false,
+        error: "No se pudo iniciar el checkout de Mercado Pago.",
+      };
+    }
+
+    const preference = (await preferenceRes.json()) as {
+      id?: string;
+      init_point?: string;
+      sandbox_init_point?: string;
+    };
+
+    await prisma.billingPayment.update({
+      where: { id: payment.id },
+      data: { mpPreferenceId: preference.id ?? null },
+    });
+
+    const redirectTo =
+      preference.init_point || preference.sandbox_init_point || undefined;
+    if (!redirectTo) {
+      return {
+        ok: false,
+        error: "Mercado Pago no devolvió URL de checkout.",
+      };
+    }
+
+    revalidatePath("/onboarding/pago");
+    return { ok: true, paymentId: payment.id, redirectTo };
+  } catch (error) {
+    console.error("createMercadoPagoCheckout", error);
+    return { ok: false, error: "No se pudo iniciar Mercado Pago." };
+  }
+}
+
 export async function startTrialOrPaidCheckout(input: {
   plan: BillingPlanId;
   companyName: string;
   companySlug?: string;
-  method: "TRIAL" | "TRANSFER";
+  method: "TRIAL" | "TRANSFER" | "MERCADOPAGO";
 }): Promise<BillingActionResult> {
   if (input.plan === "TRIAL" || input.method === "TRIAL") {
     return startTrialPayment({
       planId: "TRIAL",
+      companyName: input.companyName,
+      companySlug: input.companySlug,
+    });
+  }
+
+  if (input.method === "MERCADOPAGO") {
+    return createMercadoPagoCheckout({
+      planId: input.plan,
       companyName: input.companyName,
       companySlug: input.companySlug,
     });

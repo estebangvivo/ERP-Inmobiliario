@@ -14,7 +14,7 @@ export async function GET() {
     (session.organizationRole !== "ADMIN" &&
       !hasModule(session.allowedModules, "whatsapp"))
   ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   const snapshot = await getDeskInboxSnapshot(

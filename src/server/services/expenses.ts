@@ -117,6 +117,44 @@ function allocateByAreaM2(
   });
 }
 
+/**
+ * Prorratea por coeficiente de participación (ownershipCoefficient).
+ * Si la suma de coeficientes es 0, cae a m².
+ */
+function allocateByOwnershipCoefficient(
+  totalAmount: number,
+  units: {
+    id: string;
+    code: string;
+    ownershipCoefficient: Prisma.Decimal | number | null;
+    areaM2: Prisma.Decimal | number | null;
+    property?: { areaM2: Prisma.Decimal | number | null } | null;
+  }[],
+): { unitId: string; amount: number }[] {
+  const withCoeff = units.map((u) => ({
+    unitId: u.id,
+    code: u.code,
+    coeff: Number(u.ownershipCoefficient ?? 0),
+  }));
+  const totalCoeff = withCoeff.reduce((s, u) => s + u.coeff, 0);
+  if (!(totalCoeff > 0)) {
+    return allocateByAreaM2(totalAmount, units).map((a) => ({
+      unitId: a.unitId,
+      amount: a.amount,
+    }));
+  }
+
+  let assigned = 0;
+  return withCoeff.map((u, i) => {
+    if (i === withCoeff.length - 1) {
+      return { unitId: u.unitId, amount: round2(totalAmount - assigned) };
+    }
+    const amount = round2((totalAmount * u.coeff) / totalCoeff);
+    assigned += amount;
+    return { unitId: u.unitId, amount };
+  });
+}
+
 export async function createExpenseWithAllocations(input: {
   complexId: string;
   type: ExpenseType;
@@ -135,7 +173,11 @@ export async function createExpenseWithAllocations(input: {
   const ledger = input.ledger ?? "EXPENSES";
   const units = await prisma.unit.findMany({
     where: { complexId: input.complexId },
-    include: {
+    select: {
+      id: true,
+      code: true,
+      areaM2: true,
+      ownershipCoefficient: true,
       complex: { select: { organizationId: true } },
       property: { select: { areaM2: true } },
     },
@@ -162,8 +204,10 @@ export async function createExpenseWithAllocations(input: {
           ? round2(input.totalAmount - each * (units.length - 1))
           : each,
     }));
+  } else if (method === "OWNERSHIP_COEFFICIENT") {
+    allocations = allocateByOwnershipCoefficient(input.totalAmount, units);
   } else {
-    // OWNERSHIP_COEFFICIENT / FIXED_AMOUNT: prorrateo por m² sobre el total del edificio
+    // FIXED_AMOUNT u otros: prorrateo por m²
     allocations = allocateByAreaM2(input.totalAmount, units).map((a) => ({
       unitId: a.unitId,
       amount: a.amount,
@@ -273,6 +317,19 @@ export async function deleteServiceCost(
     where: { id: serviceCostId, organizationId },
   });
   if (!existing) throw new Error("Gasto no encontrado.");
+
+  const paymentOrderId = existing.paymentOrderId;
+  if (paymentOrderId) {
+    const { cancelPaymentOrder } = await import(
+      "@/features/treasury/actions/treasury-actions"
+    );
+    const cancelled = await cancelPaymentOrder(paymentOrderId);
+    if (!cancelled.ok) {
+      throw new Error(
+        `No se pudo anular la OP vinculada (${cancelled.error}). El gasto no se eliminó.`,
+      );
+    }
+  }
   await prisma.serviceCost.delete({ where: { id: serviceCostId } });
 }
 

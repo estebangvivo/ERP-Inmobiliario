@@ -193,19 +193,18 @@ export async function paySupplierInvoiceAction(
   });
   if (!invoice) return { ok: false, error: "Factura no encontrada o ya pagada." };
 
-  let contractId = invoice.workOrder.contractId;
-  if (!contractId) {
-    const contract = await prisma.contract.findFirst({
-      where: {
-        organizationId: session.organizationId,
-        propertyId: invoice.workOrder.propertyId,
-      },
-      select: { id: true },
-      orderBy: { createdAt: "desc" },
-    });
-    contractId = contract?.id ?? null;
-  }
-  if (!contractId) {
+  const { resolveWorkOrderContractId } = await import(
+    "@/server/services/tenant-work-order-charges"
+  );
+  let contractId = await resolveWorkOrderContractId(
+    session.organizationId,
+    invoice.workOrder,
+  );
+
+  const needsContract =
+    invoice.costBearer === "TENANT" ||
+    invoice.costBearer === "OWNER_DEDUCTIBLE";
+  if (needsContract && !contractId) {
     return {
       ok: false,
       error:
@@ -219,6 +218,7 @@ export async function paySupplierInvoiceAction(
     supplierId: invoice.supplierId,
     supplierName: invoice.supplier.name,
     contractId,
+    propertyId: invoice.workOrder.propertyId,
     amount,
     currency: invoice.currency,
     method,

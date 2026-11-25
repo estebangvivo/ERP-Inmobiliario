@@ -1,4 +1,5 @@
 import type { Prisma, RecoverableRecoveryMethod } from "@prisma/client";
+import { toDateInputValue } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 
 type Tx = Prisma.TransactionClient;
@@ -119,6 +120,44 @@ export async function reverseRecoverableChargesForInvoice(
       organizationId,
     },
   });
+}
+
+/**
+ * Revierte recuperos vinculados a una rendición (p. ej. antes de regenerar DRAFT).
+ * Resta recoveredAmount y elimina las RecoverableRecovery method=SETTLEMENT.
+ */
+export async function reverseRecoveriesForSettlement(
+  tx: Tx,
+  organizationId: string,
+  settlementId: string,
+) {
+  const recoveries = await tx.recoverableRecovery.findMany({
+    where: {
+      ownerSettlementId: settlementId,
+      method: "SETTLEMENT",
+      charge: { organizationId },
+    },
+    include: {
+      charge: { select: { id: true, amount: true, recoveredAmount: true } },
+    },
+  });
+  if (recoveries.length === 0) return 0;
+
+  for (const r of recoveries) {
+    const recoveredAmount = round2(
+      Math.max(0, toNumber(r.charge.recoveredAmount) - toNumber(r.amount)),
+    );
+    const status = statusFromAmounts(toNumber(r.charge.amount), recoveredAmount);
+    await tx.recoverableCharge.update({
+      where: { id: r.charge.id },
+      data: {
+        recoveredAmount,
+        status: status === "RECOVERED" ? "RECOVERED" : status,
+      },
+    });
+    await tx.recoverableRecovery.delete({ where: { id: r.id } });
+  }
+  return recoveries.length;
 }
 
 export async function applyRecoverableRecovery(
@@ -356,7 +395,7 @@ export async function getRecoverableAccountStatement(input: {
     entries.push({
       id: c.id,
       kind: "charge",
-      date: c.openedAt.toISOString().slice(0, 10),
+      date: toDateInputValue(c.openedAt),
       concept: `Gasto a recuperar · ${c.workOrder.code} · ${c.workOrder.title}${
         c.supplierInvoice.invoiceNumber
           ? ` · Fac. ${c.supplierInvoice.invoiceNumber}`
@@ -385,7 +424,7 @@ export async function getRecoverableAccountStatement(input: {
       entries.push({
         id: r.id,
         kind: "recovery",
-        date: r.recoveredAt.toISOString().slice(0, 10),
+        date: toDateInputValue(r.recoveredAt),
         concept: `Recupero (${r.method.toLowerCase()})${ref}${
           r.notes ? ` · ${r.notes}` : ""
         }`,
@@ -414,7 +453,7 @@ export async function getRecoverableAccountStatement(input: {
       amount: toNumber(c.amount),
       recoveredAmount: toNumber(c.recoveredAmount),
       pending: round2(toNumber(c.amount) - toNumber(c.recoveredAmount)),
-      openedAt: c.openedAt.toISOString().slice(0, 10),
+      openedAt: toDateInputValue(c.openedAt),
     }))
     .filter((c) => c.pending > 0.009);
 

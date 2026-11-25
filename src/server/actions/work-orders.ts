@@ -196,7 +196,7 @@ export async function paySupplierInvoiceAction(
   const { resolveWorkOrderContractId } = await import(
     "@/server/services/tenant-work-order-charges"
   );
-  let contractId = await resolveWorkOrderContractId(
+  const contractId = await resolveWorkOrderContractId(
     session.organizationId,
     invoice.workOrder,
   );

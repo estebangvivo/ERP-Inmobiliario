@@ -15,9 +15,6 @@ export function toDateInputValue(value: Date | string | null | undefined): strin
   if (!value) return "";
   const d = typeof value === "string" ? parseDateInput(value) : value;
   if (!d || Number.isNaN(d.getTime())) return "";
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
   // Prefer local for datetime, UTC for @db.Date from Prisma
   if (typeof value === "object" && value.getHours?.() === 0 && value.getMinutes?.() === 0) {
     // date-only from DB often midnight UTC

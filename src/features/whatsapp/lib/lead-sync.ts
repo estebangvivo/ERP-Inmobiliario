@@ -19,6 +19,7 @@ function buildLeadMessage(payload: BotPayload, contactName?: string | null): str
   if (payload.area) {
     lines.push(`Área: ${WHATSAPP_AGENT_AREA_LABELS[payload.area]}`);
   }
+  if (payload.orgAreaName) lines.push(`Área: ${payload.orgAreaName}`);
   if (payload.intent) lines.push(`Intención: ${intentLabel(payload.intent)}`);
   if (payload.zone) lines.push(`Zona: ${payload.zone}`);
   if (payload.budget) lines.push(`Presupuesto: ${payload.budget}`);

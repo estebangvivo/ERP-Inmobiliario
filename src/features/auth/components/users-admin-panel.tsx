@@ -40,6 +40,7 @@ type Props = {
   openAlta?: boolean;
   defaultAltaRole?: OrganizationRole;
   list?: UsersListQuery;
+  areas?: Array<{ id: string; name: string }>;
 };
 
 const ASSIGNABLE_ROLES: OrganizationRole[] = [
@@ -62,6 +63,7 @@ export function UsersAdminPanel({
   openAlta,
   defaultAltaRole,
   list,
+  areas = [],
 }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -137,6 +139,7 @@ export function UsersAdminPanel({
         birthDate: String(fd.get("birthDate") ?? "") || undefined,
         address: String(fd.get("address") ?? "") || undefined,
         documentNumber: String(fd.get("documentNumber") ?? "") || undefined,
+        areaId: String(fd.get("areaId") ?? "") || null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -169,6 +172,7 @@ export function UsersAdminPanel({
         birthDate: String(fd.get("birthDate") ?? ""),
         address: String(fd.get("address") ?? ""),
         documentNumber: String(fd.get("documentNumber") ?? ""),
+        areaId: String(fd.get("areaId") ?? "") || null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -258,6 +262,7 @@ export function UsersAdminPanel({
               label="Email"
               name="email"
               type="email"
+              autoComplete="off"
               defaultValue={editing?.email}
               required={!editing}
               disabled={!!editing}
@@ -290,30 +295,27 @@ export function UsersAdminPanel({
             <Field
               label="Domicilio actual"
               name="address"
+              autoComplete="off"
               defaultValue={editing?.address ?? ""}
               required
               placeholder="Calle, número, localidad"
             />
-            <div className="space-y-2">
-              <Label htmlFor="role">Rol</Label>
-              <Select
-                id="role"
-                name="role"
-                defaultValue={editing?.role ?? defaultAltaRole ?? "AGENT"}
-                required
-              >
-                {ASSIGNABLE_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <RoleAreaFields
+              defaultRole={editing?.role ?? defaultAltaRole ?? "AGENT"}
+              defaultAreaId={editing?.areaId ?? ""}
+              areas={areas}
+              currentArea={
+                editing?.areaId && editing.areaName
+                  ? { id: editing.areaId, name: editing.areaName }
+                  : null
+              }
+            />
             <Field
               label={editing ? "Nueva contraseña (opcional)" : "Contraseña"}
               name="password"
               type="password"
               required={!editing}
+              autoComplete="new-password"
             />
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
@@ -375,7 +377,7 @@ export function UsersAdminPanel({
       )}
 
       <DataTable
-        headers={["Nombre", "Email", "Teléfono", "Rol", "Módulos", "Estado", ""]}
+        headers={["Nombre", "Email", "Teléfono", "Rol", "Área", "Módulos", "Estado", ""]}
         empty={users.length === 0}
       >
         {users.map((user) => (
@@ -389,6 +391,9 @@ export function UsersAdminPanel({
             </td>
             <td className="px-4 py-3">
               <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
+            </td>
+            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+              {user.role === "AGENT" ? (user.areaName ?? "—") : "—"}
             </td>
             <td className="px-4 py-3 text-xs text-[var(--muted-foreground)]">
               {user.role === "ADMIN"
@@ -497,6 +502,7 @@ function Field({
   required,
   disabled,
   placeholder,
+  autoComplete,
 }: {
   label: string;
   name: string;
@@ -505,12 +511,14 @@ function Field({
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  autoComplete?: string;
 }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={name}>{label}</Label>
       <Input
         id={name}
+        autoComplete={autoComplete}
         name={name}
         type={type}
         defaultValue={defaultValue}
@@ -519,5 +527,64 @@ function Field({
         placeholder={placeholder}
       />
     </div>
+  );
+}
+
+function RoleAreaFields({
+  defaultRole,
+  defaultAreaId,
+  areas,
+  currentArea,
+}: {
+  defaultRole: OrganizationRole;
+  defaultAreaId: string;
+  areas: Array<{ id: string; name: string }>;
+  currentArea: { id: string; name: string } | null;
+}) {
+  const [role, setRole] = useState<OrganizationRole>(defaultRole);
+  const options =
+    currentArea && !areas.some((a) => a.id === currentArea.id)
+      ? [...areas, { id: currentArea.id, name: ` (inactiva)` }]
+      : areas;
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="role">Rol</Label>
+        <Select
+          id="role"
+          name="role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as OrganizationRole)}
+          required
+        >
+          {ASSIGNABLE_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {role === "AGENT" ? (
+        <div className="space-y-2">
+          <Label htmlFor="areaId">Área</Label>
+          <Select id="areaId" name="areaId" defaultValue={defaultAreaId}>
+            <option value="">Sin área</option>
+            {options.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            El chatbot de WhatsApp deriva a esta persona cuando consultan por el
+            área.{" "}
+            <Link href="/usuarios/areas" className="underline">
+              Administrar áreas
+            </Link>
+          </p>
+        </div>
+      ) : null}
+    </>
   );
 }

@@ -43,6 +43,21 @@ function parseOptionalBirthDate(raw?: string | null): Date | null | undefined {
   return parseDateInput(raw.trim());
 }
 
+/** Valida el área elegida: solo rol AGENT, área activa de la misma empresa. */
+async function resolveMemberAreaId(
+  orgId: string,
+  role: OrganizationRole,
+  areaId: string | null | undefined,
+): Promise<{ ok: true; areaId: string | null } | { ok: false; error: string }> {
+  if (role !== "AGENT" || !areaId) return { ok: true, areaId: null };
+  const area = await prisma.area.findFirst({
+    where: { id: areaId, organizationId: orgId, isActive: true },
+    select: { id: true },
+  });
+  if (!area) return { ok: false, error: "El área elegida no existe o está inactiva." };
+  return { ok: true, areaId: area.id };
+}
+
 export type UserActionResult =
   | { ok: true; userId?: string }
   | { ok: false; error: string };
@@ -60,6 +75,8 @@ export type OrganizationUserRow = {
   phone2: string | null;
   birthDate: string | null;
   address: string | null;
+  areaId: string | null;
+  areaName: string | null;
 };
 
 export type ListOrganizationUsersOptions = {
@@ -82,6 +99,8 @@ function mapMember(m: {
   userId: string;
   role: OrganizationRole;
   allowedModules: string[];
+  areaId?: string | null;
+  area?: { name: string } | null;
   user: {
     name: string;
     email: string;
@@ -108,6 +127,8 @@ function mapMember(m: {
       ? m.user.birthDate.toISOString().slice(0, 10)
       : null,
     address: m.user.address,
+    areaId: m.areaId ?? null,
+    areaName: m.area?.name ?? null,
   };
 }
 
@@ -199,7 +220,7 @@ export async function listOrganizationUsers(
 
   const members = await prisma.organizationMember.findMany({
     where,
-    include: { user: true },
+    include: { user: true, area: { select: { name: true } } },
     orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
     ...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
   });
@@ -224,12 +245,16 @@ export async function createOrganizationUser(input: {
   birthDate?: string;
   address?: string;
   documentNumber?: string;
+  areaId?: string | null;
 }): Promise<UserActionResult> {
   try {
     const session = await requireAuthSession();
     const orgId = input.organizationId ?? session.organizationId;
     if (!orgId) return { ok: false, error: "Empresa requerida." };
     await assertCanManageUsers(orgId);
+
+    const areaResult = await resolveMemberAreaId(orgId, input.role, input.areaId);
+    if (!areaResult.ok) return areaResult;
 
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
@@ -330,6 +355,7 @@ export async function createOrganizationUser(input: {
         userId: user.id,
         role: input.role,
         allowedModules: modules,
+        areaId: areaResult.areaId,
       },
     });
 
@@ -355,6 +381,8 @@ export async function updateOrganizationUser(input: {
   phone2?: string;
   birthDate?: string;
   address?: string;
+  /** undefined = no tocar; null/"" = sin área. */
+  areaId?: string | null;
 }): Promise<UserActionResult> {
   try {
     const session = await requireAuthSession();
@@ -465,8 +493,25 @@ export async function updateOrganizationUser(input: {
     const memberData: {
       role?: OrganizationRole;
       allowedModules?: string[];
+      areaId?: string | null;
     } = {};
     if (input.role) memberData.role = input.role;
+    if (input.areaId !== undefined || input.role) {
+      const wantedAreaId =
+        input.areaId !== undefined ? input.areaId : membership.areaId;
+      if (nextRole === "AGENT" && wantedAreaId === membership.areaId) {
+        // Sin cambios: se conserva aunque el área esté inactiva.
+        memberData.areaId = membership.areaId;
+      } else {
+        const areaResult = await resolveMemberAreaId(
+          orgId,
+          nextRole,
+          wantedAreaId,
+        );
+        if (!areaResult.ok) return areaResult;
+        memberData.areaId = areaResult.areaId;
+      }
+    }
     if (input.allowedModules) {
       const nextModules = input.allowedModules.filter((m) =>
         ORG_MODULE_KEYS.includes(m),

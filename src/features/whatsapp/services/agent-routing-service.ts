@@ -69,6 +69,38 @@ export async function pickAgentForRouting(
   }
 }
 
+/**
+ * Asigna la sesión a alguien del conjunto de usuarios dado (p. ej. agentes de un
+ * Área). Prefiere a quien está en horario y tiene menos chats abiertos.
+ */
+export async function autoRouteChatSessionAmongUsers(input: {
+  sessionId: string;
+  organizationId: string;
+  routingMode: WhatsAppRoutingMode;
+  candidateUserIds: string[];
+}): Promise<{ assigned: boolean; agentUserId?: string }> {
+  if (input.routingMode === "MANUAL" || input.candidateUserIds.length === 0) {
+    return { assigned: false };
+  }
+  const ids = new Set(input.candidateUserIds);
+  const available = (
+    await listWhatsAppEligibleAgents(input.organizationId, {
+      onlyAvailableNow: true,
+    })
+  ).filter((a) => ids.has(a.userId));
+
+  const agent = pickLeastBusyAgent(available);
+  if (!agent) return { assigned: false };
+
+  await assignAgentToChatSession({
+    sessionId: input.sessionId,
+    organizationId: input.organizationId,
+    agentUserId: agent.userId,
+    notifyCustomer: true,
+  });
+  return { assigned: true, agentUserId: agent.userId };
+}
+
 export async function autoRouteChatSession(input: {
   sessionId: string;
   organizationId: string;

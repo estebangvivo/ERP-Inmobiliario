@@ -24,7 +24,11 @@ import { prisma } from "@/lib/prisma";
 import { publishWhatsAppInboxEvent } from "@/features/whatsapp/lib/event-bus";
 import { listWhatsAppEligibleAgents } from "@/features/whatsapp/services/agent-eligibility";
 import { recordOutboundBotMessage } from "@/features/whatsapp/services/message-service";
-import { autoRouteChatSession } from "@/features/whatsapp/services/agent-routing-service";
+import {
+  autoRouteChatSession,
+  autoRouteChatSessionAmongUsers,
+} from "@/features/whatsapp/services/agent-routing-service";
+import { matchOrgAreaFromText } from "@/features/whatsapp/services/org-area-service";
 import {
   lookupWhatsAppContact,
   type WhatsAppContactProfile,
@@ -458,6 +462,88 @@ async function requestHumanHandoff(
   await tryAutoRoute(session.id, session.organizationId, requestedArea);
 }
 
+/**
+ * Si el texto menciona un Área de la empresa (ABM de áreas), deriva la consulta
+ * a los agentes de esa área. Devuelve true si manejó el mensaje.
+ */
+async function tryOrgAreaHandoff(
+  session: WhatsAppChatSession,
+  credentials: WhatsAppCredentials,
+  payload: BotPayload,
+  text: string,
+): Promise<boolean> {
+  const match = await matchOrgAreaFromText(session.organizationId, text);
+  if (!match) return false;
+
+  const nextPayload: BotPayload = {
+    ...payload,
+    area: undefined,
+    orgAreaName: match.name,
+    areaNote: text,
+  };
+  const leadId = await upsertLeadFromWhatsAppBot({
+    organizationId: session.organizationId,
+    phone: session.waContactPhone,
+    contactName: session.waContactName,
+    payload: nextPayload,
+    existingLeadId: session.leadId,
+  });
+
+  await updateSessionBotState(session.id, {
+    botStep: null,
+    botPayload: nextPayload,
+    status: "WAITING_AGENT",
+    leadId,
+    requestedArea: null,
+  });
+
+  await sendBotText(
+    session,
+    credentials,
+    `Perfecto. Te vamos a conectar con alguien del área de *${match.name}*. Te atenderán en breve.`,
+  );
+
+  // Avisa a las personas del área; si no hay ninguna cargada, a los agentes de WhatsApp.
+  const notifyUserIds =
+    match.agentUserIds.length > 0
+      ? match.agentUserIds
+      : (await listWhatsAppEligibleAgents(session.organizationId)).map(
+          (a) => a.userId,
+        );
+  publishWhatsAppInboxEvent({
+    type: "session.waiting_agent",
+    organizationId: session.organizationId,
+    sessionId: session.id,
+    payload: {
+      leadId,
+      phone: session.waContactPhone,
+      area: null,
+      notifyUserIds,
+      senderName: session.waContactName ?? session.waContactPhone,
+      preview: `Nueva consulta · ${match.name}`,
+      href: `/whatsapp?session=${session.id}`,
+    },
+  });
+
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: session.organizationId },
+      select: { waRoutingMode: true },
+    });
+    if (org?.waRoutingMode && org.waRoutingMode !== "MANUAL") {
+      await autoRouteChatSessionAmongUsers({
+        sessionId: session.id,
+        organizationId: session.organizationId,
+        routingMode: org.waRoutingMode,
+        candidateUserIds: match.agentUserIds,
+      });
+    }
+  } catch {
+    /* queda en espera para toma manual */
+  }
+  return true;
+}
+
 async function handleAreaSelection(
   session: WhatsAppChatSession,
   credentials: WhatsAppCredentials,
@@ -705,6 +791,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     const action = clientAction ?? actionFromNumber ?? actionFromText;
 
     if (!action) {
+      if (await tryOrgAreaHandoff(session, credentials, payload, text)) return;
       await sendClientMenu(session, credentials, payload, profile);
       return;
     }
@@ -720,6 +807,15 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
   }
 
   if (step === "AREA_MENU") {
+    const isNumberedChoice =
+      parseMenuChoiceNumber(text, AREA_MENU_ROWS.length) != null;
+    if (
+      !buttonArea &&
+      !isNumberedChoice &&
+      (await tryOrgAreaHandoff(session, credentials, payload, text))
+    ) {
+      return;
+    }
     const area =
       buttonArea ??
       matchAreaFromMenuChoice(text) ??
@@ -765,6 +861,7 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
         : matchSalesIntentFromFreeText(text));
 
     if (!intent) {
+      if (await tryOrgAreaHandoff(session, credentials, payload, text)) return;
       await sendSalesIntentMenu(session, credentials, payload);
       return;
     }
@@ -911,6 +1008,8 @@ export async function processBotMessage(input: BotProcessInput): Promise<void> {
     );
     return;
   }
+
+  if (await tryOrgAreaHandoff(session, credentials, payload, text)) return;
 
   if (textLower.includes("asesor")) {
     await sendAreaMenu(session, credentials, payload, profile);

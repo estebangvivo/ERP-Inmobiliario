@@ -5,6 +5,7 @@ import { PublicCatalogLinkCard } from "@/components/erp/public-catalog-link-card
 import { OrganizationPlanCard } from "@/features/billing/components/organization-plan-card";
 import { UsersAdminPanel } from "@/features/auth/components/users-admin-panel";
 import { listOrganizationUsers } from "@/features/auth/actions/user-actions";
+import { listActiveAreaOptions } from "@/features/auth/actions/area-actions";
 import { hasModule } from "@/features/auth/lib/modules";
 import { OrganizationSettingsForm } from "@/features/settings/components/organization-settings-form";
 import { getOrganizationProfile, getEnabledCurrencies } from "@/features/settings/queries/get-organization";
@@ -33,7 +34,7 @@ export default async function AjustesPage() {
     session.organizationRole === "ADMIN" ||
     hasModule(session.allowedModules, "usuarios");
 
-  const [billing, users, bankAccounts, enabledCurrencies] = await Promise.all([
+  const [billing, users, areas, bankAccounts, enabledCurrencies] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: session.organizationId },
       select: {
@@ -45,6 +46,7 @@ export default async function AjustesPage() {
     canManageUsers
       ? listOrganizationUsers().then((r) => r.users)
       : Promise.resolve([]),
+    canManageUsers ? listActiveAreaOptions() : Promise.resolve([]),
     listBankAccounts(),
     getEnabledCurrencies(),
   ]);
@@ -89,6 +91,7 @@ export default async function AjustesPage() {
         {canManageUsers ? (
           <UsersAdminPanel
             users={users}
+            areas={areas}
             organizationId={session.organizationId}
           />
         ) : null}

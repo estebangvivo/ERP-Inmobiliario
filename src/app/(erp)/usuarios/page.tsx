@@ -7,6 +7,9 @@ import {
 } from "@/features/auth/lib/user-list";
 import { UsersAdminPanel } from "@/features/auth/components/users-admin-panel";
 import { PageHeader } from "@/components/erp/page-chrome";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { listActiveAreaOptions } from "@/features/auth/actions/area-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +42,22 @@ export default async function UsuariosPage({
     { q, role, status, page: requestedPage, pageSize },
   );
 
+  const areas = await listActiveAreaOptions();
+
   return (
     <div>
       <PageHeader
         title="Usuarios"
         description="Miembros de la inmobiliaria, roles y módulos habilitados."
+        actions={
+          <Link href="/usuarios/areas">
+            <Button variant="outline">Áreas</Button>
+          </Link>
+        }
       />
       <UsersAdminPanel
         users={users}
+        areas={areas}
         organizationId={session.organizationId}
         openAlta={openAlta}
         defaultAltaRole={defaultAltaRole}

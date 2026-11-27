@@ -38,6 +38,8 @@ export type BotPayload = {
   budgetRangeId?: string;
   propertyType?: string;
   areaNote?: string;
+  /** Área propia de la empresa (ABM de áreas) pedida por el cliente. */
+  orgAreaName?: string;
   userId?: string;
   contactFirstName?: string;
   orgRole?: OrganizationRole;

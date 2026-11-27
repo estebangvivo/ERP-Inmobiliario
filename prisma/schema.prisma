@@ -716,14 +716,38 @@ model OrganizationMember {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   turneroPuestoId String?
+  /// Área de la inmobiliaria (ABM de áreas). Solo tiene sentido para rol AGENT.
+  areaId          String?
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   turneroPuesto   TurneroPuesto?   @relation(fields: [turneroPuestoId], references: [id])
+  area            Area?            @relation(fields: [areaId], references: [id], onDelete: SetNull)
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@index([turneroPuestoId])
   @@index([userId])
+  @@index([areaId])
   @@map("organization_members")
+}
+
+/// Área definida por la inmobiliaria (Administración, Cobranzas, etc.).
+/// El chatbot de WhatsApp la usa para derivar a la persona del área.
+model Area {
+  id             String               @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  /// Palabras extra que el chatbot reconoce como esta área.
+  keywords       String[]             @default([])
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        OrganizationMember[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@map("areas")
 }
 
 model Organization {
@@ -786,6 +810,7 @@ model Organization {
   indexRates               IndexRate[]
   billingPayments          BillingPayment[]
   members                  OrganizationMember[]
+  areas                    Area[]
   featureRequests          FeatureRequest[]
   turneroClientes          TurneroCliente[]
   turneroContadoresDiarios TurneroContadorDiario[]
